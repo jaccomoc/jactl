@@ -206,6 +206,21 @@ If async mode is disabled there is no need for a `JactlEnv` object to be supplie
 not be created since everything runs on the thread on which the script is invoked and there is no need for events
 to be scheduled on other threads.
 
+## applicationContext(Object applicationContext)
+
+This method allows you to register an object known to the application that can then be accessed from within a
+custom function to provide access to application state and functionality.
+
+From within a custom function:
+```java
+public static myCustomFunction(...) {
+  RuntimeState state = RuntimeState.getState();
+  JactlContext jactlContext = state.getContext();
+  MyApplicationCtx ctx = (MyApplicationCtx) jactlContext.getApplicationContext();
+  ...
+}
+```
+
 ## Disabling Some Types of Statements
 
 For various reasons, applications may want to allow scripts but prevent them from invoking

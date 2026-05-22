@@ -65,7 +65,7 @@
       border-radius: 6px;
       height: 38px;
       position: relative;
-      overflow: hidden;
+      overflow: visible;
     }
 
     .bar-fill {
@@ -77,6 +77,19 @@
       padding-right: 10px;
       box-sizing: border-box;
       transition: width 0.8s ease;
+      overflow: hidden;
+    }
+
+    /* Label outside bar (for narrow bars) */
+    .bar-label-outside {
+      position: absolute;
+      left: calc(10.27% + 6px);
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 13px;
+      font-weight: 600;
+      color: #555;
+      white-space: nowrap;
     }
 
     .bar-fill span {
@@ -126,10 +139,10 @@
       <div class="bar-row groovy">
         <div class="label">Groovy</div>
         <div class="bar-track">
-          <!-- 33205 / 120000 = 27.7% -->
-          <div class="bar-fill" style="width: 27.7%">
-            <span>33,205</span>
+          <!-- 32873 / 320000 = 10.3% — label outside -->
+          <div class="bar-fill" style="width: 10.27%">
           </div>
+          <div class="bar-label-outside">32,873</div>
         </div>
         <div class="speedup">baseline</div>
       </div>
@@ -137,33 +150,33 @@
       <div class="bar-row jactl">
         <div class="label">Jactl</div>
         <div class="bar-track">
-          <!-- 97503 / 120000 = 69.0% -->
-          <div class="bar-fill" style="width: 81.25%">
-            <span>97,503</span>
+          <!-- 309020 / 320000 = 96.6% -->
+          <div class="bar-fill" style="width: 96.57%">
+            <span>309,020</span>
           </div>
         </div>
-        <div class="speedup"><strong>2.9×</strong> faster</div>
+        <div class="speedup"><strong>9.4×</strong> faster</div>
       </div>
 
       <div class="bar-row java">
         <div class="label">Java</div>
         <div class="bar-track">
-          <!-- 90175 / 120000 = 74.8% -->
-          <div class="bar-fill" style="width: 75.14%">
-            <span>90,175</span>
+          <!-- 92340 / 320000 = 28.9% -->
+          <div class="bar-fill" style="width: 28.86%">
+            <span>92,340</span>
           </div>
         </div>
-        <div class="speedup"><strong>2.7×</strong> faster</div>
+        <div class="speedup"><strong>2.8×</strong> faster</div>
       </div>
 
     </div>
 
     <div class="axis-labels">
       <span>0</span>
-      <span>30k</span>
-      <span>60k</span>
-      <span>90k</span>
-      <span>120k</span>
+      <span>80k</span>
+      <span>160k</span>
+      <span>240k</span>
+      <span>320k</span>
     </div>
   </div>
 </body>

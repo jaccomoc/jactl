@@ -184,6 +184,32 @@ assertEquals(16, future.get());
 assertEquals("Result is 16\n", out.toString());
 ```
 
+## Additional Context for Application Integration
+
+It is possible to configure an application context object on the JactlContext that can be accessed from
+within custom functions (see [Application Context](jactl-context#applicationcontextobject-applicationcontext).
+
+In addition, per script invocation context can be passed when invoking `JactlScript.eval()` or `JactlScript.run()`
+that can then be accessed from within a custom function.
+
+There are multiple `eval()` and `run()` variations where this can be passed in.
+For example:
+```java
+Map bindings = new HashMap();
+MyInvocationContextClass invocationCtx = new MyInvocationContextClass();
+JactlScript script = Jactl.compileScript(...);
+Object result = script.eval(bindings, invocationCtx);
+```
+
+To access this context within a custom function:
+```java
+public static Object myFunction() {
+  RuntimeState state = RuntimeState.getState();
+  MyInvocationContextClass invocationCtx = (MyInvocationContextClass) state.getInvocationContext();
+  ...
+}
+```
+
 ## Errors
 
 If an error is detected at compile time then an exception of type `io.jactl.CompileError` will be thrown.

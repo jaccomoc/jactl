@@ -6,6 +6,8 @@ tags: [jvm]
 description: "An honest comparison of Groovy and Jactl for evaluating embedded JVM scripting languages."
 ---
 
+> Edited: Updated with benchmark results from Jactl 2.8.0
+
 ## Introduction
 
 Java applications often choose to use an embedded scripting language for reasons including the
@@ -147,6 +149,13 @@ def qsort(x) {
     [_],[]  -> x
     [h,*t]  -> qsort(t.filter{ it < h }) + [h] + qsort(t.filter{ it >= h })
   }
+}
+```
+
+Jactl also offers this pattern matching with destructuring ability with for-in statements:
+```groovy
+for ([i, [_, *j]] in collection) {
+  ...
 }
 ```
 
@@ -388,6 +397,9 @@ the asynchronous result occurs, the `Continuation` object can resume the code fr
 where it left off, including all the stack frames that existed at that point.
 This works in a similar manner to the Virtual Threads feature that was introduced in Java 21.
 
+For applications that are running on Java 21 or later, and want to rely on the Java Virtual Thread mechanism
+instead, this Jactl feature can be disabled.
+
 ## Checkpointing
 
 Jactl has the ability to checkpoint the state of scripts and to be able to restore the state and
@@ -433,7 +445,7 @@ In order to compare compile time performance and runtime performance we will use
 | Language | Version       |
 |----------|---------------|
 | Groovy   | 4.0.31        |
-| Jactl    | 2.7.2         |
+| Jactl    | 2.8.0         |
 | Java     | 8 (1.8.0_472) |
 
 The reason we are using Groovy 4 (rather than Groovy 5) is that Groovy 4 is the most recent version that still
