@@ -94,6 +94,7 @@ public class RuntimeState {
     if (context.maxExecutionTimeMs >= 0) {
       state.endTime = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(context.maxExecutionTimeMs);
     }
+    state.loopIterationCount = 0;
     state.invocationContext = invocationContext;
   }
   
