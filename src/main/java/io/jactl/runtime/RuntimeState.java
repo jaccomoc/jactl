@@ -22,6 +22,7 @@ import io.jactl.Utils;
 import io.jactl.compiler.MethodRef;
 
 import java.io.*;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -71,6 +72,17 @@ public class RuntimeState {
     threadLocalState.set(null);
   }
 
+  public static void setState(JactlContext context, Map<String, Object> globals) {
+    RuntimeState state = getState();
+    state.context = context;
+    state.globals = globals;
+    state.writer = null;
+    state.input = null;
+    state.invocationContext = null;
+    state.loopIterationCount = 0;
+    state.endTime = 0;
+  }
+  
   public static void setState(JactlContext context, Map<String, Object> globals, Reader input, Writer writer, Object invocationContext) {
     RuntimeState state = getState();
     state.context = context;

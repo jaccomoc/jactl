@@ -71,7 +71,10 @@ public class JactlContext {
 
   private final Map<Class,Map<String, HostClassMethodInvoker>> hostMethods       = new HashMap<>();
   private final Map<Class,Map<String, HostClassMethodInvoker>> staticHostMethods = new HashMap<>();
-  
+
+  // Allow local aliases for global vars (on by default unless in repl mode)
+  private static boolean localAliasForGlobals   = Boolean.parseBoolean(System.getProperty("jactl.opt.aliasedGlobals", "true"));
+
   private final Map<String, Function<Map<String,Object>,Object>> evalScriptCache = Collections.synchronizedMap(
     new LinkedHashMap(16, 0.75f, true) {
       @Override
@@ -428,6 +431,10 @@ public class JactlContext {
 
   //////////////////////////////////
 
+  public boolean globalAliases() {
+    return localAliasForGlobals && !replMode;
+  }
+  
   public Object getApplicationContext() {
     return applicationContext;
   }

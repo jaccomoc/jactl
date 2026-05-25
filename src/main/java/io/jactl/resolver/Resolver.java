@@ -1645,6 +1645,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       expr.couldBeNull = false;
     }
     
+    if (varDecl.isGlobal) {
+      if (jactlContext.globalAliases()) {
+        // If we are using local aliases for globals then the local aliases will be the unboxed type if
+        // global is a primitive
+        return expr.type = varDecl.type.unboxed();
+      }
+    }
+    
     return expr.type = varDecl.type;
   }
 

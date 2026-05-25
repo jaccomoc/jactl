@@ -367,6 +367,12 @@ public class JactlScript {
    * @return the result returned from the script
    */
   public Object eval(Map<String,Object> globals) {
+    if (!isAsync) {
+      // We can run directly on this thread and return the result since we know script won't
+      // throw a Continuation for async functions
+      RuntimeState.setState(jactlContext, globals);
+      return invoker.apply(globals);
+    }
     return eval(globals, null, (Writer)null, null);
   }
 

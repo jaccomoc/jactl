@@ -192,7 +192,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private List<CompileError>  errors = new ArrayList<>();
 
-  private static boolean      localAliasForGlobals   = Boolean.parseBoolean(System.getProperty("jactl.opt.aliasedGlobals", "true"));
   private Label               globalsLabel;
   private Map<String,Integer> globalSlots            = new HashMap<>();
   private List<Label>         asyncLocations         = new ArrayList<>();
@@ -378,7 +377,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private boolean globalAliases() {
-    return localAliasForGlobals && !classCompiler.context.replMode;
+    return classCompiler.context.globalAliases();
   }
 
   /////////////////////////////////////////////
@@ -5317,7 +5316,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   private void createAlias(String varName, Expr.VarDecl varDecl, boolean create) {
     if (create) {
-      int slot = stack.allocateGlobalVarSlot(varName, varDecl.type);
+      int slot = stack.allocateGlobalVarSlot(varName, varDecl.type.unboxed());
       globalSlots.put(varDecl.name.getStringValue(), slot);
     }
     int slot = stack.globalVarSlot(varName);
@@ -5334,6 +5333,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     popType();
     pushType(varDecl.type);
+    unbox();
     storeLocal(slot);
   }
 
@@ -5448,12 +5448,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expect(1);
     String varName = varDecl.name.getStringValue();
     if (varDecl.isGlobal) {
-      box();
       if (globalAliases()) {
         int slot = stack.globalVarSlot(varName);
+        unbox();
         storeLocal(slot);
         loadLocal(slot);
       }
+      box();
       loadGlobals();
       swap();
       loadConst(varName);
