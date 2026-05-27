@@ -419,7 +419,7 @@ public class CompilerTest3 extends BaseTest {
       fail("Expected error");
     }
     catch (JactlError e) {
-      assertTrue(e.getMessage().contains("Left hand side of String concatenation is null"));
+      assertTrue(e.getMessage().contains("Null operand for left hand side of String concatenation"));
     }
     try {
       runtest.accept("xxx.size()", "not used");

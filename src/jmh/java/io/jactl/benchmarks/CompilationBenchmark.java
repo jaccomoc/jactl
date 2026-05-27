@@ -155,10 +155,14 @@ public class CompilationBenchmark {
   ////////////////////////////////////////
 
   private String readResource(String resource) throws IOException {
+    InputStream in = getClass().getResourceAsStream(resource);
+    if (in == null) {
+      in = new FileInputStream("src/jmh/resources" + resource);
+    }
     StringBuilder sb = new StringBuilder();
-    try (InputStream in = getClass().getResourceAsStream(resource)) {
+    try (InputStream stream = in) {
       int c;
-      while ((c = in.read()) != -1) {
+      while ((c = stream.read()) != -1) {
         sb.append((char) c);
       }
     }

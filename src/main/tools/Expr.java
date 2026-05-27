@@ -114,7 +114,7 @@ class Expr extends JactlUserDataHolder {
   // determine whether we can duplicate the code for the result when there are multiple patterns that give
   // the same result.
   public boolean isSimple() {
-    return this instanceof Expr.Literal || this instanceof Expr.Identifier;
+    return this instanceof Expr.Literal || this instanceof Expr.Identifier || this instanceof Expr.Noop;
   }
 
   public boolean isLiteral() {

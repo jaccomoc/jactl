@@ -145,8 +145,11 @@ public abstract class Stmt extends JactlUserDataHolder {
     // Used by Parser and Resolver
     public Deque<Expr.FunDecl>      nestedFunctions = new ArrayDeque<>();
 
-    public boolean         isPrimaryClass = false;                      // Whether top level class in a class file (i.e. not script)
+    public boolean              isPrimaryClass = false;                 // Whether top level class in a class file (i.e. not script)
     public JactlClassDescriptor classDescriptor;
+    
+    // Flags for optimisations
+    public boolean              hasFnUsesGlobals = false;               // Whether script has functions/closures that use global vars
 
     public boolean isScriptClass() { return scriptMain != null; }
     public ClassDecl(Token name, String packageName, Token packageToken, Token baseClassToken, JactlType baseClass, boolean isInterface) {

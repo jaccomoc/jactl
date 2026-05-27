@@ -647,6 +647,15 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitFunDecl(Stmt.FunDecl stmt) {
+    if (isFirstPass && !stmt.declExpr.isScriptMain) {
+      Stmt.ClassDecl classDecl = classStack.peek();
+      if (classDecl.isScriptClass() && !stmt.declExpr.globals.isEmpty()) {
+        // We are a script that has a function/closure that uses globals
+        // so we need per invocation script instance to store globals
+        classDecl.hasFnUsesGlobals = true;
+      }
+    }
+
     analyse(stmt.declExpr);
     return null;
   }

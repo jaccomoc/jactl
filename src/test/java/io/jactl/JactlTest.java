@@ -50,9 +50,17 @@ class JactlTest {
     assertEquals(6, result);
   }
 
-  @Test void compileeval() {
+  @Test void compileEval() {
     HashMap<String, Object> globals = new HashMap<String,Object>();
     JactlScript             script  = Jactl.compileScript("3 + 4", globals);
+    Object result = script.eval(globals);          // result will be 7
+    assertEquals(7, result);
+  }
+
+  @Test void compileEvalSync() {
+    HashMap<String, Object> globals = new HashMap<String,Object>();
+    JactlContext context = JactlContext.create().async(false).build();
+    JactlScript             script  = Jactl.compileScript("3 + 4", globals, context);
     Object result = script.eval(globals);          // result will be 7
     assertEquals(7, result);
   }

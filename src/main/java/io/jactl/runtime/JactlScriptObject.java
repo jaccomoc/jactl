@@ -17,6 +17,7 @@
 
 package io.jactl.runtime;
 
+import java.util.Map;
 import java.util.UUID;
 
 public class JactlScriptObject implements Checkpointable {
@@ -48,5 +49,9 @@ public class JactlScriptObject implements Checkpointable {
   @Override public void _$j$restore(Restorer restorer) {
     _$j$instanceId = new UUID(restorer.readLong(), restorer.readLong());
     _$j$checkpointId = restorer.readCInt();
+  }
+  
+  public Object _$j$main(Map<String,Object> globals) {
+    throw new UnsupportedOperationException("Script is not sync");
   }
 }

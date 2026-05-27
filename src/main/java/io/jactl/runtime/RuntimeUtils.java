@@ -1070,6 +1070,18 @@ public class RuntimeUtils {
 
   public static final MethodRef TO_STRING_METHOD = Utils.getMethod(RuntimeUtils.class, "toString", Object.class);
   public static String toString(Object obj) {
+    if (obj instanceof String) {
+      return (String) obj;
+    }
+    if (obj instanceof BigDecimal) {
+      return ((BigDecimal) obj).toPlainString();
+    }
+    if (obj instanceof Byte) {
+      return Integer.toString(((int)(byte)obj) & 0xff);
+    }
+    if (obj instanceof Number || obj instanceof Boolean) {
+      return obj.toString();
+    }
     return doToString(obj, new HashSet<>(), "", 0);
   }
 
@@ -1389,7 +1401,13 @@ public class RuntimeUtils {
     }
 
     if (parent instanceof Map) {
-      return loadMapField(parent, field, captureStackTrace, source, offset);
+      Object value = ((Map)parent).get(field);
+      if (value == null && field instanceof String) {
+        // If we still can't find a field then if we have a method of the name return
+        // its method handle
+        value = lookupWrapper(parent, (String)field, null, source, offset);
+      }
+      return value;
     }
 
     if (parent instanceof JactlObject) {
@@ -1638,23 +1656,18 @@ public class RuntimeUtils {
     return value;
   }
 
-  public static final MethodRef LOAD_MAP_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "loadMapField", Object.class, Object.class, Boolean.TYPE, boolean.class, String.class, Integer.TYPE);
-  public static Object loadMapField(Object parent, Object field, boolean isOptional, boolean captureStackTrace, String source, int offset) {
+  public static final MethodRef LOAD_MAP_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "loadMapField", Map.class, Object.class, Boolean.TYPE, boolean.class, String.class, Integer.TYPE);
+  public static Object loadMapField(Map parent, Object field, boolean isOptional, boolean captureStackTrace, String source, int offset) {
     if (parent == null) {
       if (isOptional) {
         return null;
       }
       throw new NullError("Null value for parent during field access", source, offset, captureStackTrace);
     }
-    return loadMapField(parent, field, captureStackTrace, source, offset);
-  }
-
-  private static Object loadMapField(Object parent, Object field, boolean captureStackTrace, String source, int offset) {
     if (field == null) {
       throw new NullError("Null value for field name", source, offset, captureStackTrace);
     }
-    Map map = (Map) parent;
-    Object value = map.get(field);
+    Object value = parent.get(field);
     if (value == null && field instanceof String) {
       // If we still can't find a field then if we have a method of the name return
       // its method handle

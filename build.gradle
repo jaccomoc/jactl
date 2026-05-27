@@ -32,6 +32,7 @@ repositories {
 sourceSets {
     jmh {
         java.srcDirs = ['src/jmh/java']
+        resources.srcDirs = ['src/jmh/resources']
         compileClasspath += sourceSets.main.output
         runtimeClasspath += sourceSets.main.output
     }

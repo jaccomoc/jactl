@@ -323,8 +323,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     globalsLabel = new Label();
     mv.visitLabel(globalsLabel);
 
-    // If main script method then initialise our globals field
-    if (methodFunDecl.isScriptMain) {
+    // If main script method and we need per instance globals then initialise our globals field
+    if (methodFunDecl.isScriptMain && (methodFunDecl.isAsync || classCompiler.classDecl.hasFnUsesGlobals || classCompiler.context.replMode)) {
       // FieldAssign globals map to field so we can access it from anywhere
       mv.visitVarInsn(ALOAD, 0);
       mv.visitVarInsn(ALOAD, methodFunDecl.globalsVar());
@@ -960,7 +960,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         loadClassField(parentType.getInternalName(), fieldName, fieldType, isStatic);
       }
       else {
-        loadField(expr.accessType, RuntimeUtils.DEFAULT_VALUE, expr.field.location);
+        loadField(expr.type, expr.accessType, RuntimeUtils.DEFAULT_VALUE, expr.field.location);
       }
     };
     
@@ -1211,21 +1211,24 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitBinary(Expr.Binary expr) {
     // If we don't know the type of one of the operands then we delegate to RuntimeUtils.binaryOp
     if (expr.operator.is(numericOperator) && (expr.left.type.is(ANY) || expr.right.type.is(ANY))) {
-      compile(expr.left);
-      box();
-      compile(expr.right);
-      box();
-      expect(2);
-      loadConst(RuntimeUtils.getOperatorType(expr.operator.getType()));
-      loadConst(expr.originalOperator == null ? null : RuntimeUtils.getOperatorType(expr.originalOperator.getType()));
-      loadConst(classCompiler.context.minScale);
-      loadConst(!insideTryCatchNullError());
-      loadLocation(expr.operator);
-      MethodRef method = methodNames.get(expr.operator.getType());
-      assert method != null : "unsupported operator type " + expr.operator.getChars();
-      invokeMethod(method);
-      convertTo(expr.type, expr,true, expr.operator);  // Convert to expected type
-      return null;
+      // Special case for string concatenation
+      if (!expr.operator.is(PLUS) || !expr.type.is(STRING)) {
+        compile(expr.left);
+        box();
+        compile(expr.right);
+        box();
+        expect(2);
+        loadConst(RuntimeUtils.getOperatorType(expr.operator.getType()));
+        loadConst(expr.originalOperator == null ? null : RuntimeUtils.getOperatorType(expr.originalOperator.getType()));
+        loadConst(classCompiler.context.minScale);
+        loadConst(!insideTryCatchNullError());
+        loadLocation(expr.operator);
+        MethodRef method = methodNames.get(expr.operator.getType());
+        assert method != null : "unsupported operator type " + expr.operator.getChars();
+        invokeMethod(method);
+        convertTo(expr.type, expr, true, expr.operator);  // Convert to expected type
+        return null;
+      }
     }
 
     switch(expr.operator.getType()) {
@@ -1287,9 +1290,27 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         if (expr.operator.is(PLUS)) {
           //= String concatenation
           if (expr.type.is(STRING)) {
+            // Look for multiple strings being concatenated and
+            // optimise using StringBuilder
+            List<Expr> parts = new ArrayList<>();
+            gatherStringParts(expr, parts);
+            if (parts.size() > 2) {
+              mv.visitTypeInsn(NEW, "java/lang/StringBuilder");
+              mv.visitInsn(DUP);
+              mv.visitMethodInsn(INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false);
+              for (Expr part : parts) {
+                compile(part);
+                convertToString();
+                mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+              }
+              mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+              popType(parts.size());
+              pushType(STRING);
+              return null;
+            }
             compile(expr.left);
             if (couldBeNull(expr.left)) {
-              throwIfNull("Left hand side of String concatenation is null", expr.left.location);
+              throwIfNull("Null operand for left hand side of String concatenation", expr.left.location);
             }
             convertToString();
             desiredType = STRING;
@@ -1750,6 +1771,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  private void gatherStringParts(Expr expr, List<Expr> parts) {
+    if (expr instanceof Expr.Binary) {
+      Expr.Binary binary = (Expr.Binary) expr;
+      if (binary.operator.is(PLUS) && binary.type.is(STRING)) {
+        gatherStringParts(binary.left, parts);
+        gatherStringParts(binary.right, parts);
+        return;
+      }
+    }
+    parts.add(expr);
+  }
+  
   private Void fieldAccess(Expr.Binary expr) {
     if (expr.isFieldAccess) {
       compileFieldAccess(expr);
@@ -1882,7 +1915,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
         else {
           compile(expr.right);
-          loadField(expr.operator, null, expr.right.location);
+          loadField(expr.type, expr.operator, null, expr.right.location);
         }
       }
     }
@@ -1946,11 +1979,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                },
                () -> {
                  swap();
-                 loadField(operator, null, index.location);
+                 loadField(ANY, operator, null, index.location);
                });
       }
       else {
-        loadField(operator, null, index.location);
+        loadField(ANY, operator, null, index.location);
       }
     }
   }
@@ -5220,7 +5253,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void loadGlobals() {
-    if (classCompiler.classDecl.isScriptClass()) {
+    if (methodFunDecl.isScriptMain && !methodFunDecl.isAsync && !classCompiler.context.replMode) {
+      // Get globals from parameter passed to us
+      mv.visitVarInsn(ALOAD, methodFunDecl.globalsVar());
+      pushType(MAP);
+    }
+    else if (classCompiler.classDecl.isScriptClass()) {
       loadLocal(0);
       loadClassField(classCompiler.internalName, Utils.JACTL_GLOBALS_NAME, MAP, false);
     }
@@ -5499,11 +5537,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * special case of RuntimeUtils.DEFAULT_VALUE which is a value that means use whatever sensible
    * default makes sense in the context.
    * E.g. if doing integer arithmetic use 0 or if doing string concatenation use ''.
+   * @param exprType        the expected type of the result
    * @param accessOperator  the type of field access ('.', '?.', '[', '?[')
    * @param defaultValue    use this as the default value (only one of defaultType or defaultValue should
    *                        be supplied since they are mutally exclusive)
+   * @param location        location in the code
    */
-  private void loadField(Token accessOperator, Object defaultValue, Location location) {
+  private void loadField(JactlType exprType, Token accessOperator, Object defaultValue, Location location) {
     expect(2);
     box();                        // Field name/index passed as Object
     if (defaultValue != null) {

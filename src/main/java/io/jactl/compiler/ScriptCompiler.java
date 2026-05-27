@@ -33,7 +33,7 @@ public class ScriptCompiler extends ClassCompiler {
     if (compiledClass == null) {
       return null;
     }
-    return JactlScript.createScript(compiledClass, context, classDecl.scriptMain.declExpr.functionDescriptor.isAsync());
+    return JactlScript.createScript(compiledClass, context, classDecl.scriptMain.declExpr.functionDescriptor.isAsync(), classDecl.hasFnUsesGlobals);
   }
   
   private Class<?> compileToClass() {

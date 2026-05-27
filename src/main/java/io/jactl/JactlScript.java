@@ -23,19 +23,14 @@ import java.io.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 /**
  * A compiled JactlScript.
@@ -47,14 +42,15 @@ public class JactlScript {
   private JactlContext                                      jactlContext;
   private Class<?>                                          compiledClass;
   private boolean                                           isAsync;
+  private JactlScriptObject                                 scriptInstance;    // For when we don't need per invocation instance
   private volatile MethodHandle                             scriptConstructor;
   private volatile MethodHandle                             scriptMainMethodHandle;
 
-  private JactlScript(Class<?> compiledClass, JactlContext jactlContext, boolean isAsync) {
+  private JactlScript(Class<?> compiledClass, JactlContext jactlContext, boolean isAsync, boolean needsPerInvocationInstance) {
     this.compiledClass = compiledClass;
     this.jactlContext = jactlContext;
     this.isAsync = isAsync;
-    init();
+    init(needsPerInvocationInstance);
 
     // For async invocation where we call back on completion once finished
     this.asyncInvoker = (map, completion) -> {
@@ -83,11 +79,11 @@ public class JactlScript {
     catch (NoSuchMethodException e) {
       async = false;
     }
-    return createScript(compiledClass, context, async);
+    return createScript(compiledClass, context, async, true);
   }
 
-  public static JactlScript createScript(Class<?> compiledClass, JactlContext context, boolean isAsync) {
-    return new JactlScript(compiledClass, context, isAsync);
+  public static JactlScript createScript(Class<?> compiledClass, JactlContext context, boolean isAsync, boolean needsPerInvocationInstance) {
+    return new JactlScript(compiledClass, context, isAsync, needsPerInvocationInstance);
   }
 
   /**
@@ -95,11 +91,11 @@ public class JactlScript {
    * @return the invoker
    */
   public Function<Map<String, Object>, Object> getInvoker() {
-    init();
+    init(true);
     return invoker;
   }
   
-  private void init() {
+  private void init(boolean needsPerInvocationInstance) {
     if (isAsync) {
       invoker = map -> {
         JactlScriptObject instance = null;
@@ -123,17 +119,39 @@ public class JactlScript {
       };
     }
     else {
-      invoker = map -> {
-        try {
-          return (Object)getScriptMainMethodHandle().invokeExact((JactlScriptObject)getScriptConstructor().invokeExact(), map);
-        }
-        catch (RuntimeError e) {
-          throw e;
-        }
-        catch (Throwable e) {
-          throw new RuntimeException(e);
-        }
-      };
+      if (needsPerInvocationInstance) {
+        invoker = map -> {
+          try {
+            return (Object) getScriptMainMethodHandle().invokeExact((JactlScriptObject) getScriptConstructor().invokeExact(), map);
+          }
+          catch (RuntimeError e) {
+            throw e;
+          }
+          catch (Throwable e) {
+            throw new RuntimeException(e);
+          }
+        };
+      }
+      else {
+        // If scripts have functions/closures that use globals then we need a new instance each time because
+        // we store the globals in an instance field during execution but if we don't need to do this we can
+        // allocate a single script instance once to use each time.
+        invoker = map -> { 
+          try {
+            if (scriptInstance == null) {
+              scriptInstance = (JactlScriptObject) compiledClass.newInstance();
+              invoker = globals -> scriptInstance._$j$main(globals);
+            }
+          }
+          catch (RuntimeError e) {
+            throw e;
+          }
+          catch (Throwable e) {
+            throw new RuntimeException(e);
+          }
+          return scriptInstance._$j$main(map);
+        };
+      }
     }
   }
 
@@ -368,9 +386,9 @@ public class JactlScript {
    */
   public Object eval(Map<String,Object> globals) {
     if (!isAsync) {
+      RuntimeState.setState(jactlContext, globals);
       // We can run directly on this thread and return the result since we know script won't
       // throw a Continuation for async functions
-      RuntimeState.setState(jactlContext, globals);
       return invoker.apply(globals);
     }
     return eval(globals, null, (Writer)null, null);
