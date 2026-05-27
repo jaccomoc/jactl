@@ -975,7 +975,7 @@ z
    </g>
    <g id="text_14">
     <!-- 33,205 -->
-    <g style="fill: #ffffff" transform="translate(129.65469 331.131068) scale(0.1 -0.1)">
+    <g style="fill: #ffffff" transform="translate(129.65469 331.892337) scale(0.1 -0.1)">
      <defs>
       <path id="DejaVuSans-Bold-33" d="M 2981 2516 
 Q 3453 2394 3698 2092 
@@ -1054,7 +1054,7 @@ z
    </g>
    <g id="text_15">
     <!-- 90,175 -->
-    <g style="fill: #ffffff" transform="translate(219.849137 278.696149) scale(0.1 -0.1)">
+    <g style="fill: #ffffff" transform="translate(219.849137 279.457418) scale(0.1 -0.1)">
      <defs>
       <path id="DejaVuSans-Bold-39" d="M 641 103 
 L 641 966 
@@ -1111,7 +1111,7 @@ z
    </g>
    <g id="text_16">
     <!-- 97,503 -->
-    <g style="fill: #ffffff" transform="translate(310.043583 271.951492) scale(0.1 -0.1)">
+    <g style="fill: #ffffff" transform="translate(310.043583 272.712761) scale(0.1 -0.1)">
      <use xlink:href="#DejaVuSans-Bold-39"/>
      <use xlink:href="#DejaVuSans-Bold-37" x="69.580078"/>
      <use xlink:href="#DejaVuSans-Bold-2c" x="139.160156"/>
@@ -1122,7 +1122,7 @@ z
    </g>
    <g id="text_17">
     <!-- 309,020 -->
-    <g style="fill: #ffffff" transform="translate(396.759124 77.272243) scale(0.1 -0.1)">
+    <g style="fill: #ffffff" transform="translate(396.759124 78.033512) scale(0.1 -0.1)">
      <use xlink:href="#DejaVuSans-Bold-33"/>
      <use xlink:href="#DejaVuSans-Bold-30" x="69.580078"/>
      <use xlink:href="#DejaVuSans-Bold-39" x="139.160156"/>
@@ -1131,6 +1131,12 @@ z
      <use xlink:href="#DejaVuSans-Bold-32" x="316.308594"/>
      <use xlink:href="#DejaVuSans-Bold-30" x="385.888672"/>
     </g>
+   </g>
+   <g id="relative_labels">
+    <text x="148.948" y="351.9" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="9" font-weight="bold" fill="#ffdd57">baseline</text>
+    <text x="239.143" y="299.5" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="9" font-weight="bold" fill="#ffdd57">2.7×</text>
+    <text x="329.337" y="292.7" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="9" font-weight="bold" fill="#ffdd57">2.9×</text>
+    <text x="419.532" y="98.0" text-anchor="middle" font-family="DejaVu Sans, Arial, sans-serif" font-size="9" font-weight="bold" fill="#ffdd57">9.3×</text>
    </g>
    <g id="text_18">
     <!-- Compilation Speed Comparison -->
