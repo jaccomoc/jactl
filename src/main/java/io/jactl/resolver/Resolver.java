@@ -1095,7 +1095,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     if (expr.operator.is(PLUS) && expr.right.type.is(STRING) && 
         expr.right.isConst && ((String)expr.right.constValue).length() != 1 &&
-        expr.originalOperator != null && !expr.originalOperator.is(PLUS_EQUAL)) {
+        (expr.originalOperator == null || !expr.originalOperator.is(PLUS_EQUAL))) {
       // If we have xxx + 'yyy' and 'yyy' is not just a single char then we know
       // result will be a string
       expr.type = STRING;
