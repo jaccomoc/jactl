@@ -150,6 +150,7 @@ public abstract class Stmt extends JactlUserDataHolder {
     
     // Flags for optimisations
     public boolean              hasFnUsesGlobals = false;               // Whether script has functions/closures that use global vars
+    public Set<String>          mutatedGlobals = new HashSet();         // Which globals script mutates
 
     public boolean isScriptClass() { return scriptMain != null; }
     public ClassDecl(Token name, String packageName, Token packageToken, Token baseClassToken, JactlType baseClass, boolean isInterface) {

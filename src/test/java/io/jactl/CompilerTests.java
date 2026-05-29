@@ -3042,4 +3042,13 @@ class CompilerTests extends BaseTest {
     test("12345D >= -12345D", true);
     test("12344D >= 12345D", false);
   }
+  
+  @Test public void mutatingGlobals() {
+    test("def x = 3; def f() { x++ }; f(); x", 4);
+    globals.put("x", 3);
+    test("def f() { x++ }; f(); x", 4);
+    test("def f() { --x }; f(); x", 2);
+    test("def f() { x += 1 }; f(); x", 4);
+    test("def f() { x = 4 }; f(); x", 4);
+  }
 }

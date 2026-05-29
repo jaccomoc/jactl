@@ -73,7 +73,7 @@ public class JactlContext {
   private final Map<Class,Map<String, HostClassMethodInvoker>> staticHostMethods = new HashMap<>();
 
   // Allow local aliases for global vars (on by default unless in repl mode)
-  private static boolean localAliasForGlobals   = Boolean.parseBoolean(System.getProperty("jactl.opt.aliasedGlobals", "true"));
+  private boolean localAliasesForGlobals = Boolean.parseBoolean(System.getProperty("jactl.localAliasesForGlobals", "true"));
 
   private final Map<String, Function<Map<String,Object>,Object>> evalScriptCache = Collections.synchronizedMap(
     new LinkedHashMap(16, 0.75f, true) {
@@ -375,6 +375,20 @@ public class JactlContext {
      * @return the JactlContextBuilder
      */
     public JactlContextBuilder applicationContext(Object ctx)   { applicationContext = ctx; return this; }
+
+    /**
+     * Whether to create local variable aliases for globals in functions that access globals.
+     * This is an optimisation that can improve runtime performance. It is enabled by default
+     * unless the classAccessToGlobals is enabled (since there is the potential for class
+     * methods to mutate globals and we don't currently track this). This optimisation relies
+     * on global functions not mutating globals values as the Jactl compiler has no visibility
+     * of this and doesn't know to refresh the local variable aliases. If you are registering
+     * global functions or methods that mutate global variables you should make sure that this
+     * flag is set to false.
+     * @param value the value for the flag
+     * @return the JactlContextBuilder
+     */
+    public JactlContextBuilder localAliasesForGlobals(boolean value) { localAliasesForGlobals = value; return this; } 
     
     /**
      * Build the JactlContext. This should be invoked last after chaining all the other calls used to configure
@@ -432,7 +446,7 @@ public class JactlContext {
   //////////////////////////////////
 
   public boolean globalAliases() {
-    return localAliasForGlobals && !replMode;
+    return localAliasesForGlobals && !replMode;
   }
   
   public Object getApplicationContext() {

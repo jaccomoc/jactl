@@ -1273,6 +1273,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public JactlType visitPrefixUnary(Expr.PrefixUnary expr) {
     resolve(expr.expr);
+    if (expr.operator.is(PLUS_PLUS,MINUS_MINUS)) {
+      flagMutatedGlobals(expr.expr);
+    }
     expr.isConst = isConst(expr.expr);
     if (expr.operator.is(BANG,QUESTION_QUESTION)) {
       expr.type = BOOLEAN;
@@ -1330,6 +1333,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   
   @Override public JactlType visitPostfixUnary(Expr.PostfixUnary expr) {
     resolve(expr.expr);
+    flagMutatedGlobals(expr.expr);
     expr.isConst      = isConst(expr.expr);
     expr.type         = expr.expr.type;
     if (expr.expr.type.isNumeric() || expr.expr.type.is(ANY)) {
@@ -1675,25 +1679,26 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   @Override public JactlType visitVarAssign(Expr.VarAssign expr) {
-    if (expr.identifierExpr.isSuper() || expr.identifierExpr.isThis()) {
-      error("Cannot assign to '" + expr.identifierExpr.identifier.getStringValue() + "'", expr.identifierExpr.location);
+    Expr.Identifier identifierExpr = expr.identifierExpr;
+    if (identifierExpr.isSuper() || identifierExpr.isThis()) {
+      error("Cannot assign to '" + identifierExpr.identifier.getStringValue() + "'", identifierExpr.location);
     }
     if (jactlContext.replMode && isScriptScope()) {
       // In repl mode if variable doesn't exist yet we create it when first assigned to
-      Token  identifier = expr.identifierExpr.identifier;
+      Token  identifier = identifierExpr.identifier;
       String name       = identifier.getStringValue();
       if (lookup(name, identifier, false, true) == null) {
         Expr.VarDecl varDecl = createGlobalVarDecl(name, ANY);
         jactlContext.globalVars.put(name, varDecl);
       }
     }
-    JactlType varType = resolve(expr.identifierExpr);
-    if (varType.is(FUNCTION) && expr.identifierExpr.varDecl.funDecl != null) {
-      error("Cannot assign to function", expr.identifierExpr.location);
+    JactlType varType = resolve(identifierExpr);
+    if (varType.is(FUNCTION) && identifierExpr.varDecl.funDecl != null) {
+      error("Cannot assign to function", identifierExpr.location);
     }
     
-    if (expr.identifierExpr.varDecl.isFinal) {
-      error("Cannot modify 'final' " + (expr.identifierExpr.varDecl.isField ? "field" : "variable") + " '" + expr.identifierExpr.identifier.getStringValue() + "'", expr.identifierExpr.location);
+    if (identifierExpr.varDecl.isFinal) {
+      error("Cannot modify 'final' " + (identifierExpr.varDecl.isField ? "field" : "variable") + " '" + identifierExpr.identifier.getStringValue() + "'", identifierExpr.location);
     }
     
     resolve(expr.expr);
@@ -1703,18 +1708,34 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       expr.type = ANY;
     }
 
-    if (expr.identifierExpr.varDecl.isConstVar) {
+    if (identifierExpr.varDecl.isConstVar) {
       error("Cannot modify a constant", expr.location);
     }
 
     // Flag variable as non-final since it has had an assignment to it
-    expr.identifierExpr.varDecl.isEffectivelyFinal = false;
+    identifierExpr.varDecl.isEffectivelyFinal = false;
 
     // Track last type assigned so we can supply better completions in Intellij plugin
-    expr.identifierExpr.varDecl.lastAssignedType = expr.expr.type;
+    identifierExpr.varDecl.lastAssignedType = expr.expr.type;
+
+    flagMutatedGlobals(identifierExpr);
 
     // Result of assignment is actually type of the original value not the converted value
     return expr.type = expr.expr.type;
+  }
+
+  private void flagMutatedGlobals(Expr expr) {
+    if (expr instanceof Expr.Identifier) {
+      Expr.Identifier identifierExpr = (Expr.Identifier) expr;
+      // If global and we are a script then keep track of which globals we are mutating
+      // (for global alias refreshing)
+      if (identifierExpr.varDecl.isGlobal) {
+        Stmt.ClassDecl classDecl = classStack.peek();
+        if (classDecl.isScriptClass()) {
+          classDecl.mutatedGlobals.add(identifierExpr.identifier.getStringValue());
+        }
+      }
+    }
   }
 
   /**
@@ -1780,6 +1801,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // Flag variable as non-final since it has had an assignment to it
     expr.identifierExpr.varDecl.isEffectivelyFinal = false;
 
+    flagMutatedGlobals(expr.identifierExpr);
+    
     return expr.type = expr.expr.type;
   }
 

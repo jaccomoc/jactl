@@ -4843,7 +4843,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     popType();
 
-    refreshAliases();
+    refreshAllAliases();
     mv.visitLabel(after);              // :after
 
     // If we have a max execution time configure then as well as checking every n iterations of loops
@@ -5324,7 +5324,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void refreshAliases() {
-    createAliases(false);
+    // If we are a script (not a class) and then check which globals are mutated by the
+    // script and only refresh ones that potentially have been mutated
+    if (globalAliases() && classCompiler.classDecl.isScriptClass()) {
+      methodFunDecl.globals.forEach((name, varDecl) -> {
+        if (classCompiler.classDecl.mutatedGlobals.contains(name)) {
+          createAlias(name, varDecl, false);
+        }
+      });
+    }
+  }
+
+  private void refreshAllAliases() {
+    if (globalAliases()) {
+      methodFunDecl.globals.forEach((name, varDecl) -> {
+        createAlias(name, varDecl, false);
+      });
+    }
   }
 
   private void createAliases(boolean create) {

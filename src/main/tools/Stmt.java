@@ -130,6 +130,7 @@ class Stmt extends JactlUserDataHolder {
     
     // Flags for optimisations
     boolean              @hasFnUsesGlobals = false;               // Whether script has functions/closures that use global vars
+    Set<String>          @mutatedGlobals = new HashSet();         // Which globals script mutates
 
     public boolean isScriptClass() { return scriptMain != null; }
   }
