@@ -30,7 +30,7 @@ import static io.jactl.JactlType.ITERATOR;
 public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
   private static int VERSION = 1;
 
-  enum IteratorType {
+  public enum IteratorType {
     OBJECT_ARR,
     INT_ARR,
     LONG_ARR,

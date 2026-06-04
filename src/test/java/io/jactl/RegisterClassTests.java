@@ -72,7 +72,6 @@ public class RegisterClassTests extends BaseTest {
          .restore(restorer -> MyLocalDate1.of(restorer.readCInt(), restorer.readCInt(), restorer.readCInt()))
          .register();
     
-    
     test("test.jactl.time.LocalDate1.now().lengthOfYear() in [365, 366]", true);
     test("def now = LocalDate1.now(); now.lengthOfYear() > 360", true);
     test("LocalDate1 now = LocalDate1.now(); now.lengthOfYear() > 360", true);

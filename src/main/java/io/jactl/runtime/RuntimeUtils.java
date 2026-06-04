@@ -22,6 +22,7 @@ import io.jactl.compiler.MethodRef;
 
 import java.io.IOException;
 import java.io.Writer;
+import java.lang.invoke.CallSite;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Array;
@@ -1055,6 +1056,10 @@ public class RuntimeUtils {
     return !negated;
   }
   public static final MethodRef IS_TRUTH_METHOD = Utils.getMethod(RuntimeUtils.class, "isTruth", Object.class, boolean.class);
+  
+  public static boolean isTruth(Object value) {
+    return isTruth(value, false);
+  }
 
   public static final MethodRef TO_STRING_OR_NULL_METHOD = Utils.getMethod(RuntimeUtils.class, "toStringOrNull", Object.class);
   public static String toStringOrNull(Object obj) {
@@ -1402,7 +1407,7 @@ public class RuntimeUtils {
 
     if (parent instanceof Map) {
       Object value = ((Map)parent).get(field);
-      if (value == null && field instanceof String) {
+      if (value == null && isDot && field instanceof String) {
         // If we still can't find a field then if we have a method of the name return
         // its method handle
         value = lookupWrapper(parent, (String)field, null, source, offset);
@@ -2216,6 +2221,14 @@ public class RuntimeUtils {
   public static final MethodRef CONVERT_ITERATOR_TO_LIST_METHOD = Utils.getMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
   public static List convertIteratorToList(Object iterable, Continuation c) {
     JactlIterator iter = createIterator(iterable);
+    
+    if (!RuntimeState.getState().getContext().isAsync) {
+      List result = new ArrayList();
+      while (iter.hasNext()) {
+        result.add(iter.next());
+      }
+      return result;
+    }
 
     // If we are continuing (c != null) then get objects we have stored previously.
     // Object arr will have: result
@@ -2764,15 +2777,6 @@ public class RuntimeUtils {
     }
     catch (NoSuchMethodException | IllegalAccessException e) {
       throw new IllegalStateException("Error finding method " + method, e);
-    }
-  }
-  
-  public static JactlMethodHandle lookupMethod(Class clss, String jactlMethodName, Method method) {
-    try {
-      return JactlMethodHandle.create(MethodHandles.lookup().unreflect(method), clss,  jactlMethodName + "Handle");
-    }
-    catch (IllegalAccessException e) {
-      throw new RuntimeException(e);
     }
   }
 

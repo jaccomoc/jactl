@@ -22,6 +22,7 @@ import io.jactl.runtime.TimeoutError;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -591,6 +592,28 @@ public class CompilerTest3 extends BaseTest {
     assertEquals(123, script.eval(Utils.mapOf("unknown", 123)));
     globals.put("unknown", "abcdef");
     test(Utils.listOf("class X { def f() { unknown } }"), "new X().f()", "abcdef");
+  }
+
+  @Test public void invokeDynamic() {
+    test("def x = 'abc'; def result; 2.each{ result = x.length() }; result", 3);
+    test("def x = 'abc'; def result; 2.each{ result = x.size() }; result", 3);
+    test("def x = 'abc'; def f(a) { a.size() }; def i = f(x); x = [1,2,3,4]; 2.each{ i += f(x) }; i", 11);
+    test("def x = 3; def f(byte a) { a }; def i = f(x); x = 4; 2.each{ i += f(x) }; i", (byte)11);
+    test("def x = 'abc'; x.toUpperCase()", "ABC");
+    test("def list = ['1','22222','3','4444', '55555']; list.filter{ it.size() > 3 }.map{ it.toUpperCase() }.sort().join(',')", "22222,4444,55555");
+    test("class X { def f(byte x) { x } }; def x = new X(); def y = 6; 2.each { x.f(y) }", null);
+    test("def x=16; def f = { i=1 -> x + i }; def g = f; g()", 17);
+    test("def x=16; def f = { it = x -> it }; def g = f; g()", 16);
+    test("def x=16; int y = 3; long z = 6; def f = { a = x, b = y -> a + b + z }; f()", 25L);
+    test("def x=16; int y = 3; long z = 6; def f = { a = x, b = y -> a + b + z }; def g = f; g()", 25L);
+    test("def x=16; int y = 3; long z = 6; def f = { a = x, b = y -> a + b + z }; def g = f; g(1)", 10L);
+    test("def x=16; int y = 3; long z = 6; def f = { a = x, b = y -> a + b + z }; def g = f; g(1,4)", 11L);
+    test("def f = { -> 3}; f([])", 3);
+    test("def s = 'a:b:c'; s.split(/:/)", Utils.listOf("a", "b", "c"));
+    test("def f(Decimal d) { d * d }; [1,2D,3.0,4L].map{ f(it) }", Utils.listOf(new BigDecimal("1"), new BigDecimal("4.00"), new BigDecimal("9.00"), new BigDecimal("16")));
+    test("def f(Decimal d) { d * d }; def g = f; def result; 2.each{ result = [1,2D,3.0,4L].map{ g(it) } }; result", Utils.listOf(new BigDecimal("1"), new BigDecimal("4.00"), new BigDecimal("9.00"), new BigDecimal("16")));
+    test("class X { def f(int d) { d * d } }; def x = new X(); x.f(2.1234)", 4);
+    test("class X { def f(int d) { d * d } }; def x = new X(); def g = x.f; g(2.1234)", 4);
   }
   
 }

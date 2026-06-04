@@ -535,7 +535,7 @@ class JactlScriptEngineTest {
   @Test void accessHostClassLookupFails() throws ScriptException {
     engine.put("jactl.allowHostAccess", true);
     engine.put("x", new NewType("prefix"));
-    assertThrows(() -> engine.eval("x.process('abc')"), ScriptException.class, "not allowed");
+    assertThrows(() -> engine.eval("x.process('abc')"), ScriptException.class, "not an allowed");
   }
 
   @Test void accessHostNonPublicMethod() throws ScriptException {

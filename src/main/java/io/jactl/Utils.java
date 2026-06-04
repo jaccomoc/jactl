@@ -46,6 +46,7 @@ import static io.jactl.JactlType.INT;
 import static io.jactl.JactlType.LONG;
 import static io.jactl.JactlType.STRING;
 import static io.jactl.TokenType.*;
+import static io.jactl.runtime.FunctionDescriptor.NON_TRIVIAL;
 import static org.objectweb.asm.Opcodes.*;
 import static org.objectweb.asm.Opcodes.NEW;
 
@@ -682,7 +683,7 @@ public class Utils {
         defaultValues.add(((Expr.Literal) initialiser).value.getValue());
       }
       else {
-        defaultValues.add(null);
+        defaultValues.add(NON_TRIVIAL);
       }
       descriptor.paramTypes.add(varDecl.declExpr.type);
     }
@@ -1005,7 +1006,7 @@ public class Utils {
       for (int i = args.size(); i < func.paramTypes.size(); i++) {
         // If our defaultVals[i] is null it means that param is mandatory or that
         // its default value is non-trivial
-        if (func.defaultVals[i] == null) {
+        if (func.defaultVals[i] == NON_TRIVIAL) {
           return true;
         }
       }

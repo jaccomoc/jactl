@@ -77,7 +77,7 @@ import static org.objectweb.asm.Opcodes.*;
 public class JactlFunction extends FunctionDescriptor {
   List<String>      aliases           = new ArrayList<>();
   Class             implementingClass;
-  JactlMethodHandle methodHandle;
+  MethodHandle      methodHandle;
   Method            method;
 
   // total args including obj (for methods), and source/offset if needsLocation, and Continuation for async funcs
@@ -256,9 +256,14 @@ public class JactlFunction extends FunctionDescriptor {
     return this;
   }
 
+  @Override
+  public MethodHandle getMethodHandle() {
+    return methodHandle;
+  }
+
   ////////////////////////////////////////////////////////
 
-
+  
   @Override
   public Class getImplentingClass() {
     return implementingClass;
@@ -291,7 +296,12 @@ public class JactlFunction extends FunctionDescriptor {
     this.inlineMethod         = inlineMethodName == null ? null : Utils.findStaticMethod(implementingClass, inlineMethodName);
     Class<?>[] parameterTypes = method.getParameterTypes();
     this.argCount             = method.getParameterCount();
-    this.methodHandle         = RuntimeUtils.lookupMethod(implementingClass, name, method);
+    try {
+      this.methodHandle = MethodHandles.lookup().unreflect(method);
+    }
+    catch (IllegalAccessException e) {
+      throw new RuntimeException(e);
+    }
     this.isVarArgs            = parameterTypes.length > 0 && parameterTypes[parameterTypes.length - 1].equals(Object[].class);
     this.isAsync = isMethod() ? parameterTypes.length > 1 && parameterTypes[1].equals(Continuation.class)
                               : parameterTypes.length > 0 && parameterTypes[0].equals(Continuation.class);

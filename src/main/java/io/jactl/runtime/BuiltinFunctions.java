@@ -984,7 +984,66 @@ public class BuiltinFunctions {
 
   public static JactlIterator iteratorFilter(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     JactlIterator iter = RuntimeUtils.createIterator(iterable);
-    return new FilterIterator(iter, source, offset, closure);
+    if (RuntimeState.getState().getContext().isAsync) {
+      return new FilterIterator(iter, source, offset, closure);
+    }
+    return new JactlIterator() {
+      boolean hasNext = false;
+      Object  next;
+      final Object[] args = new Object[1];
+      
+      @Override public void _$j$checkpoint(Checkpointer checkpointer) { throw new UnsupportedOperationException(); }
+      @Override public void _$j$restore(Restorer restorer)            {  throw new UnsupportedOperationException(); }
+
+      @Override public boolean hasNext() {
+        try {
+          if (closure == null) {
+            if (!hasNext) {
+              while (iter.hasNext()) {
+                Object nextValue = iter.next();
+                if (RuntimeUtils.isTruth(nextValue, false)) {
+                  hasNext = true;
+                  next = nextValue;
+                  break;
+                }
+              }
+            }
+          }
+          else {
+            if (!hasNext) {
+              while (iter.hasNext()) {
+                args[0] = iter.next();
+                if (RuntimeUtils.isTruth(closure.invoke(null, source, offset, args), false)) {
+                  next = args[0];
+                  hasNext = true;
+                  break;
+                }
+              }
+            }
+          }
+          return hasNext;
+        }
+        catch (RuntimeError e) {
+          throw e;
+        }
+        catch (Throwable t) {
+          throw new RuntimeError("Unexpected error",  source, offset, t);
+        }
+      }
+
+      @Override
+      public Object next() {
+        if (!hasNext) {
+          hasNext();
+        }
+        try {
+          return hasNext ? next : null;
+        }
+        finally {
+          hasNext = false;
+        }
+      }
+    };
   }
 
   ////////////////////////////////
@@ -1087,7 +1146,37 @@ public class BuiltinFunctions {
 
   public static JactlIterator iteratorMap(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
     JactlIterator iter = RuntimeUtils.createIterator(iterable);
-    return new MapIterator(iter, source, offset, closure);
+    if (RuntimeState.getState().getContext().isAsync) {
+      return new MapIterator(iter, source, offset, closure);
+    }
+    
+    if (closure == null) {
+      return iter;
+    }
+    
+    return new JactlIterator() {
+      Object[] args = new Object[1];
+      
+      @Override public void _$j$checkpoint(Checkpointer checkpointer) { throw new UnsupportedOperationException(); }
+      @Override public void _$j$restore(Restorer restorer)            {  throw new UnsupportedOperationException(); }
+
+      @Override public boolean hasNext() {
+        return iter.hasNext();
+      }
+
+      @Override public Object next() {
+        args[0] = iter.next();
+        try {
+          return closure.invoke(null, source, offset, args);
+        }
+        catch (RuntimeError e) {
+          throw e;
+        }
+        catch (Throwable t) {
+          throw new RuntimeError("Unexpected error", source, offset, t);
+        }
+      }
+    };
   }
 
   ////////////////////////////////
@@ -1269,7 +1358,28 @@ public class BuiltinFunctions {
   // = join
 
   public static String iteratorJoin(Object iterable, Continuation c, String source, int offset, String joinStr) {
-    return (String)new Reducer(JOIN, RuntimeUtils.createIterator(iterable), source, offset, joinStr, null).reduce(null);
+    if (RuntimeState.getState().getContext().isAsync) {
+      return (String) new Reducer(JOIN, RuntimeUtils.createIterator(iterable), source, offset, joinStr, null).reduce(null);
+    }
+    else {
+      StringBuilder builder = new StringBuilder();
+      JactlIterator iter = RuntimeUtils.createIterator(iterable);
+      if (iter.hasNext()) {
+        builder.append(RuntimeUtils.toString(iter.next()));
+      }
+      if (joinStr != null && !joinStr.isEmpty()) {
+        while (iter.hasNext()) {
+          builder.append(joinStr);
+          builder.append(RuntimeUtils.toString(iter.next()));
+        }
+      }
+      else {
+        while (iter.hasNext()) {
+          builder.append(RuntimeUtils.toString(iter.next()));
+        }
+      }
+      return builder.toString();
+    }
   }
 
   /////////////////////////////
@@ -1323,7 +1433,14 @@ public class BuiltinFunctions {
   }
 
   public static Object iteratorSum(Object iterable, Continuation c, String source, int offset) {
-    return new Reducer(Reducer.Type.SUM, RuntimeUtils.createIterator(iterable), source, offset, 0, null).reduce(null);
+    if (RuntimeState.getState().getContext().isAsync) {
+      return new Reducer(Reducer.Type.SUM, RuntimeUtils.createIterator(iterable), source, offset, 0, null).reduce(null);
+    }
+    Object sum = 0;
+    for (JactlIterator iter = RuntimeUtils.createIterator(iterable); iter.hasNext(); ) {
+      sum = Reducer.addNumbers(sum, iter.next(), source, offset);
+    }
+    return sum;
   }
 
   // = min/max

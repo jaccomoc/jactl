@@ -230,7 +230,7 @@ public class ClassCompiler {
 
   /**
    * Create static handle to point to varargs wrapper method and another one for
-   * the continuation handle if needed
+   * the continuation handle if needed.
    * @param funDecl  the Expr.FunDecl for the method
    */
   protected void addHandleToClass(Expr.FunDecl funDecl) {
@@ -252,7 +252,32 @@ public class ClassCompiler {
     };
 
     if (!funDecl.isScriptMain) {
+      // MethodHandle for the actual method
+      classInit.visitLdcInsn(new Handle(funDecl.functionDescriptor.isStaticImplementation ? H_INVOKESTATIC : H_INVOKEVIRTUAL, 
+                                        internalName,
+                                        funDecl.functionDescriptor.implementingMethod,
+                                        MethodCompiler.getMethodDescriptor(funDecl),
+                                        false));
+      Utils.loadConst(classInit, funDecl.functionDescriptor.isAsync(), context);
+      Utils.loadConst(classInit, funDecl.functionDescriptor.needsLocation, context);
+      
       Expr.FunDecl wrapper = funDecl.wrapper;
+      
+      // Load an array of booleans corresponding to which of the heapLocals passed to the wrapper
+      // we also pass to the underlying function. Sometimes we have heapLocals that are only used
+      // in parameter initialisers and don't actually get passed to the function. We need to know
+      // which ones we need to pass so that we can work out which of the bound heapLocal values to
+      // pass to the function when using InvokeDynamic.
+      Utils.loadConst(classInit, wrapper.heapLocals.size(), context);
+      classInit.visitIntInsn(NEWARRAY, T_BOOLEAN);
+      int idx = 0;
+      for (Expr.VarDecl varDecl: wrapper.heapLocals.keySet()) {
+        classInit.visitInsn(DUP);
+        Utils.loadConst(classInit, idx++, context);
+        Utils.loadConst(classInit, funDecl.heapLocals.containsKey(varDecl), context);
+        classInit.visitInsn(BASTORE);
+      }
+
       String methodName       = wrapper.functionDescriptor.implementingMethod;
       String staticHandleName = Utils.staticHandleName(methodName);
 
@@ -274,7 +299,7 @@ public class ClassCompiler {
       classInit.visitLdcInsn(new Handle(wrapper.isStatic() ? Opcodes.H_INVOKESTATIC : H_INVOKEVIRTUAL, internalName, methodName, descriptor, false));
       classInit.visitLdcInsn(classType);
       classInit.visitLdcInsn(staticHandleName);
-      classInit.visitMethodInsn(INVOKESTATIC, "io/jactl/runtime/JactlMethodHandle", "create", "(Ljava/lang/invoke/MethodHandle;Ljava/lang/Class;Ljava/lang/String;)Lio/jactl/runtime/JactlMethodHandle;", false);
+      classInit.visitMethodInsn(INVOKESTATIC, "io/jactl/runtime/JactlMethodHandle", "create", "(Ljava/lang/invoke/MethodHandle;ZZ[ZLjava/lang/invoke/MethodHandle;Ljava/lang/Class;Ljava/lang/String;)Lio/jactl/runtime/JactlMethodHandle;", false);
 
       if (!funDecl.isClosure()) {
         classInit.visitInsn(DUP);   // For actual functions/methods we will also store in a map so duplicate first

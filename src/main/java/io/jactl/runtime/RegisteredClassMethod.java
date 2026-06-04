@@ -46,7 +46,7 @@ import java.util.stream.Collectors;
  * </p>
  */
 public class RegisteredClassMethod extends FunctionDescriptor {
-  JactlMethodHandle methodHandle;
+  MethodHandle      methodHandle;
   Method            method;
   Class             implementingClass;
   boolean           canThrow;            // Can throw exception and requires method generated in helper class
@@ -103,7 +103,11 @@ public class RegisteredClassMethod extends FunctionDescriptor {
     this.type = type;
     return this;
   }
-  
+
+  @Override
+  public MethodHandle getMethodHandle() {
+    return methodHandle;
+  }
 
   ////////////////////////////////////////////////////////
 
@@ -113,7 +117,12 @@ public class RegisteredClassMethod extends FunctionDescriptor {
 
     this.argCount             = method.getParameterCount() - (needsLocation ? 2 : 0);
     this.mandatoryArgCount    = argCount;
-    this.methodHandle         = RuntimeUtils.lookupMethod(method.getDeclaringClass(), name, method);
+    try {
+      this.methodHandle       = MethodHandles.lookup().unreflect(method);
+    }
+    catch (IllegalAccessException e) {
+      throw new RuntimeException(e);
+    }
     this.isStaticMethod       = Modifier.isStatic(method.getModifiers());
     this.isStaticImplementation = isStaticMethod;
     this.paramCount           = paramNames.size();

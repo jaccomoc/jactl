@@ -57,6 +57,7 @@ public class BaseTest {
   protected Predicate<String>  allowHostClassLookup = null;
   protected boolean            skipCheckpointTests;
   protected boolean            runTestsWithAllowHostAccess = false;
+  protected boolean            invokeDynamic = true;
   protected JactlEnv           jactlEnv;
 
   protected static int testCounter = 0;
@@ -134,13 +135,19 @@ public class BaseTest {
 
       JactlScript compiled = compileScript(scriptCode, jactlContext, packageName, asyncDecorator, bindings);
 
+      // Run everything twice to make sure second time through the invokeDynamic does the right thing
+      // since the first time we install a new call site but still invoke the wrapper. Second time we
+      // actually use what was installed by the bootstrap.
       if (input == null && output == null) {
+        Map newBindings = new HashMap(bindings);
+        compiled.eval(newBindings);
         return compiled.eval(bindings);
       }
       else {
-        return compiled.eval(bindings,
-                                input == null ? null : new BufferedReader(new StringReader(input)),
-                                output == null ? null: new PrintStream(output));
+        Map newBindings = new HashMap(bindings);
+        ByteArrayOutputStream devNull = new ByteArrayOutputStream();
+        compiled.eval(newBindings, input == null ? null : new BufferedReader(new StringReader(input)), output == null ? null: new PrintStream(devNull));
+        return compiled.eval(bindings, input == null ? null : new BufferedReader(new StringReader(input)), output == null ? null: new PrintStream(output));
       }
 
     }
@@ -156,17 +163,25 @@ public class BaseTest {
   }
 
   protected void doTestCheckpoint(String scriptCode, Object expected) {
-    doTestCheckpoint(Utils.listOf(), scriptCode, expected);
+    doTestCheckpoint(Utils.listOf(), scriptCode, expected, true);
+  }
+
+  protected void doTestCheckpoint(String scriptCode, Object expected, boolean checkpointify) {
+    doTestCheckpoint(Utils.listOf(), scriptCode, expected, checkpointify);
   }
 
   protected void doTestCheckpoint(List<String> classCode, String scriptCode, Object expected) {
+    doTestCheckpoint(classCode, scriptCode, expected, false, true);
+  }
+  
+  protected void doTestCheckpoint(List<String> classCode, String scriptCode, Object expected, boolean checkpointify) {
     if (isAsync) {
-      doTestCheckpoint(classCode, scriptCode, expected, false);
-      doTestCheckpoint(classCode, scriptCode, expected, true);
+      doTestCheckpoint(classCode, scriptCode, expected, false, checkpointify);
+      doTestCheckpoint(classCode, scriptCode, expected, true, checkpointify);
     }
   }
 
-  protected void doTestCheckpoint(List<String> classCode, String scriptCode, Object expected, boolean loopDetection) {
+  protected void doTestCheckpoint(List<String> classCode, String scriptCode, Object expected, boolean loopDetection, boolean checkpointify) {
     testVariationCounter++;
     try {
       int[] errors = {0};
@@ -211,7 +226,7 @@ public class BaseTest {
 
       Map<String, Object> bindings = createGlobals();
 
-      Function<Expr,Expr> asyncDecorator = expr -> checkpointify(expr);
+      Function<Expr,Expr> asyncDecorator = expr -> checkpointify ? checkpointify(expr) : expr;
       classCode.forEach(code -> compileClass(code, jactlContext1, packageName, asyncDecorator, bindings));
       classCode.forEach(code -> compileClass(code, jactlContext2, packageName, asyncDecorator, bindings));
 
@@ -307,6 +322,7 @@ public class BaseTest {
                                             .classAccessToGlobals(classAccessToGlobals)
                                             .evaluateConstExprs(evalConsts)
                                             .replMode(replMode)
+                                            .invokeDynamic(invokeDynamic)
                                             .debug(debugLevel)
                                             .checkpoint(isAsync && testCheckpoint)
                                             .restore(isAsync && testCheckpoint)

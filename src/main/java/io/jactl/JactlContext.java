@@ -59,7 +59,8 @@ public class JactlContext {
   public boolean classAccessToGlobals   = false;   // Whether to allow class methods to access globals
   public boolean allowUndeclaredGlobals = false;   // Whether to allow compilation of access to undeclared globals
   public boolean allowHostAccess        = false;   // Whether to allow calls to methods on binding variables of unknown type
-  public boolean isAsync                = true;    // Whether async functions use Continuations (true) or block (false)
+  public boolean isAsync       = true;    // Whether async functions use Continuations (true) or block (false)
+  public boolean invokeDynamic = true;    // Whether to generate InvokeDynamic code or not
   
   private Object applicationContext = null;
   
@@ -262,7 +263,16 @@ public class JactlContext {
      * @param enabled  true if async functions cause script to suspend, false if script should block
      * @return this JactlContextBuilder
      */
-    public JactlContextBuilder async(boolean enabled)            { isAsync            = enabled; return this; }
+    public JactlContextBuilder async(boolean enabled)            { isAsync             = enabled; return this; }
+
+    /**
+     * Whether to output InvokeDynamic code for invoking closures or functions which have been
+     * passed by value. This generates faster code at the expense of a slightly longer bootstrap
+     * the first time the code is invoked.
+     * @param enabled  whether this feature is enabled or not
+     * @return the JactlContextBuilder
+     */
+    public JactlContextBuilder invokeDynamic(boolean enabled)    { invokeDynamic = enabled; return this; }
     
     /**
      * Whether globals passed into a script execution can be accessed within a Jactl class.
@@ -1074,7 +1084,7 @@ public class JactlContext {
     private Class<?> clss;
     private Method   method;
     private boolean  multipleMethods;
-    private JactlMethodHandle methodHandle;
+    private MethodHandle methodHandle;
     private int     paramCount;
     private Class[] paramTypes;
     private boolean isStatic;
@@ -1088,13 +1098,13 @@ public class JactlContext {
       this.paramTypes      = method.getParameterTypes();
       this.isStatic        = Modifier.isStatic(method.getModifiers());
       try {
-        this.methodHandle = JactlMethodHandle.create(MethodHandles.publicLookup().unreflect(method), clss,  method.getName() + "Handle");
+        this.methodHandle = MethodHandles.publicLookup().unreflect(method);
       }
       catch (IllegalAccessException e) {
         throw new RuntimeError("Error accessing method '" + method.getName() + "' of class " + clss.getName() + ": " + e.getMessage(), source, offset, e);
       }
       try {
-        MethodHandle handle =
+        MethodHandle wrapperHandle =
           isStatic ? MethodHandles.lookup().findVirtual(HostClassMethodInvoker.class, "wrapper",
                                                         MethodType.methodType(Object.class,
                                                                               Continuation.class,
@@ -1109,8 +1119,8 @@ public class JactlContext {
                                                                               int.class,
                                                                               Object[].class));
 
-        handle = handle.bindTo(this);
-        wrapperHandle = JactlMethodHandle.createHostClassHandle(handle, isStatic);
+        wrapperHandle = wrapperHandle.bindTo(this);
+        this.wrapperHandle = JactlMethodHandle.createHostClassHandle(methodHandle, wrapperHandle, isStatic);
       }
       catch (NoSuchMethodException | IllegalAccessException e) {
         throw new RuntimeException(e);

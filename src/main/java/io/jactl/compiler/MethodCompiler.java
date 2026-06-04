@@ -19,6 +19,7 @@ package io.jactl.compiler;
 
 import io.jactl.*;
 import io.jactl.runtime.*;
+import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
@@ -32,7 +33,6 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.BOOLEAN;
@@ -52,7 +52,7 @@ import static io.jactl.JactlType.STRING_ARR;
 import static io.jactl.JactlType.VOID;
 import static io.jactl.TokenType.*;
 import static io.jactl.Utils.JACTL_JAVA_INIT;
-import static io.jactl.Utils.parseArgs;
+import static io.jactl.Utils.isNamedArgs;
 import static org.objectweb.asm.Opcodes.NEW;
 import static org.objectweb.asm.Opcodes.*;
 
@@ -2296,21 +2296,36 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Invoking via a method handle so we don't know if we have an async function or not and
     // therefore take the conservative approach of assuming it is async
+    List<JactlType> stackTypes = new ArrayList<>();
+    boolean useInvokeDynamic = classCompiler.context.invokeDynamic && !Utils.isNamedArgs(expr.args);
     invokeMaybeAsync(expr.isAsync, ANY, 0, expr.location,
                      () -> {
                        // Need to get the method handle
                        compile(expr.callee);
                        convertTo(FUNCTION, expr.callee, true, expr.callee.location);
 
+                       stackTypes.add(FUNCTION);
+                       
                        // NOTE: we don't have to passed closed over vars here because the method handle we get
                        //       has already had these values bound to it
                        loadNullContinuation();
+                       stackTypes.add(CONTINUATION);
                        loadLocation(expr.location);
-
-                       // Any arguments will be stored in an Object[]
-                       loadArgsAsObjectArr(expr.args);
+                       stackTypes.add(STRING);
+                       stackTypes.add(INT);
+                       
+                       if (!useInvokeDynamic) {
+                         // Any arguments will be stored in an Object[]
+                         loadArgsAsObjectArr(expr.args);
+                       }
+                       else {
+                         for (int i = 0; i < expr.args.size(); i++) {
+                           compile(expr.args.get(i));
+                           stackTypes.add(peek());
+                         }
+                       }
                      },
-                     () -> invokeMethodHandle());
+                     () -> invokeMethodHandle(useInvokeDynamic, stackTypes));
 
     // We don't know if function was script local or not since we invoked
     // via method handle so we need to refresh aliases just in case
@@ -2359,18 +2374,58 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // will attempt to get the method handle for the field by doing a method lookup and if no method
     // exists we will assume that there is a field of that name that holds a method handle.
     // Since we invoke through a method handle we don't know whether we are async or not so we assume
-    // the worst.
-    invokeMaybeAsync(asyncEnabled(), ANY, 0, expr.location,
-                     () -> {
-                       compile(expr.parent);           // The instance to invoke method on
-                       loadConst(expr.methodName);
-                       loadConst(!expr.parent.type.is(ANY));              // Whether must be field
-                       loadConst(expr.accessOperator.is(QUESTION_DOT));   // whether x?.a() or x.a()
-                       loadArgsAsObjectArr(expr.args);
-                       loadConst(!insideTryCatchNullError());
-                       loadLocation(expr.methodNameLocation);
-                     },
-                     () -> invokeMethod(RuntimeUtils.INVOKE_METHOD_OR_FIELD_METHOD));
+    // the worst. If we can, we will use invokeDynamic to bypass the MethodHandle call and invoke
+    // the method directly. We fall back to MethodHandle if all else fails.
+    if (classCompiler.context.invokeDynamic && !isNamedArgs(expr.args)) {
+     // Use invokeDynamic for fast runtime performance after initial bootstrap
+      compile(expr.parent);
+      MethodType methodType = getTypeForMethodCall(Object.class, expr.args);
+      int argCount          = expr.args.size() + 1 + 1 + 2;  // size + target + Continuation + source + offset
+      Handle bsmHandle      = new Handle(H_INVOKESTATIC, Type.getInternalName(InvokeDynamicBootstrap.class), "bootstrapMethodOrField",
+                                         "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                                         false);
+      
+      Runnable emitInvokeDynamic = () -> invokeMaybeAsync(asyncEnabled(), ANY, 1, expr.location,
+                                                          () -> {
+                                                            loadNullContinuation();
+                                                            loadLocation(expr.methodNameLocation);
+                                                            expr.args.forEach(this::compile);
+                                                          },
+                                                          () -> {
+                                                            expect(argCount);
+                                                            mv.visitInvokeDynamicInsn(expr.methodName, methodType.toMethodDescriptorString(), bsmHandle);
+                                                            popType(argCount);
+                                                            pushType(ANY);
+                                                          });
+
+      if (expr.parent.couldBeNull) {
+        if (expr.accessOperator.is(DOT)) {
+          throwIfNull("Tried to invoke method on null value", expr.methodNameLocation);
+          emitInvokeDynamic.run();
+        }
+        else {
+          // Access via QUESTION_DOT
+          emitIf(asyncEnabled(), IfTest.IS_NOTNULL, () -> dupVal(), () -> emitInvokeDynamic.run(), () -> {});
+        }
+      }
+      else {
+        // No need for null check
+        emitInvokeDynamic.run();
+      }
+    }
+    else {
+      invokeMaybeAsync(asyncEnabled(), ANY, 0, expr.location,
+                       () -> {
+                         compile(expr.parent);           // The instance to invoke method on
+                         loadConst(expr.methodName);
+                         loadConst(!expr.parent.type.is(ANY));              // Whether must be field
+                         loadConst(expr.accessOperator.is(QUESTION_DOT));   // whether x?.a() or x.a()
+                         loadArgsAsObjectArr(expr.args);
+                         loadConst(!insideTryCatchNullError());
+                         loadLocation(expr.methodNameLocation);
+                       },
+                       () -> invokeMethod(RuntimeUtils.INVOKE_METHOD_OR_FIELD_METHOD));
+    }
 
     if (!expr.isMethodCallTarget) {
       // If we are not chaining method calls then it is possible that the method we just invoked returned
@@ -2465,6 +2520,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            else {
                              // Must have simple constant for default value (built-in function or simple default value for user method)
                              Object        defaultValue  = method.defaultVals[i];
+                             assert defaultValue != FunctionDescriptor.NON_TRIVIAL;
                              loadConst(defaultValue);
                              if (defaultValue != null) {
                                convertTo(paramType, null, !peek().isPrimitive(), expr.leftParen);
@@ -3470,12 +3526,29 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   public static MethodType getMethodType(Expr.FunDecl funDecl) {
-    List<JactlType> paramTypes = methodParamTypes(funDecl);
+    return getMethodType(funDecl.returnType.classFromType(), methodParamTypes(funDecl));
+  }
+
+  public static MethodType getMethodType(Class<?> returnType, List<JactlType> paramTypes) {
     Class[] paramClasses = new Class[paramTypes.size()];
     for (int i = 0; i < paramTypes.size(); i++) {
       paramClasses[i] = paramTypes.get(i).classFromType();
     }
-    return MethodType.methodType(funDecl.returnType.classFromType(), paramClasses);
+    return MethodType.methodType(returnType, paramClasses);
+  }
+
+  public static MethodType getTypeForMethodCall(Class<?> returnType, List<Expr> exprs) {
+    // Allow space for the target, the Continuation, and the source/offset
+    Class[] paramClasses = new Class[exprs.size() + 1 + 1 + 2];
+    int idx = 0;
+    paramClasses[idx++] = Object.class;        // the target object
+    paramClasses[idx++] = Continuation.class;
+    paramClasses[idx++] = String.class;
+    paramClasses[idx++] = int.class;
+    for (int i = 0; i < exprs.size(); i++) {
+      paramClasses[idx++] = exprs.get(i).type.classFromType();
+    }
+    return MethodType.methodType(returnType, paramClasses);
   }
 
   private static List<JactlType> methodParamTypes(Expr.FunDecl funDecl) {
@@ -4963,6 +5036,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            for (int i = expr.args.size(); i < func.defaultVals.length; i++) {
                              Expr.VarDecl paramDecl  = funDecl.parameters.get(i).declExpr;
                              Object       defaultVal = func.defaultVals[i];
+                             assert defaultVal != FunctionDescriptor.NON_TRIVIAL;
                              loadConst(defaultVal);
                              if (defaultVal != null) {
                                convertTo(paramDecl.type, null, !peek().isPrimitive(), expr.location);
@@ -5064,6 +5138,22 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     invokeMethod(JactlMethodHandle.INVOKE_METHOD);
   }
 
+  private void invokeMethodHandle(boolean useInvokeDynamic, List<JactlType> stackTypes) {
+    if (!useInvokeDynamic) {
+      // Fallback to old way
+      invokeMethod(JactlMethodHandle.INVOKE_METHOD);
+      return;
+    }
+    expect(stackTypes.size());
+    Handle bsmHandle = new Handle(H_INVOKESTATIC, Type.getInternalName(InvokeDynamicBootstrap.class), "bootstrap",
+                                  "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                                  false);
+    MethodType methodType = getMethodType(Object.class, stackTypes);
+    mv.visitInvokeDynamicInsn("invokeMethodHandle", methodType.toMethodDescriptorString(), bsmHandle);
+    popType(stackTypes.size());
+    pushType(ANY);
+  }
+
   void invokeMethod(Class<?> clss, String methodName, Class<?>... paramTypes) {
     Method method = findMethod(clss, methodName, paramTypes);
     invokeMethod(clss, method, getTypeFromClass(method.getReturnType()));
@@ -5085,6 +5175,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     boolean isInterface = clss.isInterface();
     invokeMethod(Type.getInternalName(clss), method, returnType, descriptor, methodName, Modifier.isStatic(method.getModifiers()), isConstructor, isInterface, method.getParameterTypes());
   }
+  
   void invokeMethod(String internalClassName, Executable method, JactlType returnType, String methodDescriptor, String methodName, boolean isStatic, boolean isConstructor, boolean isInterface, Class<?>[] paramTypes) {
     if (isStatic) {
       expect(paramTypes.length);

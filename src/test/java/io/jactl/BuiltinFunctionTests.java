@@ -149,6 +149,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("sleep(1)", null);
     test("sleep(0,null)", null);
     test("sleep(0,'abc')", "abc");
+    test("def f = sleep; f(0,'abc')", "abc");
   }
 
   @Test public void filter() {
@@ -156,6 +157,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[].filter()", Utils.listOf());
     test("[1,'',2].filter{it}", Utils.listOf(1,2));
     test("[1,'',2].filter(predicate:{it})", Utils.listOf(1,2));
+    test("def f = [1,'',2].filter; f{it}", Utils.listOf(1,2));
     test("def f = [1,'',2].filter; f(predicate:{it})", Utils.listOf(1,2));
     testError("def f = [1,'',2].filter; f(closurex:{it})", "no such parameter");
     test("[1,'',2].filter()", Utils.listOf(1,2));

@@ -22,13 +22,17 @@ import io.jactl.Utils;
 import io.jactl.runtime.JactlMethodHandle.FunctionWrapperHandle;
 import org.objectweb.asm.Type;
 
+import java.lang.invoke.MethodHandle;
 import java.lang.reflect.Method;
 import java.util.*;
 
-import static io.jactl.JactlType.CONTINUATION;
+import static io.jactl.JactlType.*;
 import static io.jactl.compiler.MethodCompiler.getMethodDescriptor;
 
 public class FunctionDescriptor {
+  
+  public static final Object NON_TRIVIAL = new Object();
+  
   public JactlType        type;            // Type method is for, or null for global functions
   public JactlType        firstArgtype;    // Type of first arg (can be different to type - e.g. ANY)
   public String           name;            // Jactl method/function name
@@ -38,7 +42,8 @@ public class FunctionDescriptor {
   public List<JactlType>  paramTypes;
   public int              paramCount;
   public int              mandatoryArgCount;
-  public Object[]         defaultVals = new Object[0]; // Default values for each parameter - null if mandatory or if default is not a trivial constant
+  public Object[]         defaultVals = new Object[0]; // Default values for each parameter - MANDATORY if mandatory or NON_TRIVIAL
+                                                       // if default is not a trivial constant
   public String           implementingClassName;       // internal form (a/b/c/Name)
   public String           implementingMethod;
   public String           inlineMethodName;         // Name of method that compiler can invoke to inline function (if supported)
@@ -76,6 +81,10 @@ public class FunctionDescriptor {
 
   public FunctionDescriptor() {}
   
+  public MethodHandle getMethodHandle() {
+    throw new UnsupportedOperationException();
+  }
+  
   public String getWrapperHandleClassName() {
     return wrapperHandleClassName == null ? implementingClassName : wrapperHandleClassName;
   }
@@ -97,7 +106,7 @@ public class FunctionDescriptor {
       types.add(firstArgtype);
     }
     if (isAsync() || isWrapper) { types.add(CONTINUATION); }
-    if (needsLocation)          { types.addAll(Utils.listOf(JactlType.STRING, JactlType.INT)); }
+    if (needsLocation)          { types.addAll(Utils.listOf(STRING, INT)); }
     types.addAll(paramTypes);
     return types;
   }
@@ -113,6 +122,28 @@ public class FunctionDescriptor {
       types[i] = paramTypes.get(i).descriptorType();
     }
     return Type.getMethodDescriptor(returnType.descriptorType(), types);
+  }
+  
+  public String getImplementingMethodDescriptor() {
+    // This differs from getMethodDescriptor() in that it reflects the actual implementing method
+    // signature (which might be a static method with the target object as first arg) rather than
+    // pretending to be an object method when it is actually a static method. It also handles the
+    // Continuation if needed and the source/offset if needed.
+    if (isStaticImplementation && !isStaticMethod) {
+      // We need to add our target object
+      List<JactlType> actualTypes = new ArrayList<>();
+      actualTypes.add(firstArgtype);
+      if (isAsync()) {
+        actualTypes.add(CONTINUATION);
+      }
+      if (needsLocation) {
+        actualTypes.add(STRING);
+        actualTypes.add(INT);
+      }
+      actualTypes.addAll(paramTypes);
+      return getMethodDescriptor(returnType, actualTypes);
+    }
+    return getMethodDescriptor();
   }
   
   public List<String> getAliases() {

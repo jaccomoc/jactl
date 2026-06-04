@@ -20,11 +20,12 @@ package io.jactl.runtime;
 import io.jactl.JactlType;
 import io.jactl.Utils;
 import io.jactl.compiler.MethodRef;
+
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
+import java.util.List;
 
 import static io.jactl.JactlType.FUNCTION;
 
@@ -53,6 +54,10 @@ public abstract class JactlMethodHandle implements Checkpointable {
   public int parameterCount() {
     return handle.type().parameterCount();
   }
+  
+  public Class[] parameterTypes() {
+    return handle.type().parameterArray();
+  }
 
   public Object invoke(JactlObject obj, Continuation c, String source, int offset, Object[] args) throws Throwable {
     return handle.invoke(obj, c, source, offset, args);
@@ -73,26 +78,54 @@ public abstract class JactlMethodHandle implements Checkpointable {
   public JactlMethodHandle bindTo(Object obj) {
     return new BoundHandle(this, obj);
   }
+  
+  public MethodHandle handleToUnderlyingFunction() {
+    throw new UnsupportedOperationException();
+  }
+  
+  public boolean   isAsync() {
+    throw new UnsupportedOperationException();
+  }
+  public boolean   needsLocation() {
+    throw new UnsupportedOperationException();
+  }
+  
+  private static final boolean[] EMPTY_BOOLEAN_ARR = new boolean[0];
+  public boolean[] heapLocalsPassedToFn() { return EMPTY_BOOLEAN_ARR; }
 
+  public boolean            isBoundHandle()  { return false; }
+  public Object             getBoundObject() { return null; }
+  public JactlMethodHandle  getInnerHandle() { return this; }
+  public void               populateBoundHandles(List<JactlMethodHandle> boundHandles) {}
+  
   /**
-   * Create a Handle that wraps a MethodHandle pointing to a given method of a class.
-   * Used for built-in functions and host class methods.
-   * For built-in functions the handleName is the name of a field in the handleClass
-   * that holds the value of handle. This is used for recovery. We store the handle
-   * name in the checkpoint and use this to then lookup the handle during restore.
-   * Note: not sure why we don't just do another MethodHandles.lookup at that point
-   * since both mechanisms need reflection to work.
-   * @param handle       the handle returned by MethodHandles.lookup() 
-   * @param handleClass  the class in which the method lives
-   * @param handleName   the name of a static field in the handleClass that holds the handle value
+   * Used when creating MethodHandles to continuation methods (for built-in functions)
+   * @param handle        the handle to the method returned by MethodHandles.lookup()
+   * @param handleClass   the class in which the static field holding the wrapper handle lives
+   * @param handleName    the name of a static field in the handleClass that holds the wrapper handle value
    * @return the new Handle object
    */
-  public static JactlMethodHandle create(MethodHandle handle, Class handleClass, String handleName) {
-    return new Handle(handle, handleClass, handleName);
+  public static JactlMethodHandle create(MethodHandle handle, Class<?> handleClass, String handleName) {
+    return new Handle(null, false, false, null, handle, handleClass, handleName);
   }
 
   /**
-   * Return an InteratorHandle that points to the static method of a JactlIterator class.
+   * Used by ClassCompiler when creating wrapper handles for methods/functions.
+   * @param methodHandle  handle to actual method
+   * @param isAsync       true if method is async
+   * @param needsLocation true if method needs location passed to it
+   * @param heapLocalsPassedToFn  array of booleans indicating which heapLocals from wrapper are passed to function
+   * @param wrapperHandle the wrapper handle
+   * @param className     the class name (for the method and the location of the handle field)
+   * @param handleName    the name of the static field holding the JactlMethodHandle
+   * @return the JactlMethodHandle
+   */
+  public static JactlMethodHandle create(MethodHandle methodHandle, boolean isAsync, boolean needsLocation, boolean[] heapLocalsPassedToFn, MethodHandle wrapperHandle, Class<?> className, String handleName) {
+    return new Handle(methodHandle, isAsync, needsLocation, heapLocalsPassedToFn, wrapperHandle, className, handleName);
+  }
+
+  /**
+   * Return an IteratorHandle that points to the static method of a JactlIterator class.
    * @param handle      the MethodHandle for the method
    * @param type        the type of iterator
    * @param handleName  the static field of the class holding the value of the underlying MethodHandle
@@ -118,12 +151,13 @@ public abstract class JactlMethodHandle implements Checkpointable {
    * When host access is enabled this returns a HostClassWrapperHandle that points to the wrapper()
    * method of HostClassMethodInvoker that has been bound to an instance of that class that knows
    * how to invoke the given host class method.
-   * @param handle    a MethodHandle pointing to HostClassMethodInvoker.wrapper() bound to an instance of that type
-   * @param isStatic  whether the host method is static or not
+   * @param handle           a MethodHandle pointing to the host class method
+   * @param wrapperHandle    a MethodHandle pointing to HostClassMethodInvoker.wrapper() bound to an instance of that type
+   * @param isStatic         whether the host method is static or not
    * @return the HostClassWrapperHandle
    */
-  public static HostClassWrapperHandle createHostClassHandle(MethodHandle handle, boolean isStatic) {
-    return new HostClassWrapperHandle(handle, isStatic);
+  public static HostClassWrapperHandle createHostClassHandle(MethodHandle handle, MethodHandle wrapperHandle, boolean isStatic) {
+    return new HostClassWrapperHandle(handle, wrapperHandle, isStatic);
   }
 
   /////////////////////////////////////////////////////////////
@@ -141,14 +175,39 @@ public abstract class JactlMethodHandle implements Checkpointable {
   }
 
   private static class Handle extends JactlMethodHandle {
-    private Class        handleClass;
-    private String       handleName;
+    private Class  className;
+    private String handleName;
+    private MethodHandle methodHandle;
+    private boolean isAsync;
+    private boolean   needsLocation;
+    private boolean[] heapLocalsPassedToFn;
     Handle(){}
-    public Handle(MethodHandle handle, Class handleClass, String handleName) {
-      this.handle      = handle;
-      this.handleClass = handleClass;
-      this.handleName  = handleName;
+    public Handle(MethodHandle methodHandle, boolean isAsync, boolean needsLookup, boolean[] heapLocalsPassedToFn, MethodHandle wrapperHandle, Class className, String handleName) {
+      this.handle       = wrapperHandle;
+      this.className    = className;
+      this.handleName   = handleName;
+      this.methodHandle = methodHandle;
+      this.isAsync        = isAsync;
+      this.needsLocation = needsLookup;
+      this.heapLocalsPassedToFn = heapLocalsPassedToFn;
     }
+
+    @Override public MethodHandle handleToUnderlyingFunction() { return methodHandle; } 
+    @Override public boolean isAsync() { return isAsync; }
+    @Override public boolean needsLocation() { return needsLocation; }
+    public boolean[] heapLocalsPassedToFn() {
+      return heapLocalsPassedToFn;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) { return true; }
+      if (obj instanceof Handle) {
+        return this.methodHandle == ((Handle)obj).methodHandle;
+      }
+      return false;
+    }
+
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(FUNCTION);
       checkpointer.writeCInt(HandleType.HANDLE.ordinal());
@@ -156,14 +215,14 @@ public abstract class JactlMethodHandle implements Checkpointable {
 
       // For JactlObject handles we write the class name but for built-in function classes
       // we write an id that has been registered with BuiltinFunctions.
-      if (JactlObject.class.isAssignableFrom(handleClass)) {
+      if (JactlObject.class.isAssignableFrom(className)) {
         checkpointer.writeBoolean(true);
-        checkpointer.writeObject(Type.getInternalName(handleClass));
+        checkpointer.writeObject(Type.getInternalName(className));
       }
       else {
         checkpointer.writeBoolean(false);
-        checkpointer.writeCInt(BuiltinFunctions.getClassId(handleClass));
-        checkpointer.writeCInt(handleClass.getName().hashCode());
+        checkpointer.writeCInt(BuiltinFunctions.getClassId(className));
+        checkpointer.writeCInt(className.getName().hashCode());
       }
       checkpointer.writeObject(handleName);
     }
@@ -173,19 +232,24 @@ public abstract class JactlMethodHandle implements Checkpointable {
       restorer.expectCInt(VERSION, "Bad version");
       boolean isJactlClass = restorer.readBoolean();
       if (isJactlClass) {
-        handleClass = restorer.getJactlClass((String)restorer.readObject());
+        className = restorer.getJactlClass((String)restorer.readObject());
       }
       else {
-        handleClass = BuiltinFunctions.getClass(restorer.readCInt());
-        restorer.expectCInt(handleClass.getName().hashCode(), "Class name hash does not match for " + handleClass.getName());
+        className = BuiltinFunctions.getClass(restorer.readCInt());
+        restorer.expectCInt(className.getName().hashCode(), "Class name hash does not match for " + className.getName());
       }
       handleName = (String)restorer.readObject();
       try {
-        Field handleField = handleClass.getDeclaredField(handleName);
-        handle = ((JactlMethodHandle)handleField.get(null)).handle;
+        Field handleField = className.getDeclaredField(handleName);
+        Handle jactlMethodHandle = (Handle) handleField.get(null);
+        handle = jactlMethodHandle.handle;
+        methodHandle = jactlMethodHandle.methodHandle;
+        isAsync = jactlMethodHandle.isAsync;
+        needsLocation = jactlMethodHandle.needsLocation;
+        heapLocalsPassedToFn = jactlMethodHandle.heapLocalsPassedToFn;
       }
       catch (NoSuchFieldException | IllegalAccessException e) {
-        throw new IllegalStateException("Error accessing field " + handleName + " in class " + handleClass.getName(), e);
+        throw new IllegalStateException("Error accessing field " + handleName + " in class " + className.getName(), e);
       }
     }
   }
@@ -206,6 +270,16 @@ public abstract class JactlMethodHandle implements Checkpointable {
       checkpointer.writeCInt(type.ordinal());
       checkpointer.writeObject(handleName);
     }
+
+    @Override
+    public boolean equals(Object obj) {
+      if (this == obj) { return true; }
+      if (obj instanceof IteratorHandle) {
+        return this.handle == ((IteratorHandle)obj).handle;
+      }
+      return false;
+    }
+
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.FUNCTION);
       restorer.expectCInt(HandleType.ITERATOR_HANDLE.ordinal(), "Expected HANDLE");
@@ -223,14 +297,31 @@ public abstract class JactlMethodHandle implements Checkpointable {
     }
   }
 
-  // NOTE: These don't support checkpoint/restore because of the risk of somone being able to inject
+  // NOTE: These don't support checkpoint/restore because of the risk of someone being able to inject
   // a malicious class/method name at restoration time that then gets invoked.
   public static class HostClassWrapperHandle extends JactlMethodHandle {
     boolean isStatic;
-    public HostClassWrapperHandle(MethodHandle handle, boolean isStatic) {
-      this.handle   = handle;
-      this.isStatic = isStatic;
+    MethodHandle methodHandle;
+    public HostClassWrapperHandle(MethodHandle handle, MethodHandle wrapperHandle, boolean isStatic) {
+      this.handle       = wrapperHandle;
+      this.methodHandle = handle;
+      this.isStatic     = isStatic;
     }
+
+    public MethodHandle handleToUnderlyingFunction() { return methodHandle; }
+    public boolean isAsync() { return false; }
+    public boolean needsLocation() { return false; }
+
+    @Override
+    public boolean equals(Object other) {
+      if (other == this) return true;
+      if (other instanceof HostClassWrapperHandle) {
+        HostClassWrapperHandle hh = (HostClassWrapperHandle)other;
+        return this.methodHandle.equals(hh.methodHandle);
+      }
+      return false;
+    }
+
     @Override public JactlMethodHandle bindTo(Object obj) {
       return isStatic ? this : super.bindTo(obj);
     }
@@ -253,9 +344,21 @@ public abstract class JactlMethodHandle implements Checkpointable {
       this.name   = name;
       this.function = function;
     }
-    public FunctionDescriptor getFunction() {
-      return function;
+    public FunctionDescriptor getFunction() { return function; }
+    @Override public MethodHandle handleToUnderlyingFunction() { return function.getMethodHandle(); }
+    @Override public boolean isAsync() { return function.isAsync(); }
+    @Override public boolean needsLocation() { return function.needsLocation; }
+
+    @Override
+    public boolean equals(Object other) {
+      if (other == this) return true;
+      if (other instanceof FunctionWrapperHandle) {
+        FunctionWrapperHandle fh = (FunctionWrapperHandle) other;
+        return this.function == fh.function;
+      }
+      return false;
     }
+
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(FUNCTION);
       checkpointer.writeCInt(HandleType.BUILTIN_FUNCTION.ordinal());
@@ -289,6 +392,30 @@ public abstract class JactlMethodHandle implements Checkpointable {
       this.boundObj      = obj;
       this.handle        = wrappedHandle.handle.bindTo(boundObj);
     }
+
+    @Override public MethodHandle      handleToUnderlyingFunction() { return wrappedHandle.handleToUnderlyingFunction(); }
+    @Override public boolean[]         heapLocalsPassedToFn()       { return wrappedHandle.heapLocalsPassedToFn(); }
+    @Override public boolean           isAsync()                    { return wrappedHandle.isAsync(); }
+    @Override public boolean           needsLocation()              { return wrappedHandle.needsLocation(); }
+    @Override public boolean           isBoundHandle()              { return true; }
+    @Override public Object            getBoundObject()             { return boundObj; }
+    @Override public JactlMethodHandle getInnerHandle()             { return wrappedHandle; }
+    @Override public void              populateBoundHandles(List<JactlMethodHandle> boundHandles) {
+      wrappedHandle.populateBoundHandles(boundHandles);
+      boundHandles.add(this);
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (other == this) return true;
+      if (other instanceof BoundHandle) {
+        BoundHandle bh = (BoundHandle)other;
+        if (this.wrappedHandle == bh.wrappedHandle && this.boundObj == bh.boundObj && this.handle == bh.handle) return true;
+        return this.wrappedHandle.equals(bh.wrappedHandle) && this.boundObj.equals(bh.boundObj) && this.handle.equals(bh.handle);
+      }
+      return false;
+    }
+
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(FUNCTION);
       checkpointer.writeCInt(HandleType.BOUND.ordinal());

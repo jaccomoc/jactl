@@ -141,6 +141,21 @@ public class Functions {
     return function.wrapperHandle;
   }
 
+  FunctionDescriptor lookupFunction(Object parent, String methodName) {
+    Class       parentClass     = parent instanceof JactlIterator ? JactlIterator.class : parent.getClass();
+    ClassLookup classLookup     = classes.computeIfAbsent(parentClass, clss -> new ClassLookup());
+    FunctionDescriptor function = classLookup.methods.computeIfAbsent(methodName, name -> {
+      JactlType parentType = JactlContext.typeOf(parent, jactlContext);
+      return findMatching(parentType, name);
+    });
+
+    if (function == NO_SUCH_METHOD) {
+      return null;
+    }
+    
+    return function;
+  }
+
   private FunctionDescriptor findMatching(JactlType objType, String methodName) {
     JactlType                type      = objType.unboxed();
     List<FunctionDescriptor> functions = methods.get(methodName);

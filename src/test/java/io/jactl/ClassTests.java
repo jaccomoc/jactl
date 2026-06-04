@@ -375,8 +375,8 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void methodArgsAsList() {
-    test("def a = [1,2,3]; class X { def f(byte x, byte y=7, byte z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", (byte)12);
     test("def a = [1,2,3]; class X { def f(int x, int y=7, int z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", 12);
+    test("def a = [1,2,3]; class X { def f(byte x, byte y=7, byte z) { x + y + z }}; X x = new X(); x.f(1,2,3) + x.f(a)", (byte)12);
     test("def a = [1,2,3]; class X { def f(x,y=7,z=8) { x + y + z }}; new X().f(a)", Utils.listOf(1, 2, 3, 7, 8));
     test("class X { def f(String x, int y) { x + y }}; def a = ['x',2]; new X().f(a)", "x2");
     testError("class X { def f(String x, int y) { x + y }}; def a = [2,'x']; new X().f(a)", "cannot convert object of type int to string");
