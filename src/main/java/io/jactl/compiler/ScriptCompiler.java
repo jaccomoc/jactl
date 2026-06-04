@@ -24,8 +24,15 @@ import static org.objectweb.asm.Opcodes.ACC_PUBLIC;
 
 public class ScriptCompiler extends ClassCompiler {
 
+  boolean globalsHaveErasedType = false;
+  
   public ScriptCompiler(String source, JactlContext context, Stmt.ClassDecl classDecl) {
     super(source, context, null, classDecl, classDecl.name.getStringValue() + ".jactl");
+  }
+  
+  public ScriptCompiler(String source, JactlContext context, Stmt.ClassDecl classDecl, boolean globalsHaveErasedType) {
+    super(source, context, null, classDecl, classDecl.name.getStringValue() + ".jactl");
+    this.globalsHaveErasedType = globalsHaveErasedType;
   }
 
   JactlScript compile() {
@@ -48,6 +55,10 @@ public class ScriptCompiler extends ClassCompiler {
     return compiledClass;
   }
 
+  @Override protected boolean globalsHaveErasedType() {
+    return globalsHaveErasedType;
+  }
+  
   private void compileScriptMain() {
     Expr.FunDecl method     = classDecl.scriptMain.declExpr;
     String       methodName =  method.functionDescriptor.implementingMethod;

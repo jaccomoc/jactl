@@ -168,18 +168,27 @@ public class JactlContext {
     return new JactlContextBuilder();
   }
 
-  public Class<?> defineClass(JactlClassDescriptor descriptor, byte[] bytes) {
-    return classAdder.addClass(descriptor, bytes);
+  public Class<?> defineClass(String source, JactlClassDescriptor descriptor, byte[] bytes) {
+    return classAdder.addClass(source, descriptor, bytes);
   }
 
-  private Class<?> _defineClass(JactlClassDescriptor descriptor, byte[] bytes) {
+  private Class<?> _defineClass(String source, JactlClassDescriptor descriptor, byte[] bytes) {
     String className = descriptor.getInternalName().replace('/', '.');
-    if (classLoader.getClass(className) != null) {
-      // Redefining existing class so create a new ClassLoader. This allows already defined classes that
-      // want to refer to the old version of the class to continue working.
+    Class<?> clss = classLoader.getClass(className);
+    if (clss != null) {
+      // If source code is the same then return existing class
+      // NOTE: we only do this for eval() where we have erased types for globals
+      // so we know that the compiled code is going to be the same each time.
+      if (source != null && source.equals(classLoader.getSource(className))) {
+        return clss;
+      }
+      
+      // Otherwise, redefining existing class so create a new ClassLoader. This allows
+      // already defined classes that want to refer to the old version of the class to
+      // continue working.
       classLoader = new DynamicClassLoader(classLoader);
     }
-    Class<?> clss = classLoader.defineClass(descriptor.getInternalName(), className, bytes);
+    clss = classLoader.defineClass(descriptor.getInternalName(), className, source, bytes);
     addClass(descriptor);
     if (buildDir != null) {
       String dirName  = descriptor.getJavaPackagedName().replaceAll("\\.[^\\.]*$", "");
@@ -204,7 +213,7 @@ public class JactlContext {
 
   // Helper that maps internal name (jactl.pkg.a.b.c.A$B$C) to class descriptor
   public interface ClassLookup    { JactlClassDescriptor lookup(String internalName); }
-  public interface ClassAdder     { Class<?>        addClass(JactlClassDescriptor descriptor, byte[] bytes); }
+  public interface ClassAdder     { Class<?>        addClass(String source, JactlClassDescriptor descriptor, byte[] bytes); }
 
   public class JactlContextBuilder {
     private JactlContextBuilder() {}
@@ -991,6 +1000,7 @@ public class JactlContext {
   
   public class DynamicClassLoader extends ClassLoader {
     private Map<String,Class<?>> classes                = new HashMap<>();
+    private Map<String,String>   classSource            = new HashMap<>();
     private Map<String,Class<?>> classesByInternalName  = new HashMap<>();
     private DynamicClassLoader   previous               = null;
 
@@ -1003,6 +1013,10 @@ public class JactlContext {
       this.previous = prev;
     }
 
+    String getSource(String className) {
+      return classSource.get(className);
+    }
+    
     Class<?> getClass(String name) {
       Class<?> clss = classes.get(name);
       if (clss == null && previous != null) {
@@ -1039,10 +1053,13 @@ public class JactlContext {
       return clss;
     }
 
-    Class<?> defineClass(String internalName, String name, byte[] bytes) {
+    Class<?> defineClass(String internalName, String name, String source, byte[] bytes) {
       Class<?> clss = defineClass(name, bytes, 0, bytes.length);
       classes.put(name, clss);
       classesByInternalName.put(internalName, clss);
+      if (source != null) {
+        classSource.put(name, source);
+      }
       return clss;
     }
 

@@ -99,7 +99,7 @@ public class Compiler {
     resolver.resolveScript(script);
     Analyser analyser = new Analyser(jactlContext);
     analyser.analyseClass(script);
-    ScriptCompiler compiler = new ScriptCompiler(source, jactlContext, script);
+    ScriptCompiler compiler = new ScriptCompiler(source, jactlContext, script, true);
     return compiler.compile().getInvoker();
   }
 

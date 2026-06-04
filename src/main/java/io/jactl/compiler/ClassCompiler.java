@@ -192,6 +192,10 @@ public class ClassCompiler {
       }
     });
   }
+  
+  protected boolean globalsHaveErasedType() {
+    return false;
+  }
 
   private Stream<Stmt.ClassDecl> allInnerClasses(Stmt.ClassDecl classDecl) {
     return Stream.concat(Stream.of(classDecl), classDecl.innerClasses.stream().flatMap(this::allInnerClasses));
@@ -221,7 +225,7 @@ public class ClassCompiler {
     if (context.printSize) {
       System.out.println("Class " + className + ": compiled size = " + bytes.length);
     }
-    compiledClass = context.defineClass(classDescriptor, bytes);
+    compiledClass = context.defineClass(globalsHaveErasedType() ? source : null, classDescriptor, bytes);
   }
 
   /**
