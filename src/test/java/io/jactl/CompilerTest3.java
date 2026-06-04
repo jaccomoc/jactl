@@ -614,6 +614,7 @@ public class CompilerTest3 extends BaseTest {
     test("def f(Decimal d) { d * d }; def g = f; def result; 2.each{ result = [1,2D,3.0,4L].map{ g(it) } }; result", Utils.listOf(new BigDecimal("1"), new BigDecimal("4.00"), new BigDecimal("9.00"), new BigDecimal("16")));
     test("class X { def f(int d) { d * d } }; def x = new X(); x.f(2.1234)", 4);
     test("class X { def f(int d) { d * d } }; def x = new X(); def g = x.f; g(2.1234)", 4);
+    test("class X { static def f(int d) { d * d } }; def g = X.f; g(2.1234)", 4);
   }
   
 }

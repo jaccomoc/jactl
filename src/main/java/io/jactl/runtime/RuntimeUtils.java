@@ -423,6 +423,10 @@ public class RuntimeUtils {
 
   public static final MethodRef MULTIPLY_METHOD = Utils.getMethod(RuntimeUtils.class, "multiply", Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
   public static Object multiply(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
+    if (left instanceof Integer && right instanceof Integer) {
+      return (int)left * (int)right;
+    }
+    
     if (isString(left)) {
       return binaryOp(left, right, operator, originalOperator, minScale, captureStackTrace, source, offset);
     }
@@ -588,29 +592,35 @@ public class RuntimeUtils {
 
   public static final MethodRef MODULO_METHOD = Utils.getMethod(RuntimeUtils.class, "modulo", Object.class, Object.class, String.class, String.class, int.class, boolean.class, String.class, int.class);
   public static Object modulo(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
-    if (!(left instanceof Number)) {
-      throwOperandError(left, true, operator, captureStackTrace, source, offset);
-    }
-    if (!(right instanceof Number)) {
-      throwOperandError(right, false, operator, captureStackTrace, source, offset);
-    }
-
-    // Must be numeric so convert to appropriate type and perform operation
-    if (left instanceof BigDecimal || right instanceof BigDecimal) {
-      return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
-    }
-
-    boolean resultIsByte = left instanceof Byte && right instanceof Byte;
-    if (left  instanceof Byte) { left  = ((int)(byte)left) & 0xff; }
-    if (right instanceof Byte) { right = ((int)(byte)right) & 0xff; }
-
-    if (left instanceof Double || right instanceof Double) {
-      double lhs = ((Number) left).doubleValue();
-      double rhs = ((Number) right).doubleValue();
-      return ((lhs % rhs)+rhs) % rhs;
-    }
-
     try {
+      if (left instanceof Integer && right instanceof Integer) {
+        int lhs = (int)left;
+        int rhs = (int)right;
+        return ((lhs % rhs) + rhs) % rhs;
+      }
+    
+      if (!(left instanceof Number)) {
+        throwOperandError(left, true, operator, captureStackTrace, source, offset);
+      }
+      if (!(right instanceof Number)) {
+        throwOperandError(right, false, operator, captureStackTrace, source, offset);
+      }
+
+      // Must be numeric so convert to appropriate type and perform operation
+      if (left instanceof BigDecimal || right instanceof BigDecimal) {
+        return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
+      }
+
+      boolean resultIsByte = left instanceof Byte && right instanceof Byte;
+      if (left  instanceof Byte) { left  = ((int)(byte)left) & 0xff; }
+      if (right instanceof Byte) { right = ((int)(byte)right) & 0xff; }
+      
+      if (left instanceof Double || right instanceof Double) {
+        double lhs = ((Number) left).doubleValue();
+        double rhs = ((Number) right).doubleValue();
+        return ((lhs % rhs)+rhs) % rhs;
+      }
+
       if (left instanceof Long || right instanceof Long) {
         long lhs = ((Number) left).longValue();
         long rhs = ((Number) right).longValue();
@@ -646,6 +656,16 @@ public class RuntimeUtils {
 
   public static final MethodRef BOOLEAN_OP_METHOD = Utils.getMethod(RuntimeUtils.class, "booleanOp", Object.class, Object.class, String.class, String.class, int.class);
   public static boolean booleanOp(Object left, Object right, String operator, String source, int offset) {
+    if (left instanceof Integer && right instanceof Integer) {
+      int lhs = (Integer) left;
+      int rhs = (Integer) right;
+      if (operator == EQUAL_EQUAL || operator == TRIPLE_EQUAL) { return lhs == rhs; }
+      if (operator == BANG_EQUAL  || operator == BANG_EQUAL_EQUAL) { return lhs != rhs; }
+      if (operator == LESS_THAN) {  return lhs < rhs; }
+      if (operator == GREATER_THAN) {  return lhs > rhs; }
+      if (operator == LESS_THAN_EQUAL) {  return lhs <= rhs; }
+      if (operator == GREATER_THAN_EQUAL) {  return lhs >= rhs; }
+    }
     if (operator == TRIPLE_EQUAL) {
       if (left == right)                                        { return true;  }
       if (left instanceof Boolean || left instanceof String)    { return left.equals(right); }

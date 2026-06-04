@@ -17,7 +17,6 @@
 
 package io.jactl.runtime;
 
-import io.jactl.Jactl;
 import io.jactl.JactlContext;
 import org.objectweb.asm.Type;
 
@@ -27,7 +26,7 @@ import java.math.BigDecimal;
 import java.util.*;
 
 /**
- * Bootstrap for InvokeDynamic sites.
+ * Bootstrap for InvokeDynamic sites
  */
 public class InvokeDynamicBootstrap {
 
