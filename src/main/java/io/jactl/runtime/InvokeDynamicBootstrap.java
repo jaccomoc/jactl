@@ -39,7 +39,25 @@ public class InvokeDynamicBootstrap {
   private static final MethodHandle IS_SAME_CLASS;               // Check classes are still the same
   private static final MethodHandle METHOD_OR_FIELD_INVOKER;     // Invokes wrapper as fallback
   private static final MethodHandle SAME_CLASSES;                // Checks if arg types are still the same
-  private static final MethodHandle SAME_HANDLE_AND_ARG_CLASSES; // Checks if arg types are still the same
+  
+  private static final MethodHandle SAME_JMH;
+  private static final MethodHandle SAME_JMH_OBJECT1;
+  private static final MethodHandle SAME_JMH_OBJECT2;
+  private static final MethodHandle SAME_JMH_OBJECT3;
+  private static final MethodHandle SAME_JMH_OBJECTN;
+  private static final MethodHandle SAME_JMH_ARG1;
+  private static final MethodHandle SAME_JMH_ARG2;
+  private static final MethodHandle SAME_JMH_ARG3;
+  private static final MethodHandle SAME_JMH_ARGN;
+  private static final MethodHandle SAME_CLASS;
+  private static final MethodHandle SAME_CLASS_OBJECT1;
+  private static final MethodHandle SAME_CLASS_OBJECT2;
+  private static final MethodHandle SAME_CLASS_OBJECT3;
+  private static final MethodHandle SAME_CLASS_OBJECTN;
+  private static final MethodHandle SAME_CLASS_ARG1;
+  private static final MethodHandle SAME_CLASS_ARG2;
+  private static final MethodHandle SAME_CLASS_ARG3;
+  private static final MethodHandle SAME_CLASS_ARGN;
 
   private static final MethodHandle BYTE_VALUE;
   private static final MethodHandle INT_VALUE;
@@ -58,11 +76,28 @@ public class InvokeDynamicBootstrap {
       GET_BOUND_AT_LEVEL      = lookup.findStatic(InvokeDynamicBootstrap.class, "getBoundAtLevel", MethodType.methodType(Object.class, int.class, JactlMethodHandle.class));
       INVOKE_WRAPPER_HANDLE   = lookup.findStatic(InvokeDynamicBootstrap.class, "invokeWrapper", MethodType.methodType(Object.class, JactlMethodHandle.class, Continuation.class, String.class, int.class, Object[].class));
        
-      METHOD_OR_FIELD_ADAPTER     = lookup.findStatic(InvokeDynamicBootstrap.class, "methodOrFieldAdapter", MethodType.methodType(Object.class, MaxDepthCallSite.class, MethodHandles.Lookup.class, String.class, Object[].class));
-      IS_SAME_CLASS               = lookup.findStatic(InvokeDynamicBootstrap.class, "isSameClass", MethodType.methodType(boolean.class, Class.class, Class.class));
-      METHOD_OR_FIELD_INVOKER     = lookup.findStatic(InvokeDynamicBootstrap.class, "invokeMethodOrField", MethodType.methodType(Object.class, String.class, Object.class, Continuation.class, String.class, int.class, Object[].class));
-      SAME_CLASSES                = lookup.findStatic(InvokeDynamicBootstrap.class, "sameClasses", MethodType.methodType(boolean.class, Class[].class, Object[].class));
-      SAME_HANDLE_AND_ARG_CLASSES = lookup.findStatic(InvokeDynamicBootstrap.class, "sameHandleAndArgClasses", MethodType.methodType(boolean.class, JactlMethodHandle.class, Class[].class, Object[].class));
+      METHOD_OR_FIELD_ADAPTER = lookup.findStatic(InvokeDynamicBootstrap.class, "methodOrFieldAdapter", MethodType.methodType(Object.class, MaxDepthCallSite.class, MethodHandles.Lookup.class, String.class, Object[].class));
+      IS_SAME_CLASS           = lookup.findStatic(InvokeDynamicBootstrap.class, "isSameClass", MethodType.methodType(boolean.class, Class.class, Class.class));
+      METHOD_OR_FIELD_INVOKER = lookup.findStatic(InvokeDynamicBootstrap.class, "invokeMethodOrField", MethodType.methodType(Object.class, String.class, Object.class, Continuation.class, String.class, int.class, Object[].class));
+      SAME_CLASSES            = lookup.findStatic(InvokeDynamicBootstrap.class, "sameClasses", MethodType.methodType(boolean.class, Class[].class, Object[].class));
+      SAME_JMH                = lookup.findStatic(InvokeDynamicBootstrap.class, "sameJmh", MethodType.methodType(boolean.class, JactlMethodHandle.class, JactlMethodHandle.class, Object.class, Object.class, int.class));
+      SAME_JMH_OBJECT1        = lookup.findStatic(InvokeDynamicBootstrap.class, "sameJmhObject1", MethodType.methodType(boolean.class, JactlMethodHandle.class, JactlMethodHandle.class, Object.class, Object.class, int.class, Object.class));
+      SAME_JMH_OBJECT2        = lookup.findStatic(InvokeDynamicBootstrap.class, "sameJmhObject2", MethodType.methodType(boolean.class, JactlMethodHandle.class, JactlMethodHandle.class, Object.class, Object.class, int.class, Object.class, Object.class));
+      SAME_JMH_OBJECT3        = lookup.findStatic(InvokeDynamicBootstrap.class, "sameJmhObject3", MethodType.methodType(boolean.class, JactlMethodHandle.class, JactlMethodHandle.class, Object.class, Object.class, int.class, Object.class, Object.class, Object.class));
+      SAME_JMH_OBJECTN        = lookup.findStatic(InvokeDynamicBootstrap.class, "sameJmhObjectN", MethodType.methodType(boolean.class, JactlMethodHandle.class, JactlMethodHandle.class, Object.class, Object.class, int.class, Object[].class));
+      SAME_JMH_ARG1           = lookup.findStatic(InvokeDynamicBootstrap.class, "sameJmhArg1", MethodType.methodType(boolean.class, JactlMethodHandle.class, Class.class, JactlMethodHandle.class, Object.class, Object.class, int.class, Object.class));
+      SAME_JMH_ARG2           = lookup.findStatic(InvokeDynamicBootstrap.class, "sameJmhArg2", MethodType.methodType(boolean.class, JactlMethodHandle.class, Class.class, Class.class, JactlMethodHandle.class, Object.class, Object.class, int.class, Object.class, Object.class));
+      SAME_JMH_ARG3           = lookup.findStatic(InvokeDynamicBootstrap.class, "sameJmhArg3", MethodType.methodType(boolean.class, JactlMethodHandle.class, Class.class, Class.class, Class.class, JactlMethodHandle.class, Object.class, Object.class, int.class, Object.class, Object.class, Object.class));
+      SAME_JMH_ARGN           = lookup.findStatic(InvokeDynamicBootstrap.class, "sameJmhArgN", MethodType.methodType(boolean.class, JactlMethodHandle.class, Class[].class, JactlMethodHandle.class, Object.class, Object.class, int.class, Object[].class));
+      SAME_CLASS              = lookup.findStatic(InvokeDynamicBootstrap.class, "sameClass", MethodType.methodType(boolean.class, Class.class, Object.class, Object.class, Object.class, int.class));
+      SAME_CLASS_OBJECT1      = lookup.findStatic(InvokeDynamicBootstrap.class, "sameClassObject1", MethodType.methodType(boolean.class, Class.class, Object.class, Object.class, Object.class, int.class, Object.class));
+      SAME_CLASS_OBJECT2      = lookup.findStatic(InvokeDynamicBootstrap.class, "sameClassObject2", MethodType.methodType(boolean.class, Class.class, Object.class, Object.class, Object.class, int.class, Object.class, Object.class));
+      SAME_CLASS_OBJECT3      = lookup.findStatic(InvokeDynamicBootstrap.class, "sameClassObject3", MethodType.methodType(boolean.class, Class.class, Object.class, Object.class, Object.class, int.class, Object.class, Object.class, Object.class));
+      SAME_CLASS_OBJECTN      = lookup.findStatic(InvokeDynamicBootstrap.class, "sameClassObjectN", MethodType.methodType(boolean.class, Class.class, Object.class, Object.class, Object.class, int.class, Object[].class));
+      SAME_CLASS_ARG1         = lookup.findStatic(InvokeDynamicBootstrap.class, "sameClassArg1", MethodType.methodType(boolean.class, Class.class, Class.class, Object.class, Object.class, Object.class, int.class, Object.class));
+      SAME_CLASS_ARG2         = lookup.findStatic(InvokeDynamicBootstrap.class, "sameClassArg2", MethodType.methodType(boolean.class, Class.class, Class.class, Class.class, Object.class, Object.class, Object.class, int.class, Object.class, Object.class));
+      SAME_CLASS_ARG3         = lookup.findStatic(InvokeDynamicBootstrap.class, "sameClassArg3", MethodType.methodType(boolean.class, Class.class, Class.class, Class.class, Class.class, Object.class, Object.class, Object.class, int.class, Object.class, Object.class, Object.class));
+      SAME_CLASS_ARGN         = lookup.findStatic(InvokeDynamicBootstrap.class, "sameClassArgN", MethodType.methodType(boolean.class, Class.class, Class[].class, Object.class, Object.class, Object.class, int.class, Object[].class));
       
       BYTE_VALUE              = lookup.findVirtual(Number.class, "byteValue", MethodType.methodType(byte.class));
       INT_VALUE               = lookup.findVirtual(Number.class, "intValue", MethodType.methodType(int.class));
@@ -109,6 +144,12 @@ public class InvokeDynamicBootstrap {
     cs.setTarget(makeMethodOrFieldAdapter(siteType, cs, methodOrField, lookup));
     return cs;
   }
+  
+  public static CallSite boostrapClosure(MethodHandles.Lookup lookup, String name, MethodType siteType) {
+    MaxDepthCallSite cs = new MaxDepthCallSite(siteType);
+    cs.setTarget(makeAdapter(siteType, cs));
+    return cs;
+  }
 
   private static MethodHandle makeMethodOrFieldAdapter(MethodType siteType, MaxDepthCallSite cs, String methodOrFieldName, MethodHandles.Lookup lookup) {
     return METHOD_OR_FIELD_ADAPTER.bindTo(cs)
@@ -140,11 +181,6 @@ public class InvokeDynamicBootstrap {
     
     Object[] actualArgs = Arrays.copyOfRange(args, 4, args.length);
 
-    MethodHandle sameHandleAndArgClasses = SAME_HANDLE_AND_ARG_CLASSES.bindTo(jmh)
-                                                                      .bindTo(Arrays.stream(args).map(a -> a == null ? null : a.getClass()).toArray(Class[]::new))
-                                                                      .asCollector(Object[].class, siteType.parameterCount())
-                                                                      .asType(siteType.changeReturnType(boolean.class));
-    
     // Guard against chain depth that becomes unwieldy
     cs.depth++;
     if (cs.depth > MaxDepthCallSite.MAX_DEPTH) {
@@ -233,6 +269,12 @@ public class InvokeDynamicBootstrap {
     }
     // adapted.type() should now be (JMH, Continuation, String, int, params...) -> Object
 
+
+    // We need to build a guard that tests for changes of the JactlMethodHandle and changes of argument types
+    // so that we can install a new call site in case we need different coercions applied. We optimise for
+    // parameters that are of type Object.class since no coercion is done so argument type changing has no effect.
+    MethodHandle guard = createGuard(jmh, siteType, adapted.type(), args);
+
     try {
       // Check that args are compatible
       adapted = coerceArgumentsOrFail(siteType, adapted, args, 4);
@@ -240,13 +282,13 @@ public class InvokeDynamicBootstrap {
     }
     catch (WrongMethodTypeException e) {
       // Type coercion failed (e.g. param count mismatch). Install a stable wrapper-path guard.
-      cs.setTarget(MethodHandles.guardWithTest(sameHandleAndArgClasses, makeWrapperInvoker(siteType), cs.getTarget()));
+      cs.setTarget(MethodHandles.guardWithTest(guard, makeWrapperInvoker(siteType), cs.getTarget()));
       MutableCallSite.syncAll(new MutableCallSite[]{cs});
       return jmh.invoke((Continuation)args[1], (String)args[2], (int)args[3], actualArgs);
     }
 
     // Install the direct-call guard.
-    cs.setTarget(MethodHandles.guardWithTest(sameHandleAndArgClasses, adapted, cs.getTarget()));
+    cs.setTarget(MethodHandles.guardWithTest(guard, adapted, cs.getTarget()));
     MutableCallSite.syncAll(new MutableCallSite[]{cs});
 
     // For the first call, use the wrapper rather than invokeWithArguments(args).
@@ -274,10 +316,6 @@ public class InvokeDynamicBootstrap {
 
     JactlContext jactlContext = RuntimeState.getState().getContext();
 
-    // Note: sameClasses and isSameClass must have the same argument types as the call site
-    MethodHandle sameClasses = SAME_CLASSES.bindTo(Arrays.stream(args).map(a -> a == null ? null : a.getClass()).toArray(Class[]::new))
-                                           .asCollector(Object[].class, siteType.parameterCount())
-                                           .asType(siteType.changeReturnType(boolean.class));
     MethodHandle getClassMH  = lookup.findVirtual(Object.class, "getClass", GET_CLASS_TYPE);
     MethodHandle isSameClass = MethodHandles.filterArguments(IS_SAME_CLASS.bindTo(parent.getClass()), 0, getClassMH);
     isSameClass = MethodHandles.dropArguments(isSameClass, 1, siteType.parameterList().subList(1, siteType.parameterCount()));
@@ -308,18 +346,20 @@ public class InvokeDynamicBootstrap {
           adapted = MethodHandles.dropArguments(adapted, 2, String.class, int.class);
         }
 
+        MethodHandle guard = createGuardForMethod(args[0].getClass(), siteType, adapted.type(), args);
+        
         // Install call site that checks that the parent class is still the same and that the argument
         // types haven't changed and then invokes the method. If there are conversion errors then we catch
         // the exception and install the wrapper fallback instead.
         try {
           adapted = coerceArgumentsOrFail(siteType, adapted, args, 4);          
           adapted = adapted.asType(siteType);
-          cs.setTarget(MethodHandles.guardWithTest(sameClasses, adapted, fallback));
+          cs.setTarget(MethodHandles.guardWithTest(guard, adapted, fallback));
         }
         catch (WrongMethodTypeException e) {
           // Argument types not directly compatible so fall back to invoking wrapper to let it do any
           // coercion required and fill in missing arguments etc (or throw an error if needed).
-          cs.setTarget(MethodHandles.guardWithTest(sameClasses, makeMethodOrFieldInvoker(siteType, methodOrField), fallback));
+          cs.setTarget(MethodHandles.guardWithTest(guard, makeMethodOrFieldInvoker(siteType, methodOrField), fallback));
         }
       }
       else {
@@ -355,27 +395,30 @@ public class InvokeDynamicBootstrap {
           MethodHandle throwErr        = MethodHandles.throwException(Object.class, RuntimeError.class);
           MethodHandle throwErrWithArg = MethodHandles.insertArguments(throwErr, 0, error);
           MethodHandle thrower         = MethodHandles.dropArguments(throwErrWithArg, 0, siteType.parameterList());
-          cs.setTarget(MethodHandles.guardWithTest(sameClasses, thrower, fallback));
+          cs.setTarget(MethodHandles.guardWithTest(isSameClass, thrower, fallback));
         }
         else {
           jmh = jmh.getInnerHandle();     // Get unbound handle
+          // Drop the Continuation and source/offset since these won't be used by a host class method
+          int          pos     = jmh.isBoundHandle() ? 1 : 0;
+          MethodHandle adapted = jmh.handleToUnderlyingFunction();
+          if (!jmh.isBoundHandle()) {
+            // Ignore the object since we have a static method
+            adapted = MethodHandles.dropArguments(adapted, pos++, Object.class);
+          }
+          adapted = MethodHandles.dropArguments(adapted, pos, Continuation.class, String.class, int.class);
+          pos += 3;
+
+          MethodHandle guard = createGuardForMethod(args[0].getClass(), siteType, adapted.type(), args);
+          
           try {
-            // Drop the Continuation and source/offset since these won't be used by a host class method
-            int          pos     = jmh.isBoundHandle() ? 1 : 0;
-            MethodHandle adapted = jmh.handleToUnderlyingFunction();
-            if (!jmh.isBoundHandle()) {
-              // Ignore the object since we have a static method
-              adapted = MethodHandles.dropArguments(adapted, pos++, Object.class);
-            }
-            adapted = MethodHandles.dropArguments(adapted, pos, Continuation.class, String.class, int.class);
-            pos += 3;
             adapted = coerceArgumentsOrFail(siteType, adapted, args, pos);
             adapted = adapted.asType(siteType);
-            cs.setTarget(MethodHandles.guardWithTest(sameClasses, adapted, fallback));
+            cs.setTarget(MethodHandles.guardWithTest(guard, adapted, fallback));
           }
           catch (WrongMethodTypeException e) {
             // Argument types not directly compatible so fall back to slow path to let it do any coercion required
-            cs.setTarget(MethodHandles.guardWithTest(sameClasses, makeMethodOrFieldInvoker(siteType, methodOrField), fallback));
+            cs.setTarget(MethodHandles.guardWithTest(guard, makeMethodOrFieldInvoker(siteType, methodOrField), fallback));
           }
         }
       }
@@ -431,6 +474,8 @@ public class InvokeDynamicBootstrap {
       }
     }
 
+    MethodHandle guard = createGuardForMethod(args[0].getClass(), siteType, adapted.type(), args);
+
     try {
       // Insert argument coercion for numeric types or if incompatible types
       // we will throw WrongMethodTypeException and fall back to invoking wrapper
@@ -441,7 +486,7 @@ public class InvokeDynamicBootstrap {
       directInvoke = false;
     }
     
-    adapted = MethodHandles.guardWithTest(sameClasses, directInvoke ? adapted : makeMethodOrFieldInvoker(siteType, methodOrField), fallback);
+    adapted = MethodHandles.guardWithTest(guard, directInvoke ? adapted : makeMethodOrFieldInvoker(siteType, methodOrField), fallback);
     cs.setTarget(adapted);
     MutableCallSite.syncAll(new MutableCallSite[]{cs});
 
@@ -449,8 +494,8 @@ public class InvokeDynamicBootstrap {
     return invokeMethodOrField(methodOrField, parent, null, source, offset, actualArgs);
   }
 
-  private static HashMap<Class<?>, MethodHandle> NUMERIC_FILTERS = new HashMap<>();
-  private static HashMap<Class<?>, Integer>      NUMERIC_RANK    = new HashMap<>();
+  private static final HashMap<Class<?>, MethodHandle> NUMERIC_FILTERS = new HashMap<>();
+  private static final HashMap<Class<?>, Integer>      NUMERIC_RANK    = new HashMap<>();
   static {
     NUMERIC_FILTERS.put(byte.class,       BYTE_VALUE);
     NUMERIC_FILTERS.put(int.class,        INT_VALUE);
@@ -571,11 +616,6 @@ public class InvokeDynamicBootstrap {
     return true;
   }
   
-  public static boolean sameHandleAndArgClasses(JactlMethodHandle expectedJmh, Class<?>[] expected, Object[] args) {
-    return args[0] instanceof JactlMethodHandle && isSame(expectedJmh, (JactlMethodHandle)args[0]) &&
-           sameClasses(expected, args);
-  }
-
   public static class MaxDepthCallSite extends MutableCallSite {
     int depth = 0;
     static final int MAX_DEPTH = Integer.getInteger("jactl.invokeDynamic.maxDepth", 8);
@@ -595,5 +635,185 @@ public class InvokeDynamicBootstrap {
   
   private static Class<?> boxedType(Class<?> type) {
     return MethodType.methodType(type).wrap().returnType();
+  }
+  
+  private static MethodHandle createGuard(JactlMethodHandle jmh, MethodType siteType, MethodType type, Object[] args) {
+    // Create a guard that checks if the JactlMethodHandle still refers to the same underlying function
+    // and checks if the argument types have changed.
+    // We have a special case if all parameters are of type Object since no coercion is required and args
+    // will always be passed in irrespective of their type.
+    // NOTE: we start from argument position 4 to skip the always present JMH, Continuation, String, int
+    boolean allObjectParams = true;
+    for (int idx = 4; idx < type.parameterCount(); idx++) {
+      if (type.parameterType(idx) != Object.class) {
+        allObjectParams = false;
+        break;
+      }
+    }
+    
+    Class[] argTypes = Arrays.stream(Arrays.copyOfRange(args, 4, args.length)).map(a -> a == null ? null : a.getClass()).toArray(Class[]::new);
+
+    if (allObjectParams) {
+      switch (args.length - 4) {
+        case 0:  return SAME_JMH.bindTo(jmh).asType(siteType.changeReturnType(boolean.class));
+        case 1:  return SAME_JMH_OBJECT1.bindTo(jmh).asType(siteType.changeReturnType(boolean.class));
+        case 2:  return SAME_JMH_OBJECT2.bindTo(jmh).asType(siteType.changeReturnType(boolean.class));
+        case 3:  return SAME_JMH_OBJECT3.bindTo(jmh).asType(siteType.changeReturnType(boolean.class));
+        default: return SAME_JMH_OBJECTN.bindTo(jmh).asCollector(Object[].class, args.length - 4).asType(siteType.changeReturnType(boolean.class));
+      }
+    }
+    else {
+      switch (args.length - 4) {
+        case 0:  return SAME_JMH.bindTo(jmh).asType(siteType.changeReturnType(boolean.class));
+        case 1:  return SAME_JMH_ARG1.bindTo(jmh).bindTo(argTypes[0]).asType(siteType.changeReturnType(boolean.class));
+        case 2:  return SAME_JMH_ARG2.bindTo(jmh).bindTo(argTypes[0]).bindTo(argTypes[1]).asType(siteType.changeReturnType(boolean.class));
+        case 3:  return SAME_JMH_ARG3.bindTo(jmh).bindTo(argTypes[0]).bindTo(argTypes[1]).bindTo(argTypes[2]).asType(siteType.changeReturnType(boolean.class));
+        default: return SAME_JMH_ARGN.bindTo(jmh).bindTo(argTypes).asCollector(Object[].class, args.length - 4).asType(siteType.changeReturnType(boolean.class));
+      }
+    }
+  }
+
+  private static MethodHandle createGuardForMethod(Class<?> expected, MethodType siteType, MethodType type, Object[] args) {
+    // Create a guard that checks if arg0 matches the expected target class and checks if the argument types
+    // have changed.
+    // We have a special case if all parameters are of type Object since no coercion is required and args
+    // will always be passed in irrespective of their type.
+    // NOTE: we start from argument position 4 to skip the always present Object target, Continuation, String, int
+    boolean allObjectParams = true;
+    for (int idx = 4; idx < type.parameterCount(); idx++) {
+      if (type.parameterType(idx) != Object.class) {
+        allObjectParams = false;
+        break;
+      }
+    }
+    
+    Class[] argTypes = Arrays.stream(Arrays.copyOfRange(args, 4, args.length)).map(a -> a == null ? null : a.getClass()).toArray(Class[]::new);
+
+    if (allObjectParams) {
+      switch (args.length - 4) {
+        case 0:  return SAME_CLASS.bindTo(args[0].getClass()).asType(siteType.changeReturnType(boolean.class));
+        case 1:  return SAME_CLASS_OBJECT1.bindTo(args[0].getClass()).asType(siteType.changeReturnType(boolean.class));
+        case 2:  return SAME_CLASS_OBJECT2.bindTo(args[0].getClass()).asType(siteType.changeReturnType(boolean.class));
+        case 3:  return SAME_CLASS_OBJECT3.bindTo(args[0].getClass()).asType(siteType.changeReturnType(boolean.class));
+        default: return SAME_CLASS_OBJECTN.bindTo(args[0].getClass()).asCollector(Object[].class, args.length - 4).asType(siteType.changeReturnType(boolean.class));
+      }
+    }
+    else {
+      switch (args.length - 4) {
+        case 0:  return SAME_CLASS.bindTo(args[0].getClass()).asType(siteType.changeReturnType(boolean.class));
+        case 1:  return SAME_CLASS_ARG1.bindTo(args[0].getClass()).bindTo(argTypes[0]).asType(siteType.changeReturnType(boolean.class));
+        case 2:  return SAME_CLASS_ARG2.bindTo(args[0].getClass()).bindTo(argTypes[0]).bindTo(argTypes[1]).asType(siteType.changeReturnType(boolean.class));
+        case 3:  return SAME_CLASS_ARG3.bindTo(args[0].getClass()).bindTo(argTypes[0]).bindTo(argTypes[1]).bindTo(argTypes[2]).asType(siteType.changeReturnType(boolean.class));
+        default: return SAME_CLASS_ARGN.bindTo(args[0].getClass()).bindTo(argTypes).asCollector(Object[].class, args.length - 4).asType(siteType.changeReturnType(boolean.class));
+      }
+    }
+  }
+  
+  private static boolean sameJmh(JactlMethodHandle expected, JactlMethodHandle jmh, Object continuation, Object source, int offset) {
+    return expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction(); 
+  }
+  
+  private static boolean sameJmhObject1(JactlMethodHandle expected, JactlMethodHandle jmh, Object continuation, Object source, int offset, Object arg4) {
+    return expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction(); 
+  }
+  
+  private static boolean sameJmhObject2(JactlMethodHandle expected, JactlMethodHandle jmh, Object continuation, Object source, int offset, Object arg4, Object arg5) {
+    return expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction(); 
+  }
+  
+  private static boolean sameJmhObject3(JactlMethodHandle expected, JactlMethodHandle jmh, Object continuation, Object source, int offset, Object arg4,  Object arg5, Object arg6) {
+    return expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction(); 
+  }
+  
+  private static boolean sameJmhObjectN(JactlMethodHandle expected, JactlMethodHandle jmh, Object continuation, Object source, int offset, Object[] args) {
+    return expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction(); 
+  }
+
+  private static boolean sameJmhArg1(JactlMethodHandle expected, Class<?> c4, JactlMethodHandle jmh, Object continuation, Object source, int offset, Object arg4) {
+    return ((expected == jmh) || (expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction())) &&
+           (c4 == null ? arg4 == null : (arg4 != null && arg4.getClass() == c4));
+  }
+  
+  private static boolean sameJmhArg2(JactlMethodHandle expected, Class<?> c4, Class<?> c5, JactlMethodHandle jmh, Object continuation, Object source, int offset, Object arg4, Object arg5) {
+    return (expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction()) &&
+           (c4 == null ? arg4 == null : (arg4 != null && arg4.getClass() == c4)) &&
+           (c5 == null ? arg5 == null : (arg5 != null && arg5.getClass() == c5));
+  }
+
+  private static boolean sameJmhArg3(JactlMethodHandle expected, Class<?> c4, Class<?> c5, Class<?> c6, JactlMethodHandle jmh, Object continuation, Object source, int offset, Object arg4, Object arg5, Object arg6) {
+    return (expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction()) &&
+           (c4 == null ? arg4 == null : (arg4 != null && arg4.getClass() == c4)) &&
+           (c5 == null ? arg5 == null : (arg5 != null && arg5.getClass() == c5)) &&
+           (c6 == null ? arg6 == null : (arg6 != null && arg6.getClass() == c6));
+  }
+
+  private static boolean sameJmhArgN(JactlMethodHandle expected, Class<?>[] classes, JactlMethodHandle jmh, Object continuation, Object source, int offset, Object[] args) {
+    if (expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction()) {
+      if (args.length != classes.length) {
+        return false;
+      }
+      for (int i = 0; i < args.length; i++) {
+        if (classes[i] == null ? args[i] == null : (args[i] != null && args[i].getClass() == classes[i])) {
+          continue;
+        }
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  private static boolean sameClass(Class<?> expected, Object target, Object continuation, Object source, int offset) {
+    return expected == target.getClass();
+  }
+  
+  private static boolean sameClassObject1(Class<?> expected, Object target, Object continuation, Object source, int offset, Object arg4) {
+    return expected == target.getClass();
+  }
+  
+  private static boolean sameClassObject2(Class<?> expected, Object target, Object continuation, Object source, int offset, Object arg4, Object arg5) {
+    return expected == target.getClass();
+  }
+  
+  private static boolean sameClassObject3(Class<?> expected, Object target, Object continuation, Object source, int offset, Object arg4,  Object arg5, Object arg6) {
+    return expected == target.getClass();
+  }
+  
+  private static boolean sameClassObjectN(Class<?> expected, Object target, Object continuation, Object source, int offset, Object[] args) {
+    return expected == target.getClass();
+  }
+
+  private static boolean sameClassArg1(Class<?> expected, Class<?> c4, Object target, Object continuation, Object source, int offset, Object arg4) {
+    return expected == target.getClass() &&
+           (c4 == null ? arg4 == null : (arg4 != null && arg4.getClass() == c4));
+  }
+  
+  private static boolean sameClassArg2(Class<?> expected, Class<?> c4, Class<?> c5, Object target, Object continuation, Object source, int offset, Object arg4, Object arg5) {
+    return expected == target.getClass() &&
+           (c4 == null ? arg4 == null : (arg4 != null && arg4.getClass() == c4)) &&
+           (c5 == null ? arg5 == null : (arg5 != null && arg5.getClass() == c5));
+  }
+
+  private static boolean sameClassArg3(Class<?> expected, Class<?> c4, Class<?> c5, Class<?> c6, Object target, Object continuation, Object source, int offset, Object arg4, Object arg5, Object arg6) {
+    return expected == target.getClass() &&
+           (c4 == null ? arg4 == null : (arg4 != null && arg4.getClass() == c4)) &&
+           (c5 == null ? arg5 == null : (arg5 != null && arg5.getClass() == c5)) &&
+           (c6 == null ? arg6 == null : (arg6 != null && arg6.getClass() == c6));
+  }
+
+  private static boolean sameClassArgN(Class<?> expected, Class<?>[] classes, Object target, Object continuation, Object source, int offset, Object[] args) {
+    if (expected == target.getClass()) {
+      if (args.length != classes.length) {
+        return false;
+      }
+      for (int i = 0; i < args.length; i++) {
+        if (classes[i] == null ? args[i] == null : (args[i] != null && args[i].getClass() == classes[i])) {
+          continue;
+        }
+        return false;
+      }
+      return true;
+    }
+    return false;
   }
 }
