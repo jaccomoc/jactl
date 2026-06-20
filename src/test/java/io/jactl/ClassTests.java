@@ -1218,6 +1218,7 @@ public class ClassTests extends BaseTest {
   @Test public void innerClasses() {
     test("class X { int i; class Y { int i }}; X x = new X(1); X.Y y = new X.Y(2); x.i + y.i", 3);
     test("class X { int i; class Y { int i; Z.ZZ f() { return new Z.ZZ(i) } }}; class Z { class ZZ { int i } }; new X.Y(3).f() instanceof Z.ZZ", true);
+    test("class X { int i; class Y { int i; Z.ZZ f() { return new Z.ZZ(i) } }}; class Z { class ZZ { int i } }; def y = new X.Y(3); y.f() instanceof Z.ZZ", true);
     test("class X { int i; class Y { int i; def f() { return new Z.ZZ(i) } }}; class Z { class ZZ { int i } }; new X.Y(3).f() instanceof Z.ZZ", true);
     test("class Y { int i; Z f() { return new Z(i) } }; class Z { int i }; Z z = new Y(3).f(); z instanceof Z", true);
     test("class Y { int i; def f() { return new Z(i) } }; class Z { int i }; Z z = new Y(3).f(); z instanceof Z", true);

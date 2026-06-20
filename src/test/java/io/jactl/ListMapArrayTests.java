@@ -665,6 +665,7 @@ public class ListMapArrayTests extends BaseTest {
     test("var a = new byte[1]; a instanceof byte[]", true);
     test("def a = new byte[1]; ((byte[])a)[0]", (byte)0);
     test("def a = new byte[1]; ((byte[])a)[0] instanceof byte", true);
+    test("byte[] f() { [1,2,3] }; f() instanceof byte[] && f().sum() == 6", true);
     test("byte[] f() { [1,2,3] }; f() instanceof byte[] and f().sum() == 6", true);
     test("byte[] b; def x = 'abc'; b = x; b", new byte[]{97,98,99});
     test("byte[] b; def x = 'abc'; b ?= x; b", new byte[]{97,98,99});

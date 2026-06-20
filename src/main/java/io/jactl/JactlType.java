@@ -468,6 +468,14 @@ public class JactlType extends JactlUserDataHolder {
     return typeMatches(type1) || typeMatches(type2) || typeMatches(type3) || typeMatches(type4) || typeMatches(type5);
   }
 
+  public boolean is(JactlType type1, JactlType type2, JactlType type3, JactlType type4, JactlType type5, JactlType type6) {
+    return typeMatches(type1) || typeMatches(type2) || typeMatches(type3) || typeMatches(type4) || typeMatches(type5) || typeMatches(type6);
+  }
+
+  public boolean isIterable() {
+    return is(ITERATOR, ARRAY, STRING, LIST, MAP, ANY) || isNumeric();
+  }
+  
   private boolean typeMatches(JactlType type) {
     if (this == type) return true;
     type = type.getDelegate();

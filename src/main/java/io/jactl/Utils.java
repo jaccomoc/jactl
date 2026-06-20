@@ -1409,6 +1409,7 @@ public class Utils {
       Method method = clss.getMethod(methodName, parameterTypes);
       return new MethodRef(method);
     } catch (NoSuchMethodException e) {
+      System.err.println("Method " + methodName + " for class " + clss.getName() + " not found");
       throw new RuntimeException(e);
     }
   }

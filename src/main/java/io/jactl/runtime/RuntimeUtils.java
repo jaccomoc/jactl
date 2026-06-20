@@ -22,7 +22,6 @@ import io.jactl.compiler.MethodRef;
 
 import java.io.IOException;
 import java.io.Writer;
-import java.lang.invoke.CallSite;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Array;
@@ -2054,7 +2053,7 @@ public class RuntimeUtils {
    * @return an iterator that iterates over the object
    */
   public static JactlIterator createIteratorFlatMap(Object obj) {
-    JactlIterator iter = createIteratorOrNull(obj);
+    JactlIterator iter = createCollectionIteratorOrNull(obj);
     if (iter != null) {
       return iter;
     }
@@ -2063,10 +2062,11 @@ public class RuntimeUtils {
     }
     return JactlIterator.of(obj);
   }
+  public static final MethodRef CREATE_ITERATOR_FLATMAP_METHOD = Utils.getMethod(RuntimeUtils.class, "createIteratorFlatMap", Object.class);
 
   public static final MethodRef CREATE_ITERATOR_METHOD = Utils.getMethod(RuntimeUtils.class, "createIterator", Object.class);
   public static JactlIterator createIterator(Object obj) {
-    JactlIterator iter = createIteratorOrNull(obj);
+    JactlIterator iter = createCollectionIteratorOrNull(obj);
     if (iter != null) {
       return iter;
     }
@@ -2075,7 +2075,18 @@ public class RuntimeUtils {
     throw new IllegalStateException("Internal error: unexpected type " + obj.getClass().getName() + " for iterable");
   }
 
+  public static final MethodRef CREATE_ITERATOR_OR_NULL_METHOD = Utils.getMethod(RuntimeUtils.class, "createIteratorOrNull", Object.class);
   public static JactlIterator createIteratorOrNull(Object obj) {
+    JactlIterator iter = createCollectionIteratorOrNull(obj);
+    if (iter != null) {
+      return iter;
+    }
+    if (obj instanceof Number) { return JactlIterator.numberIterator((Number)obj); }
+    if (obj instanceof String) { return JactlIterator.stringIterator((String)obj); }
+    return null;
+  }
+
+  public static JactlIterator createCollectionIteratorOrNull(Object obj) {
     if (obj instanceof JactlIterator) { return (JactlIterator)obj;               }
     if (obj instanceof List)          { return JactlIterator.of((List)obj);      }
     if (obj instanceof Map)           { return JactlIterator.of((Map)obj);       }

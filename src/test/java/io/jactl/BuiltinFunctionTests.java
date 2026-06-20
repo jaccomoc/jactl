@@ -1220,4 +1220,71 @@ public class BuiltinFunctionTests extends BaseTest {
     assertTrue(result.isDone());
     assertEquals("abc", result.get());
   }
+  
+  @Test public void pipeline() {
+    test("List list = [1,2,3,4]; list.sum()", 10);
+    test("List list = [1,2,3,4]; list.filter{ it % 2 == 0 }", Utils.listOf(2, 4));
+    test("List list = [[1,2],[3,4]]; list.filter{ x,y -> x != y }", Utils.listOf(Utils.listOf(1,2), Utils.listOf(3, 4)));
+    test("def list = [[1,2],[3,4]]; list.filter{ x,y -> x != y }", Utils.listOf(Utils.listOf(1,2), Utils.listOf(3, 4)));
+    test("List list = [[1,2],[5,5],[3,4]]; list.map{ x,y -> [y,x] }.filter{ x,y -> x != y }", Utils.listOf(Utils.listOf(2,1), Utils.listOf(4, 3)));
+    test("def list = [[1,2],[5,5],[3,4]]; list.map{ x,y -> [y,x] }.filter{ x,y -> x != y }", Utils.listOf(Utils.listOf(2,1), Utils.listOf(4, 3)));
+    test("List list = [1,2,3,4]; list.filter{ it % 2 == 0 }.sum()", 6);
+    test("List list = [1,2,3,4]; list.filter{ it % 2 == 0 }.map{ it + it }.sum()", 12);
+    test("def list = [1,2,3,4]; list.filter{ it % 2 == 0 }.map{ it + it }.sum()", 12);
+    test("def list = [1,2,3,4]; if (true) list.filter{ it % 2 == 0 }.map{ it + it }.sum(); 13", 13);
+    test("def list = [1,2,3,4]; list.filter{ it % 2 == 0 }.map{ it + it }.sum().filter{ it < 6 }.sum()", 15);
+    test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(2).map{ it + it }.sum()", 12);
+    test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.sum()", 12+16+20);
+    test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.skip(1).sum()", 16+20);
+    test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.limit(2).skip(1).sum()", 16);
+    test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.skip(1).sum()", 16+20);
+    test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(3).map{ it + it }.skip(1).sum()", 20);
+    test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(2).map{ it + it }.limit(1).sum()", 4);
+    test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(2).map{ it + it }.limit(3).sum()", 12);
+    test("def list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(2).map{ it + it }.sum()", 12);
+    test("def x = 2; List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(sleep(0,x)).map{ it + it }.sum()", 12);
+    test("def list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.sum()", 12+16+20);
+    test("List list = [1,2,3,4]; list.limit(3).map{it+it}.skip(1).sum()", 10);
+    test("def x = 2; List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(x).map{ it + it }.sum()", 12);
+    test("def x = 2; List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(x).map{ it + it }.sum()", 12+16+20);
+    test("def x = 2; def list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(x).map{ it + it }.sum()", 12);
+    test("def x = 2; def list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(x).map{ it + it }.sum()", 12+16+20);
+    test("List list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap{ it + it }.sum()", 12);
+    test("def list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap{ it + it }.sum()", 12);
+    test("def list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap{ [it,it] }.sum()", 12);
+    test("var list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap{ [it,it] }.sum()", 12);
+    test("def list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap().sum()", 6);
+    test("var list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap().sum()", 6);
+  }
+  
+  @Test public void pipelineNegativeSkipLimit() {
+    test("List list = [1,2,3,4]; list.skip(-3)", Utils.listOf(2,3,4));
+    test("List list = [1,2,3,4]; list.skip(-3).limit(2).skip(-1)", Utils.listOf(3));
+    test("def x = -3; def y = -1; List list = [1,2,3,4]; list.skip(x).limit(2).skip(y)", Utils.listOf(3));
+    test("def x = -3; def y = -1; def list = [1,2,3,4]; list.skip(x).limit(2).skip(y)", Utils.listOf(3));
+    test("List list = [1,2,3,4]; list.skip(-3).limit(2).skip(0)", Utils.listOf(2,3));
+    test("List list = [1,2,3,4]; list.skip(-3).limit(1).sum()", 2);
+    test("List list = [1,2,3,4]; list.skip(-3).limit(2).skip(-1).sum()", 3);
+    test("List list = [1,2,3,4]; list.skip(-1).sum()", 4);
+    test("List list = [1,2,3,4]; list.skip(-3).skip(-1).sum()", 4);
+    test("List list = [1,2,3,4]; list.skip(-3).skip(-4).sum()", 9);
+    test("List list = [[1,2],[2,3],4]; list.skip(-3).flatMap{ it + it }.skip(-7).sum()", 21);
+    test("def list = [[1,2],[2,3],4]; list.skip(-3).flatMap{ it + it }.skip(-7).sum()", 21);
+    test("def list = [[1,2],[2,3],4]; list.skip(-list[1][1]).flatMap{ it + it }.skip(-7).sum()", 21);
+    test("def list = [[1,2],[2,3],4]; list.flatMap().skip(-list[1][1]).flatMap{ [it,it] }.skip(-4).sum()", 14);
+    test("List list = [1,2,3,4]; list.limit(-2)", Utils.listOf(1,2));
+    test("def list = [1,2,3,4]; list.limit(-2)", Utils.listOf(1,2));
+    test("def x = -2; def list = [1,2,3,4]; list.limit(x)", Utils.listOf(1,2));
+    test("def list = [[1,2],[2,3],4]; list.flatMap().skip(-3).flatMap{ [it,it] }.limit(-2)", Utils.listOf(2,2,3,3));
+    test("def list = [[1,2],[2,3],4]; list.flatMap().skip(-3).flatMap{ [it,it] }.limit(0).sum()", 0);
+    test("def list = [[1,2],[2,3],4]; list.flatMap().skip(-3).flatMap{ [it,it] }.limit(-2).sum()", 10);
+    test("def list = [[1,2],[2,3],4]; list.flatMap().skip(0).flatMap{ [it,it] }.limit(-2).sum()", 16);
+
+    // Async will fail these tests because they force creation of intermediate list
+    doTest("def i = 0; [1,2,3,4,5].map{ i++; it }.limit(0); i", 0);
+    doTest("def i = 0; [1,2,3,4,5].map{ i++; it }.limit(2); i", 2);
+    doTest("def i = 0; [1,2,3,4,5].map{ i++; sleep(0,it) }.limit(2); i", 2);
+    doTest("def i = 0; [[1,2],[3,4],[5,6]].map{ i++; it }.limit(3).flatMap{ it + it }.map{ i++; it }.limit(6); i", 8);
+    doTest("def i = 0; [[1,2],[3,4],[5,6]].map{ i++; sleep(0,it) }.limit(3).flatMap{ it + it }.map{ i++; it }.limit(6); i", 8);
+  }
 }

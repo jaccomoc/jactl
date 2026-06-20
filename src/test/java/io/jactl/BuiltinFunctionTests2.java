@@ -25,9 +25,12 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
 import io.jactl.compiler.Compiler;
 
 import static io.jactl.JactlType.ANY;
@@ -240,7 +243,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
     doTest("def i = 0; [1,2,3,4,5].map{ i++; it }.map{ sleep(0, sleep(0,it)) }.limit(2); i", 2);
     doTest("def i = 0; [1,2,3,4,5].map{ i++; it }.filter{ sleep(0,it) }.map{ sleep(0, sleep(0,it)) }.limit(2); i", 2);
   }
-
+  
   @Test public void unique() {
     test("[].unique()", Utils.listOf());
     test("def x = []; x.unique()", Utils.listOf());

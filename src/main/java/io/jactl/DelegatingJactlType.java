@@ -100,11 +100,14 @@ public class DelegatingJactlType extends JactlType {
   @Override public boolean is(JactlType type1, JactlType type2, JactlType type3) {
     return getDelegate().is(type1, type2,  type3);
   }
-  @Override public boolean is(JactlType type1, JactlType type2, JactlType type3,  JactlType type4) {
+  @Override public boolean is(JactlType type1, JactlType type2, JactlType type3, JactlType type4) {
     return getDelegate().is(type1, type2,  type3,  type4);
   }
-  @Override public boolean is(JactlType type1, JactlType type2, JactlType type3,  JactlType type4,  JactlType type5) {
-    return getDelegate().is(type1, type2,  type3,  type4,   type5); 
+  @Override public boolean is(JactlType type1, JactlType type2, JactlType type3, JactlType type4, JactlType type5) {
+    return getDelegate().is(type1, type2,  type3,  type4, type5); 
+  }
+  @Override public boolean is(JactlType type1, JactlType type2, JactlType type3, JactlType type4, JactlType type5, JactlType type6) {
+    return getDelegate().is(type1, type2,  type3,  type4, type5, type6); 
   }
 
   // JactlUserDataHolder

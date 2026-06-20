@@ -2341,9 +2341,127 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return null;
   }
 
+  private List<Expr> checkForValidArgs(Expr.MethodCall expr, FunctionDescriptor desc) {
+    try {
+      Pair<Boolean,List<Expr>> validationResult = validateArgs(expr.args, desc, expr.location, false, null);
+      return validationResult.first ?  validationResult.second : null;
+    }
+    catch (CompileError e) {
+      return null;
+    }
+  }
+
+  private static final boolean USE_PIPELINE_INLINING = Boolean.parseBoolean(System.getProperty("jactl.pipelineInlining", "true")); 
+  
   @Override public Void visitMethodCall(Expr.MethodCall expr) {
-    // If we know what method to invoke
+    if (USE_PIPELINE_INLINING && classCompiler.context.invokeDynamic && PipelineCompiler.inlineable(expr) && (!expr.isMethodCallTarget || PipelineCompiler.isCollapsing(expr.methodName))) {
+      // Check if we have something that looks like it could be a function that acts on an
+      // iterator.
+      // We can only inline if we are the end function in the pipeline (one that collapses
+      // the iteration into a single result) or we are end function and we are not ourselves
+      // used as the target for a further method call (possibly for another iterator method
+      // that we don't currently inline).
+
+      // We search our parents to find the start of what is potentially a pipeline and try
+      // to inline the pipeline for efficiency. We can online inline if every parent that
+      // is a method call has a known method name (i.e. not something like x."${a}"() or
+      // equivalent) since we don't know if that method might be an iterator method or not.
+      // We can't inline part of a pipeline since that changes the semantics by creating
+      // intermediate list results and interrupting the iterator chaining.
+      boolean               isInlineablePipeline = true;
+      List<Expr.MethodCall> pipeline             = new ArrayList<>();
+      List<List<Expr>>      args                 = new ArrayList<>();
+      Expr                  parent               = expr;
+      for (; parent instanceof Expr.MethodCall; parent = ((Expr.MethodCall) parent).parent) {
+        Expr.MethodCall methodCallParent = (Expr.MethodCall) parent;
+        List<Expr>      convertedArgs;
+        if (!methodCallParent.parent.type.isIterable()) {
+          break;
+        }
+        if (!PipelineCompiler.inlineable(methodCallParent)) {
+          isInlineablePipeline = false;
+          break;
+        }
+        if (methodCallParent.methodDescriptor != null) {
+          // If not a method that returns iterator then can't inline anything since we don't have an
+          // iteration pipeline
+          if (parent != expr && !methodCallParent.methodDescriptor.returnType.isIterable()) {
+            isInlineablePipeline = false;
+            break;
+          }
+          convertedArgs = checkForValidArgs(methodCallParent, methodCallParent.methodDescriptor);
+          if (convertedArgs == null) {
+            isInlineablePipeline = false;
+            break;
+          }
+        }
+        else {
+          // We can only inline when we know all the method names at compile time
+          if (methodCallParent.methodName == null) {
+            isInlineablePipeline = false;
+            break;
+          }
+          // Check to see if we could have an iterator method
+          FunctionDescriptor desc = classCompiler.context.getFunctions().lookupMethod(ITERATOR, methodCallParent.methodName);
+
+          // If not iterator method or method result is not an iterator then we have reached
+          // top of the pipeline
+          if (desc == null || (parent != expr && !desc.returnType.is(ITERATOR))) {
+            break;
+          }
+          convertedArgs = checkForValidArgs(methodCallParent, desc);
+          if (convertedArgs == null) {
+            isInlineablePipeline = false;
+            break;
+          }
+        }
+        // Insert at head of list so we maintian invocation order of pipeline
+        pipeline.add(0, methodCallParent);
+        args.add(0, convertedArgs);
+      }
+
+      // Inline if we are inlining and we have more than one method in the pipeline,
+      // otherwise fall through to standard compilation
+      if (isInlineablePipeline && expr != parent) {
+        // If the parent is ANY, we insert a check for the right parent type before executing
+        // the inline pipeline and fall back to traditional method invocation if the parent
+        // runtime type is not iterable.
+        // Any of the inline functions can veto the pipeline at runtime (e.g. skip/limit
+        // with negative arguments) so if we have a vetoable function insert a runtime
+        // check.
+        compile(parent);
+        List<PipelineCompiler.InlineFn> pipelineFns = PipelineCompiler.createPipeline(pipeline, args, this);
+        if (peek().is(ANY)) {
+          invokeMethod(RuntimeUtils.CREATE_ITERATOR_OR_NULL_METHOD);
+          Expr finalParent = parent;
+          emitIf(classCompiler.context.isAsync, false, IfTest.IS_NULL,
+                 () -> dupVal(),
+                 () -> pipeline.forEach(this::_visitMethodCall),
+                 () -> PipelineCompiler.compilePipeline(finalParent, this, pipeline, pipelineFns));
+        }
+        else {
+          box();
+          invokeMethod(RuntimeUtils.CREATE_ITERATOR_METHOD);
+          PipelineCompiler.compilePipeline(parent, this, pipeline, pipelineFns);
+        }
+
+        return null;
+      }
+    }
+    compile(expr.parent);
+    _visitMethodCall(expr);
+    return null;
+  }
+
+  Void _visitMethodCall(Expr.MethodCall expr) {
     JactlType parentType = expr.parent.type;
+    
+//    loadConst("not pipeline");
+//    loadConst("not pipeline");
+//    invokeMethod(RuntimeUtils.class, RuntimeUtils.DEBUG_BREAK_POINT, Object.class, String.class);
+//    popVal();
+    
+    // If we know what method to invoke
     if (expr.methodDescriptor != null) {
       invokeMethodDescriptor(expr);
       return null;
@@ -2351,7 +2469,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Check for host class method
     if (parentType.is(CLASS, INSTANCE) && parentType.isHostClass()) {
-      compile(expr.parent);
       Class<?> hostClass = parentType.getJavaClass();
       List<JactlType> argTypes = new ArrayList<>(); 
       for (Expr arg : expr.args) {
@@ -2378,7 +2495,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // the method directly. We fall back to MethodHandle if all else fails.
     if (classCompiler.context.invokeDynamic && !isNamedArgs(expr.args)) {
      // Use invokeDynamic for fast runtime performance after initial bootstrap
-      compile(expr.parent);
       MethodType methodType = getTypeForMethodCall(Object.class, expr.args);
       int argCount          = expr.args.size() + 1 + 1 + 2;  // size + target + Continuation + source + offset
       Handle bsmHandle      = new Handle(H_INVOKESTATIC, Type.getInternalName(InvokeDynamicBootstrap.class), "bootstrapMethodOrField",
@@ -2416,7 +2532,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       invokeMaybeAsync(asyncEnabled(), ANY, 0, expr.location,
                        () -> {
-                         compile(expr.parent);           // The instance to invoke method on
                          loadConst(expr.methodName);
                          loadConst(!expr.parent.type.is(ANY));              // Whether must be field
                          loadConst(expr.accessOperator.is(QUESTION_DOT));   // whether x?.a() or x.a()
@@ -2488,7 +2603,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // We can invoke the method directly as we have exact number of args required
       invokeMaybeAsync(isAsync, method.returnType, 0, expr.location,
                        () -> {
-                         compile(parent);
+//                         compile(parent);
                          if (couldBeNull(parent)) {
                            throwIfNull("Cannot invoke method " + method.name + "() on null object", expr.methodNameLocation);
                          }
@@ -2546,7 +2661,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // Need to invoke the wrapper
       invokeMaybeAsync(isAsync, method.returnType, 0, expr.location,
                        () -> {
-                         compile(parent);
+//                         compile(parent);
                          if (couldBeNull(parent)) {
                            throwIfNull("Cannot invoke method " + method.name + "() on null object", expr.methodNameLocation);
                          }
@@ -2884,7 +2999,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return isDefinitelyPositive;
   }
 
-  private void convertIteratorToList(boolean isAsync, Token location) {
+  void convertIteratorToList(boolean isAsync, Token location) {
     dupVal();
     emitIf(isAsync, IfTest.IS_TRUE,
            () -> isInstanceOf(ITERATOR),
@@ -3100,7 +3215,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @return Pair of (true if args validated and false if validation should be deferred to runtime) and
    *         (original args or named args converted to ordered arg list)
    */
-  private Pair<Boolean,List<Expr>> validateArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod, JactlType initClass) {
+  Pair<Boolean,List<Expr>> validateArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod, JactlType initClass) {
     int       argCount = args.size();
     JactlType arg0Type = argCount > 0 ? args.get(0).type : null;
     if (!isInitMethod && argCount == 1 && arg0Type.is(ANY, LIST)) {
@@ -3697,7 +3812,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   /**
    * Pop value off JVM stack but don't touch type stack
    */
-  private void _popVal() {
+  void _popVal() {
     stack._popVal();
   }
 
@@ -3768,7 +3883,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     pushType(type.boxed());
   }
 
-  private void loadNullContinuation() {
+  void loadNullContinuation() {
     _loadConst(null);
     pushType(CONTINUATION);
   }
@@ -4617,7 +4732,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * Throw error preprend class name of stack arg to message.
    * Expect value stack: ...,value
    */
-  private void _throwWithClassName(String msg, SourceLocation location) {
+  void _throwWithClassName(String msg, SourceLocation location) {
     mv.visitMethodInsn(INVOKESTATIC, "io/jactl/runtime/RuntimeUtils", "className", "(Ljava/lang/Object;)Ljava/lang/String;", false);
     _loadConst(msg);
     mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;", false);
@@ -4632,7 +4747,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     stack.freeSlot(temp);
   }
 
-  private void throwError(String msg, SourceLocation location) {
+  void throwError(String msg, SourceLocation location) {
     mv.visitTypeInsn(NEW, Utils.RUNTIME_ERROR_INTERNAL);
     mv.visitInsn(DUP);
     _loadConst(msg);
@@ -4702,7 +4817,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @param tryBlock         Runnable that emits code for the try block
    * @param catchBlock       Runnable that emits code for the catch block
    */
-  private void tryCatch(Class exceptionClass, boolean checkStacksMatch, Runnable tryBlock, Runnable catchBlock) {
+  void tryCatch(Class exceptionClass, boolean checkStacksMatch, Runnable tryBlock, Runnable catchBlock) {
     // We need to check for any values that are on the stack at the point that the try/catch
     // is to be used since the JVM will discard these values if an exception is thrown and
     // will leave just the exception on the stack at the point the exception is caught.
@@ -4816,7 +4931,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @param compileArgs            Runnable that emits code for compiling expressions for the args
    * @param invoker                Runnable that emits code for the method/function invocation
    */
-  private void invokeMaybeAsync(boolean isAsync, JactlType returnType, int numArgsAlreadyOnStack, Location location, Runnable compileArgs, Runnable invoker) {
+  void invokeMaybeAsync(boolean isAsync, JactlType returnType, int numArgsAlreadyOnStack, Location location, Runnable compileArgs, Runnable invoker) {
     if (!isAsync) {
       compileArgs.run();
       invoker.run();
@@ -4825,7 +4940,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     invokeAsync(returnType, numArgsAlreadyOnStack, location, compileArgs, invoker);
   }
 
-  private void invokeAsync(JactlType returnType, int numArgsAlreadyOnStack, Location location, Runnable compileArgs, Runnable invoker) {
+  void invokeAsync(JactlType returnType, int numArgsAlreadyOnStack, Location location, Runnable compileArgs, Runnable invoker) {
     assert longArr != -1 && objArr != -1 : "Async code in method that is not marked as async: " + classCompiler.className + "." + methodName;
 
     // We need to preserve our stack and locals so that when we are resumed we can restore these
@@ -4929,7 +5044,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
-  private boolean asyncEnabled() {
+  boolean asyncEnabled() {
     return classCompiler.context.isAsync;
   }
 
@@ -5138,7 +5253,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     invokeMethod(JactlMethodHandle.INVOKE_METHOD);
   }
 
-  private void invokeMethodHandle(boolean useInvokeDynamic, List<JactlType> stackTypes) {
+  void invokeMethodHandle(List<JactlType> stackTypes) {
+    invokeMethodHandle(classCompiler.context.invokeDynamic, stackTypes);
+  }
+  
+  void invokeMethodHandle(boolean useInvokeDynamic, List<JactlType> stackTypes) {
     if (!useInvokeDynamic) {
       // Fallback to old way
       invokeMethod(JactlMethodHandle.INVOKE_METHOD);
@@ -5633,7 +5752,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     stack.storeLocal(slot);
   }
 
-  private void _storeLocal(int slot) {
+  void _storeLocal(int slot) {
     stack._storeLocal(slot);
   }
 

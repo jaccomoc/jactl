@@ -615,6 +615,7 @@ public class CompilerTest3 extends BaseTest {
     test("class X { def f(int d) { d * d } }; def x = new X(); x.f(2.1234)", 4);
     test("class X { def f(int d) { d * d } }; def x = new X(); def g = x.f; g(2.1234)", 4);
     test("class X { static def f(int d) { d * d } }; def g = X.f; g(2.1234)", 4);
+    test("def i = 0; [null, 'P'].each{ i++ if sleep(0,it) }; i", 1);
   }
   
 }

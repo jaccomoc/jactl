@@ -19,6 +19,7 @@ package io.jactl.runtime;
 
 import io.jactl.JactlType;
 import io.jactl.Utils;
+import io.jactl.compiler.MethodRef;
 
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
@@ -59,6 +60,8 @@ public class Reducer implements Checkpointable {
     GROUP_BY,
     TRANSPOSE
   }
+  
+  public static final MethodRef ADD_NUMBERS_METHOD = Utils.getMethod(Reducer.class, "addNumbers", Object.class, Object.class, String.class, int.class);
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeTypeEnum(JactlType.TypeEnum.BUILTIN);

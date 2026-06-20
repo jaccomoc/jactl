@@ -17,6 +17,10 @@
 
 package io.jactl.runtime;
 
+import io.jactl.Utils;
+import io.jactl.compiler.MethodRef;
+import org.objectweb.asm.Type;
+
 import java.util.Arrays;
 
 import static io.jactl.JactlType.TypeEnum.BUILTIN;
@@ -37,7 +41,12 @@ import static io.jactl.JactlType.TypeEnum.BUILTIN;
  * </p>
  */
 public class CircularBuffer<T> implements Checkpointable {
-  private static int VERSION = 1;
+  public static final String    CIRCULAR_BUFFER_INTERNAL_NAME = Type.getInternalName(CircularBuffer.class);
+  public static final MethodRef CIRCULAR_BUFFER_ADD_METHOD    = Utils.getMethod(CircularBuffer.class, "add", Object.class);
+  public static final MethodRef CIRCULAR_BUFFER_REMOVE_METHOD = Utils.getMethod(CircularBuffer.class, "remove");
+  public static final MethodRef CIRCULAR_BUFFER_SIZE_METHOD   = Utils.getMethod(CircularBuffer.class, "size");
+  public static final MethodRef CIRCULAR_BUFFER_FREE_METHOD   = Utils.getMethod(CircularBuffer.class, "free");
+  private static      int       VERSION                       = 1;
   Object[] buffer;
   int      bufferSize;
   boolean  canGrow = false;  // true if we can grow buffer when it fills up
@@ -46,7 +55,7 @@ public class CircularBuffer<T> implements Checkpointable {
 
   public CircularBuffer() {}    // for checkpoint/restore
 
-  CircularBuffer(int capacity) {
+  public CircularBuffer(int capacity) {
     this.bufferSize = capacity + 1;
     buffer = new Object[this.bufferSize];
   }
@@ -58,12 +67,13 @@ public class CircularBuffer<T> implements Checkpointable {
 
   /**
    * Number of elements in the buffer
+   * @return number elements in buffer
    */
-  int size() {
+  public int size() {
     return (tail + bufferSize - head) % bufferSize;
   }
 
-  void add(T t) {
+  public void add(T t) {
     if (free() == 0) {
       if (canGrow) {
         Object[] newBuf = new Object[bufferSize << 1];
@@ -86,7 +96,7 @@ public class CircularBuffer<T> implements Checkpointable {
     tail = (tail + 1) % bufferSize;
   }
 
-  T remove() {
+  public T remove() {
     if (size() == 0) {
       return null;
     }
@@ -97,7 +107,11 @@ public class CircularBuffer<T> implements Checkpointable {
     return elem;
   }
 
-  int free() {
+  /**
+   * How much free space in the buffer
+   * @return number of unoccupied elements in buffer
+   */
+  public int free() {
     return bufferSize - 1 - size();
   }
 
