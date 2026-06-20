@@ -35,10 +35,13 @@ public class PipelineCompiler {
       case "map":
       case "filter":
       case "flatMap":
+      case "fmap":
         return expr.args.size() <= 1;
       case "sum":
       case "limit":
       case "skip":
+      case "mapWithIndex":
+      case "mapi":
         return true;
       default:
         return false;
@@ -112,7 +115,7 @@ public class PipelineCompiler {
 
     for (int i = 0; i < fns.size(); i++) {
       InlineFn fn = fns.get(i);
-      fn.compile(-1, fns, i);
+      fn.compile(-1, -1, fns, i);
     }
 
     if (convertToList) {
@@ -172,7 +175,6 @@ public class PipelineCompiler {
       methodCompiler.loadDefaultValue(LIST);
       methodCompiler.storeLocal(resultListSlot);
     }
-    
     
     int contResultSlot = methodCompiler.stack.allocateSlot(ANY);
     methodCompiler.loadConst(null);
@@ -247,7 +249,7 @@ public class PipelineCompiler {
           // sync handler for fn
           methodCompiler.mv.visitLabel(switchLabels[index++]);
           methodCompiler.loadLocal(valueSlot);
-          fn.compile(valueSlot, fns, i);
+          fn.compile(valueSlot, locationSlot, fns, i);
           if (!fn.isCollapsing()) {
             methodCompiler.storeLocal(valueSlot);
           }
@@ -324,12 +326,15 @@ public class PipelineCompiler {
   
   private static InlineFn createInlineFn(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) {
     switch (expr.methodName) {
-      case "map":     return new InlineMap(expr, args, methodCompiler);
-      case "flatMap": return new InlineFlatMap(expr, args, methodCompiler);
-      case "filter":  return new InlineFilter(expr, args, methodCompiler);
-      case "sum":     return new InlineSum(expr, methodCompiler);
-      case "skip":    return new InlineSkip(expr, args.get(0), methodCompiler);
-      case "limit":   return new InlineLimit(expr, args.get(0), methodCompiler);
+      case "map":           return new InlineMap(expr, args, methodCompiler);
+      case "mapWithIndex":  return new InlineMapWithIndex(expr, args, methodCompiler);
+      case "mapi":          return new InlineMapWithIndex(expr, args, methodCompiler);
+      case "flatMap":       return new InlineFlatMap(expr, args, methodCompiler);
+      case "fmap":          return new InlineFlatMap(expr, args, methodCompiler);
+      case "filter":        return new InlineFilter(expr, args, methodCompiler);
+      case "sum":           return new InlineSum(expr, methodCompiler);
+      case "skip":          return new InlineSkip(expr, args.get(0), methodCompiler);
+      case "limit":         return new InlineLimit(expr, args.get(0), methodCompiler);
       default:
         throw new UnsupportedOperationException("Unsupported method " + expr.methodName);
     }
@@ -349,7 +354,7 @@ public class PipelineCompiler {
     boolean isCollapsing() { return false; }   // True for functions like sum that collapse pipeline into a single value
     void initialise() {}
     
-    void compile(int valueSlot, List<InlineFn> fns, int idx) {}
+    void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {}
     void compileLimitCheck() {}                // Allow limit() to short circuit if limit reached
     void finish() {}
     void asyncResumed(int contResultSlot, int valueSlot) {
@@ -406,7 +411,7 @@ public class PipelineCompiler {
   private static class InlineMap extends InlineClosureInvoker {
     InlineMap(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler); }
     @Override
-    void compile(int valueSlot, List<InlineFn> fns, int idx) {
+    void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       if (closureSlot >= 0) {
         methodCompiler.loadLocal(closureSlot);
         invokeClosure(methodCompiler, expr.location);
@@ -414,6 +419,49 @@ public class PipelineCompiler {
     }
     @Override void asyncResumed(int contResultSlot, int valueSlot) {
       methodCompiler.loadLocal(contResultSlot);
+    }
+  }
+
+  private static class InlineMapWithIndex extends InlineClosureInvoker {
+    int indexSlot = -1;
+    InlineMapWithIndex(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler); }
+    @Override void initialise() {
+      super.initialise();
+      indexSlot = methodCompiler.stack.allocateSlot(INT);
+      methodCompiler.loadConst(0);
+      methodCompiler.storeLocal(indexSlot);
+    }
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
+      methodCompiler.mv.visitTypeInsn(NEW, "java/util/ArrayList");
+      methodCompiler.mv.visitInsn(DUP);
+      methodCompiler._loadConst(2);
+      methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, "java/util/ArrayList", "<init>", "(I)V", false);
+      methodCompiler.mv.visitInsn(DUP_X1);
+      methodCompiler.mv.visitInsn(SWAP);
+      methodCompiler.mv.visitMethodInsn(INVOKEINTERFACE, "java/util/List", "add", "(Ljava/lang/Object;)Z", true);
+      methodCompiler.mv.visitInsn(POP);
+      methodCompiler.mv.visitInsn(DUP);
+      methodCompiler.loadLocal(indexSlot);
+      methodCompiler.box();
+      methodCompiler.popType(2);
+      methodCompiler.mv.visitMethodInsn(INVOKEINTERFACE, "java/util/List", "add", "(Ljava/lang/Object;)Z", true);
+      methodCompiler.mv.visitInsn(POP);
+      methodCompiler.pushType(ANY);
+      if (closureSlot >= 0) {
+        methodCompiler.loadLocal(closureSlot);
+        invokeClosure(methodCompiler, expr.location);
+      }
+      methodCompiler.mv.visitIincInsn(indexSlot, 1);
+    }
+    @Override void asyncResumed(int contResultSlot, int valueSlot) {
+      methodCompiler.loadLocal(contResultSlot);
+      methodCompiler.mv.visitIincInsn(indexSlot, 1);
+    }
+
+    @Override
+    void finish() {
+      super.finish();
+      methodCompiler.stack.freeSlot(indexSlot);
     }
   }
 
@@ -428,7 +476,7 @@ public class PipelineCompiler {
       methodCompiler.loadConst(null);
       methodCompiler.storeLocal(subIterSlot);
     }
-    @Override void compile(int valueSlot, List<InlineFn> fns, int idx) {
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       if (closureSlot >= 0) {
         methodCompiler.loadLocal(closureSlot);
         invokeClosure(methodCompiler, expr.location);
@@ -438,6 +486,12 @@ public class PipelineCompiler {
       methodCompiler.storeLocal(subIterSlot);
       
       methodCompiler.mv.visitLabel(subLoop);      // :SUB LOOP
+      // Set location since we could have jumped to this label and location will not have been updated
+      if (locationSlot != -1) {
+        methodCompiler.loadConst(4 + idx * 2);
+        methodCompiler.storeLocal(locationSlot);
+      }
+      
       // Need to allow for a subsequent limit in the pipeline to short circuit us
       for (int i = idx + 1; i < fns.size(); i++) {
         fns.get(i).compileLimitCheck();
@@ -466,7 +520,7 @@ public class PipelineCompiler {
 
   private static class InlineFilter extends InlineClosureInvoker {
     InlineFilter(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler); }
-    @Override void compile(int valueSlot, List<InlineFn> fns, int idx) {
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       methodCompiler.dupVal();
       if (closureSlot >= 0) {
         // Invoke closure and check truthiness of its result
@@ -504,7 +558,7 @@ public class PipelineCompiler {
       methodCompiler.box();
       methodCompiler.storeLocal(sumSlot);
     }
-    @Override void compile(int valueSlot, List<InlineFn> fns, int idx) {
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       methodCompiler.loadLocal(sumSlot);
       methodCompiler.swap();
       methodCompiler.loadLocation(expr.location);
@@ -513,7 +567,7 @@ public class PipelineCompiler {
     }
     @Override void asyncResumed(int contResultSlot, int valueSlot) {
       methodCompiler.loadLocal(valueSlot);
-      compile(valueSlot, null, 0);
+      compile(valueSlot, -1, null, 0);
     }
     @Override void finish() {
       methodCompiler._loadLocal(sumSlot);
@@ -596,7 +650,7 @@ public class PipelineCompiler {
   private static class InlineSkip extends InlineSkipLimit {
     Label SUBLOOP = new Label();
     InlineSkip(Expr.MethodCall expr, Expr argExpr, MethodCompiler methodCompiler) { super(expr, argExpr, methodCompiler); }
-    @Override void compile(int valueSlot, List<InlineFn> fns, int idx) {
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       Label IS_POSITIVE = new Label();
       Label NEXT = new Label();
       if (!argExpr.isConst) {
@@ -618,6 +672,11 @@ public class PipelineCompiler {
         // back to main loop (if they need to) and it then sees it has finished 
         // and jumps here again.
         methodCompiler.mv.visitLabel(SUBLOOP);             // :SUBLOOP
+        if (locationSlot != -1) {
+          methodCompiler.loadConst(4 + idx * 2);
+          methodCompiler.storeLocal(locationSlot);
+        }
+        
         if (!constNegative) {
           methodCompiler._loadLocal(isNegativeSlot);
           methodCompiler.mv.visitJumpInsn(IFEQ, endLabel);   // positive skip so nothing to do
@@ -657,7 +716,7 @@ public class PipelineCompiler {
 
   private static class InlineLimit extends InlineSkipLimit {
     InlineLimit(Expr.MethodCall expr, Expr argExpr, MethodCompiler methodCompiler) { super(expr, argExpr, methodCompiler); }
-    @Override void compile(int valueSlot, List<InlineFn> fns, int idx) {
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       Label IS_POSITIVE = new Label();
       Label NEXT = new Label();
       if (!argExpr.isConst) {

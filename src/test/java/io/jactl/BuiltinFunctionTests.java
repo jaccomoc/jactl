@@ -1258,11 +1258,11 @@ public class BuiltinFunctionTests extends BaseTest {
   }
   
   @Test public void pipelineNegativeSkipLimit() {
-    test("List list = [1,2,3,4]; list.skip(-3)", Utils.listOf(2,3,4));
+    test("List list = [1,2,3,4]; list.skip(-3)", Utils.listOf(2, 3, 4));
     test("List list = [1,2,3,4]; list.skip(-3).limit(2).skip(-1)", Utils.listOf(3));
     test("def x = -3; def y = -1; List list = [1,2,3,4]; list.skip(x).limit(2).skip(y)", Utils.listOf(3));
     test("def x = -3; def y = -1; def list = [1,2,3,4]; list.skip(x).limit(2).skip(y)", Utils.listOf(3));
-    test("List list = [1,2,3,4]; list.skip(-3).limit(2).skip(0)", Utils.listOf(2,3));
+    test("List list = [1,2,3,4]; list.skip(-3).limit(2).skip(0)", Utils.listOf(2, 3));
     test("List list = [1,2,3,4]; list.skip(-3).limit(1).sum()", 2);
     test("List list = [1,2,3,4]; list.skip(-3).limit(2).skip(-1).sum()", 3);
     test("List list = [1,2,3,4]; list.skip(-1).sum()", 4);
@@ -1272,10 +1272,10 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def list = [[1,2],[2,3],4]; list.skip(-3).flatMap{ it + it }.skip(-7).sum()", 21);
     test("def list = [[1,2],[2,3],4]; list.skip(-list[1][1]).flatMap{ it + it }.skip(-7).sum()", 21);
     test("def list = [[1,2],[2,3],4]; list.flatMap().skip(-list[1][1]).flatMap{ [it,it] }.skip(-4).sum()", 14);
-    test("List list = [1,2,3,4]; list.limit(-2)", Utils.listOf(1,2));
-    test("def list = [1,2,3,4]; list.limit(-2)", Utils.listOf(1,2));
-    test("def x = -2; def list = [1,2,3,4]; list.limit(x)", Utils.listOf(1,2));
-    test("def list = [[1,2],[2,3],4]; list.flatMap().skip(-3).flatMap{ [it,it] }.limit(-2)", Utils.listOf(2,2,3,3));
+    test("List list = [1,2,3,4]; list.limit(-2)", Utils.listOf(1, 2));
+    test("def list = [1,2,3,4]; list.limit(-2)", Utils.listOf(1, 2));
+    test("def x = -2; def list = [1,2,3,4]; list.limit(x)", Utils.listOf(1, 2));
+    test("def list = [[1,2],[2,3],4]; list.flatMap().skip(-3).flatMap{ [it,it] }.limit(-2)", Utils.listOf(2, 2, 3, 3));
     test("def list = [[1,2],[2,3],4]; list.flatMap().skip(-3).flatMap{ [it,it] }.limit(0).sum()", 0);
     test("def list = [[1,2],[2,3],4]; list.flatMap().skip(-3).flatMap{ [it,it] }.limit(-2).sum()", 10);
     test("def list = [[1,2],[2,3],4]; list.flatMap().skip(0).flatMap{ [it,it] }.limit(-2).sum()", 16);
@@ -1286,5 +1286,15 @@ public class BuiltinFunctionTests extends BaseTest {
     doTest("def i = 0; [1,2,3,4,5].map{ i++; sleep(0,it) }.limit(2); i", 2);
     doTest("def i = 0; [[1,2],[3,4],[5,6]].map{ i++; it }.limit(3).flatMap{ it + it }.map{ i++; it }.limit(6); i", 8);
     doTest("def i = 0; [[1,2],[3,4],[5,6]].map{ i++; sleep(0,it) }.limit(3).flatMap{ it + it }.map{ i++; it }.limit(6); i", 8);
+  }
+  
+  @Test public void pipelineMapWithIndex() {
+    test("List list = [[1,2]]; list.flatMap{ [it,it] }.flatMap{ sleep(0,it) }", Utils.listOf(1, 2, 1, 2));
+    test("List list = [1,2,3]; list.mapWithIndex{ it -> it }", Utils.listOf(Utils.listOf(1,0), Utils.listOf(2,1), Utils.listOf(3,2)));
+    test("List list = [1,2,3]; list.mapWithIndex{ it,i -> [it*it,i+1] }.flatMap().sum()", 20);
+    test("def list = [1,2,3]; list.mapWithIndex{ it -> it }", Utils.listOf(Utils.listOf(1,0), Utils.listOf(2,1), Utils.listOf(3,2)));
+    test("def list = [1,2,3]; list.mapWithIndex{ it,i -> [it*it,i+1] }.flatMap{ sleep(0,it) }.sum()", 20);
+    test("def list = [[1,2,3]]; list.flatMap{ it }.mapWithIndex{ it,i -> [it*it,i+1] }.flatMap{ sleep(0,it) }.sum()", 20);
+    test("def list = [[1,2,3]]; list.flatMap{ it }.mapWithIndex().flatMap{ sleep(0,it) }.sum()", 9);
   }
 }
