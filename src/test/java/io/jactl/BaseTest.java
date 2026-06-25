@@ -115,6 +115,10 @@ public class BaseTest {
     doTest(classCode, scriptCode, null, null, evalConsts, replMode, testAsync, testCheckpoint, expected);
   }
 
+  protected void test(String scriptCode, String input, ByteArrayOutputStream output, Object expected) {
+    doTest(Utils.listOf(), scriptCode, input, output, true, false, false, false, expected);
+  }
+  
   protected void doTest(List<String> classCode, String scriptCode, String input, ByteArrayOutputStream output, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, Object expected) {
     checkEqual(expected, doRun(classCode, scriptCode, input, output, evalConsts, replMode, testAsync, testCheckpoint, false));
     if (output != null) {

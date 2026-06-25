@@ -189,6 +189,16 @@ public class RuntimeUtils {
     return result;
   }
 
+  public static final MethodRef CALCULATE_AVERAGE = Utils.getMethod(RuntimeUtils.class, "calculateAverage", Object.class, long.class, String.class, int.class);
+  public static BigDecimal calculateAverage(Object value, long count, String source, int offset) {
+    if (count == 0) {
+      throw new RuntimeError("Empty list for avg() function", source, offset);
+    }
+    if (value instanceof Double)             { value = BigDecimal.valueOf((double)value); }
+    else if (!(value instanceof BigDecimal)) { value = BigDecimal.valueOf(((Number)value).longValue()); }
+    return RuntimeUtils.decimalDivide((BigDecimal)value, BigDecimal.valueOf(count), Utils.DEFAULT_MIN_SCALE, source, offset);
+  }
+  
   public static BigDecimal decimalDivide(BigDecimal left, BigDecimal right, int minScale, String source, int offset) {
     BigDecimal result;
     try {
@@ -1106,6 +1116,9 @@ public class RuntimeUtils {
     if (obj instanceof Number || obj instanceof Boolean) {
       return obj.toString();
     }
+    if (obj == null) {
+      return "null";
+    }
     return doToString(obj, new HashSet<>(), "", 0);
   }
 
@@ -1377,7 +1390,7 @@ public class RuntimeUtils {
     JactlType jactlType = context.typeFromClass(parentClass, (JactlType) null);
     if (jactlType == null) {
       String msg = context.allowHostAccess ? "Access to host class '" + parentClass.getName() + "' not allowed (see allowHostClassLookup setting)"
-                                           : "Access to host classes not allowed (see allowHostAccess and allowHostClassLookup settings)";
+                                           : "Access to host classes not allowed (see allowHostAccess and allowHostClassLookup settings). Class was '" + parentClass.getName() + "', field was '" + field + "'";
       throw new RuntimeError(msg, source, offset);
     }
     if (jactlType.isHostClass()) {

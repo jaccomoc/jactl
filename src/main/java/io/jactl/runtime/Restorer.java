@@ -242,6 +242,10 @@ public class Restorer {
     return new StringBuffer(readString());
   }
   
+  private StringBuilder readStringBuilder() {
+    return new StringBuilder(readString());
+  }
+  
   private String readString() {
     int length = readCInt();
     StringBuilder sb = new StringBuilder(length);
@@ -314,6 +318,7 @@ public class Restorer {
         // Don't restore since these object types are more like primitives and are restored when we read them
         case STRING:         result = readString();            shouldRestore = false;   break;
         case STRING_BUFFER:  result = readStringBuffer();      shouldRestore = false;   break;
+        case STRING_BUILDER: result = readStringBuilder();     shouldRestore = false;   break;
 
         case MAP:            result = add.apply(new LinkedHashMap<>());                 break;
         case LIST:           result = add.apply(new ArrayList<>());                     break;

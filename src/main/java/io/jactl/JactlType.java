@@ -73,6 +73,7 @@ public class JactlType extends JactlUserDataHolder {
     CONTINUATION,
     NULL_TYPE,
     STRING_BUFFER,
+    STRING_BUILDER,
     NAMED_ARGS_MAP,
     VOID,
     OPTIONAL,       // Used for "for" variables which may have already been declared

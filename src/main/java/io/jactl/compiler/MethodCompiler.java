@@ -2351,10 +2351,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
-  private static final boolean USE_PIPELINE_INLINING = Boolean.parseBoolean(System.getProperty("jactl.pipelineInlining", "true")); 
+  private static final boolean USE_PIPELINE_INLINING = Boolean.parseBoolean(System.getProperty("jactl.pipelineInlining", "false")); 
   
   @Override public Void visitMethodCall(Expr.MethodCall expr) {
-    if (USE_PIPELINE_INLINING && classCompiler.context.invokeDynamic && PipelineCompiler.inlineable(expr) && (!expr.isMethodCallTarget || PipelineCompiler.isCollapsing(expr.methodName))) {
+    if (USE_PIPELINE_INLINING && classCompiler.context.invokeDynamic && PipelineCompiler.inlineable(expr) && !expr.isMethodCallTarget) {
       // Check if we have something that looks like it could be a function that acts on an
       // iterator.
       // We can only inline if we are the end function in the pipeline (one that collapses
@@ -2368,7 +2368,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // equivalent) since we don't know if that method might be an iterator method or not.
       // We can't inline part of a pipeline since that changes the semantics by creating
       // intermediate list results and interrupting the iterator chaining.
-      boolean               isInlineablePipeline = true;
       List<Expr.MethodCall> pipeline             = new ArrayList<>();
       List<List<Expr>>      args                 = new ArrayList<>();
       Expr                  parent               = expr;
@@ -2379,26 +2378,25 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           break;
         }
         if (!PipelineCompiler.inlineable(methodCallParent)) {
-          isInlineablePipeline = false;
+          break;
+        }
+        if (expr != parent && PipelineCompiler.isCollapsing(methodCallParent.methodName)) {
           break;
         }
         if (methodCallParent.methodDescriptor != null) {
           // If not a method that returns iterator then can't inline anything since we don't have an
           // iteration pipeline
           if (parent != expr && !methodCallParent.methodDescriptor.returnType.isIterable()) {
-            isInlineablePipeline = false;
             break;
           }
           convertedArgs = checkForValidArgs(methodCallParent, methodCallParent.methodDescriptor);
           if (convertedArgs == null) {
-            isInlineablePipeline = false;
             break;
           }
         }
         else {
           // We can only inline when we know all the method names at compile time
           if (methodCallParent.methodName == null) {
-            isInlineablePipeline = false;
             break;
           }
           // Check to see if we could have an iterator method
@@ -2411,7 +2409,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           }
           convertedArgs = checkForValidArgs(methodCallParent, desc);
           if (convertedArgs == null) {
-            isInlineablePipeline = false;
             break;
           }
         }
@@ -2420,9 +2417,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         args.add(0, convertedArgs);
       }
 
-      // Inline if we are inlining and we have more than one method in the pipeline,
-      // otherwise fall through to standard compilation
-      if (isInlineablePipeline && expr != parent) {
+      List<PipelineCompiler.InlineFn> pipelineFns = expr != parent ? PipelineCompiler.createPipeline(pipeline, args, this) : null;
+      // If single function in pipeline and function has potentially more efficient direct implementation
+      // (e.g. size() for list/maps) then don't inline
+      if (expr != parent && !(pipelineFns.size() == 1 && pipelineFns.get(0).canBeDirect())) {
         // If the parent is ANY, we insert a check for the right parent type before executing
         // the inline pipeline and fall back to traditional method invocation if the parent
         // runtime type is not iterable.
@@ -2430,7 +2428,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         // with negative arguments) so if we have a vetoable function insert a runtime
         // check.
         compile(parent);
-        List<PipelineCompiler.InlineFn> pipelineFns = PipelineCompiler.createPipeline(pipeline, args, this);
         if (peek().is(ANY)) {
           invokeMethod(RuntimeUtils.CREATE_ITERATOR_OR_NULL_METHOD);
           Expr finalParent = parent;

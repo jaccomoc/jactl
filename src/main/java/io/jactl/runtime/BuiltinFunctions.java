@@ -23,7 +23,6 @@ import org.objectweb.asm.MethodVisitor;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -913,13 +912,13 @@ public class BuiltinFunctions {
 
   // = size
 
-  public static int mapSize(Map map) { return map.size(); }
+  public static long mapSize(Map map) { return map.size(); }
 
-  public static int listSize(List list) {
+  public static long listSize(List list) {
     return list.size();
   }
 
-  public static int iteratorSize(Object iterable, Continuation c) {
+  public static long iteratorSize(Object iterable, Continuation c) {
     try {
       List list = c == null ? RuntimeUtils.convertIteratorToList(iterable, null)
                             : (List) c.getResult();
@@ -1513,9 +1512,39 @@ public class BuiltinFunctions {
 
   // = sort
 
-  public static JactlMethodHandle iteratorSort$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSort$c",
-                                                                                    Object.class, Continuation.class);
+  public static JactlMethodHandle listSort$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "listSort$c", Object.class, Continuation.class);
+  public static Object listSort$c(Continuation c) {
+    return listSort((List)c.localObjects[0], c, (String)c.localObjects[1], (int)c.localPrimitives[0], (JactlMethodHandle)c.localObjects[2]);
+  }
 
+  public static MethodRef LIST_SORT = Utils.getMethod(BuiltinFunctions.class, "listSort", List.class, Continuation.class, String.class, int.class, JactlMethodHandle.class);
+  public static List listSort(List list, Continuation c, String source, int offset, JactlMethodHandle closure) {
+    int location = c == null ? 0 : c.methodLocation;
+    try {
+      if (location == 0) {
+        if (closure == null) {
+          try {
+            list.sort((a,b) -> RuntimeUtils.compareTo(a,b,source,offset));
+            return list;
+          }
+          catch (Throwable t) {
+            throw new RuntimeError("Unexpected error", source, offset, t);
+          }
+        }
+        else {
+          return (List) mergeSort(list, closure, source, offset, null);
+        }
+      }
+      else {
+        return (List) c.getResult();
+      }
+    }
+    catch (Continuation cont) {
+      throw new Continuation(cont, listSort$cHandle, location + 1, new long[]{ offset }, new Object[]{ list, source, closure });
+    }
+  }
+
+  public static JactlMethodHandle iteratorSort$cHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "iteratorSort$c", Object.class, Continuation.class);
   public static Object iteratorSort$c(Continuation c) {
     return iteratorSort(c.localObjects[0], c, (String)c.localObjects[1], (int)c.localPrimitives[0], (JactlMethodHandle)c.localObjects[2]);
   }

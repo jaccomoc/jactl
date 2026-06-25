@@ -18,27 +18,18 @@
 package io.jactl;
 
 import io.jactl.compiler.Compiler;
-import io.jactl.runtime.Continuation;
 import io.jactl.runtime.Functions;
-import io.jactl.runtime.RuntimeError;
 import io.jactl.runtime.RuntimeState;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.*;
 import java.math.BigDecimal;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import static io.jactl.JactlType.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class BuiltinFunctionTests extends BaseTest {
@@ -47,8 +38,9 @@ public class BuiltinFunctionTests extends BaseTest {
   void tearDown() {
     Functions.INSTANCE.deregisterFunction("testFunction");
   }
-  
-  @Test public void aliasedFunction() {
+
+  @Test
+  public void aliasedFunction() {
     Jactl.function()
          .name("testFunction")
          .alias("testFunction2")
@@ -64,9 +56,12 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("testFunction2()", "unknown");
   }
 
-  public static int testFunction() { return 3; }
+  public static int testFunction() {
+    return 3;
+  }
 
-  @Test public void applicationContext() {
+  @Test
+  public void applicationContext() {
     Jactl.function()
          .name("testFunction")
          .impl(BuiltinFunctionTests.class, "testFunctionAppCtx")
@@ -77,12 +72,12 @@ public class BuiltinFunctionTests extends BaseTest {
     JactlScript script = Jactl.compileScript("testFunction()", new HashMap<>(), jactlContext);
     assertEquals(null, script.eval(new HashMap<>()));
 
-    Object applicationContext = new Object();
-    JactlContext jactlContext2 = JactlContext.create().applicationContext(applicationContext).build();
+    Object       applicationContext = new Object();
+    JactlContext jactlContext2      = JactlContext.create().applicationContext(applicationContext).build();
     assertEquals(applicationContext, Jactl.eval("testFunction()", new HashMap<>(), jactlContext2));
     script = Jactl.compileScript("testFunction()", new HashMap<>(), jactlContext2);
     assertEquals(applicationContext, script.eval(new HashMap<>()));
-    
+
     script = Jactl.compileScript("sleep(0, testFunction())", new HashMap<>(), jactlContext2);
     assertEquals(applicationContext, script.eval(new HashMap<>()));
     script = Jactl.compileScript("sleep(0, testFunction()); sleep(0, testFunction())", new HashMap<>(), jactlContext2);
@@ -93,18 +88,19 @@ public class BuiltinFunctionTests extends BaseTest {
     return RuntimeState.getState().getContext().getApplicationContext();
   }
 
-  @Test public void invocationContext() throws ExecutionException, InterruptedException {
+  @Test
+  public void invocationContext() throws ExecutionException, InterruptedException {
     Jactl.function()
          .name("testFunction")
          .impl(BuiltinFunctionTests.class, "testFunctionScriptCtx")
          .register();
 
-    Object invocationContext = new Object();
-    JactlScript script = Jactl.compileScript("testFunction()", new HashMap<>());
+    Object      invocationContext = new Object();
+    JactlScript script            = Jactl.compileScript("testFunction()", new HashMap<>());
     assertEquals(null, script.eval(new HashMap<>()));
     assertEquals(null, script.eval(new HashMap<>(), null));
     assertEquals(invocationContext, script.eval(new HashMap<>(), invocationContext));
-    
+
     script = Jactl.compileScript("sleep(0, testFunction())", new HashMap<>());
     assertEquals(null, script.eval(new HashMap<>()));
     assertEquals(null, script.eval(new HashMap<>(), null));
@@ -116,11 +112,11 @@ public class BuiltinFunctionTests extends BaseTest {
     assertEquals(invocationContext, script.run(new HashMap<>(), null, null, invocationContext).get());
 
     JactlContext jactlContext = JactlContext.create().async(false).build();
-    script = Jactl.compileScript("testFunction()", new HashMap<>(),  jactlContext);
+    script = Jactl.compileScript("testFunction()", new HashMap<>(), jactlContext);
     assertEquals(null, script.eval(new HashMap<>()));
     assertEquals(null, script.eval(new HashMap<>(), null));
     assertEquals(invocationContext, script.eval(new HashMap<>(), invocationContext));
-    
+
     script = Jactl.compileScript("sleep(0, testFunction())", new HashMap<>(), jactlContext);
     assertEquals(null, script.eval(new HashMap<>()));
     assertEquals(null, script.eval(new HashMap<>(), null));
@@ -142,7 +138,8 @@ public class BuiltinFunctionTests extends BaseTest {
     return RuntimeState.getState().getInvocationContext();
   }
 
-  @Test public void sleep() {
+  @Test
+  public void sleep() {
     test("sleep(0,1)", 1);
     test("sleep(1,1)", 1);
     test("sleep(0)", null);
@@ -152,15 +149,16 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def f = sleep; f(0,'abc')", "abc");
   }
 
-  @Test public void filter() {
+  @Test
+  public void filter() {
     test("[].filter{it>1}", Utils.listOf());
     test("[].filter()", Utils.listOf());
-    test("[1,'',2].filter{it}", Utils.listOf(1,2));
-    test("[1,'',2].filter(predicate:{it})", Utils.listOf(1,2));
-    test("def f = [1,'',2].filter; f{it}", Utils.listOf(1,2));
-    test("def f = [1,'',2].filter; f(predicate:{it})", Utils.listOf(1,2));
+    test("[1,'',2].filter{it}", Utils.listOf(1, 2));
+    test("[1,'',2].filter(predicate:{it})", Utils.listOf(1, 2));
+    test("def f = [1,'',2].filter; f{it}", Utils.listOf(1, 2));
+    test("def f = [1,'',2].filter; f(predicate:{it})", Utils.listOf(1, 2));
     testError("def f = [1,'',2].filter; f(closurex:{it})", "no such parameter");
-    test("[1,'',2].filter()", Utils.listOf(1,2));
+    test("[1,'',2].filter()", Utils.listOf(1, 2));
     test("[:].filter()", Utils.listOf());
     test("def x = []; x.filter{it>1}", Utils.listOf());
     test("def x = []; x.filter()", Utils.listOf());
@@ -171,13 +169,13 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def f = 'abacad'.filter; f{it != 'a'}.join()", "bcd");
     test("def x = 'abc'; x.filter().join()", "abc");
     testError("def x = null; x.filter()", "null value");
-    test("[(byte)1,(byte)2,(byte)3].filter()", Utils.listOf((byte)1,(byte)2,(byte)3));
-    test("[(byte)1,(byte)2,(byte)3].filter{it>1}", Utils.listOf((byte)2,(byte)3));
-    test("[1,2,3].filter()", Utils.listOf(1,2,3));
-    test("[1,2,3].filter{it>1}", Utils.listOf(2,3));
-    test("[a:true,b:false,c:true].filter{it[1]}.map{it[0]}", Utils.listOf("a","c"));
-    test("def f = [a:true,b:false,c:true].filter; f{it[1]}.map{it[0]}", Utils.listOf("a","c"));
-    test("def x = [a:true,b:false,c:true]; x.filter{it[1]}.map{it[0]}", Utils.listOf("a","c"));
+    test("[(byte)1,(byte)2,(byte)3].filter()", Utils.listOf((byte) 1, (byte) 2, (byte) 3));
+    test("[(byte)1,(byte)2,(byte)3].filter{it>1}", Utils.listOf((byte) 2, (byte) 3));
+    test("[1,2,3].filter()", Utils.listOf(1, 2, 3));
+    test("[1,2,3].filter{it>1}", Utils.listOf(2, 3));
+    test("[a:true,b:false,c:true].filter{it[1]}.map{it[0]}", Utils.listOf("a", "c"));
+    test("def f = [a:true,b:false,c:true].filter; f{it[1]}.map{it[0]}", Utils.listOf("a", "c"));
+    test("def x = [a:true,b:false,c:true]; x.filter{it[1]}.map{it[0]}", Utils.listOf("a", "c"));
     testError("[1,2,3].filter('abc')", "cannot convert");
     testError("def f = [1,2,3].filter; f('abc')", "cannot be cast to function");
     test("[null,null,'P'].filter{it != ' '}", Arrays.asList(null, null, "P"));
@@ -185,7 +183,8 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[null,null,'P'].map{sleep(0,it)}.filter{it}", Utils.listOf("P"));
   }
 
-  @Test public void allMatch() {
+  @Test
+  public void allMatch() {
     test("[].allMatch{it>1}", true);
     test("[].allMatch()", true);
     test("[1,'',2].allMatch{it}", false);
@@ -217,7 +216,8 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[null,null,'P'].map{sleep(0,it)}.allMatch{it}", false);
   }
 
-  @Test public void noneMatch() {
+  @Test
+  public void noneMatch() {
     test("[].noneMatch{it>1}", true);
     test("[].noneMatch()", true);
     test("[1,2].noneMatch{it}", false);
@@ -252,7 +252,8 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[null,null,'P'].map{sleep(0,it)}.noneMatch{it}", false);
   }
 
-  @Test public void anyMatch() {
+  @Test
+  public void anyMatch() {
     test("[].anyMatch{it>1}", false);
     test("[].anyMatch()", false);
     test("[1,2].anyMatch{it}", true);
@@ -288,30 +289,32 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[null,null,'P'].map{sleep(0,it)}.anyMatch{it}", true);
   }
 
-  @Test public void lines() {
+  @Test
+  public void lines() {
     test("''.lines()", Utils.listOf(""));
     testError("[].lines()", "no such method");
     testError("def x = []; x.lines()", "no such method");
     test("' '.lines()", Utils.listOf(" "));
     test("'\\n'.lines()", Utils.listOf(""));
-    test("'abc\\nxyz'.lines()", Utils.listOf("abc","xyz"));
+    test("'abc\\nxyz'.lines()", Utils.listOf("abc", "xyz"));
     test("def x = ''; x.lines()", Utils.listOf(""));
     test("def x = ' '; x.lines()", Utils.listOf(" "));
     test("def x = '\\n'; x.lines()", Utils.listOf(""));
-    test("def x = 'abc\\nxyz'; x.lines()", Utils.listOf("abc","xyz"));
-    test("'abc\\n\\nxyz'.lines()", Utils.listOf("abc","","xyz"));
-    test("'abc\\n\\nxyz\\n'.lines()", Utils.listOf("abc","","xyz"));
-    test("'abc\\n\\nxyz\\n\\n'.lines()", Utils.listOf("abc","","xyz",""));
-    test("'\\nabc\\n\\nxyz\\n\\n'.lines()", Utils.listOf("","abc","","xyz",""));
-    test("'\\n\\nabc\\n\\nxyz\\n\\n'.lines()", Utils.listOf("","","abc","","xyz",""));
-    test("def f = '\\n\\nabc\\n\\nxyz\\n\\n'.lines; f()", Utils.listOf("","","abc","","xyz",""));
+    test("def x = 'abc\\nxyz'; x.lines()", Utils.listOf("abc", "xyz"));
+    test("'abc\\n\\nxyz'.lines()", Utils.listOf("abc", "", "xyz"));
+    test("'abc\\n\\nxyz\\n'.lines()", Utils.listOf("abc", "", "xyz"));
+    test("'abc\\n\\nxyz\\n\\n'.lines()", Utils.listOf("abc", "", "xyz", ""));
+    test("'\\nabc\\n\\nxyz\\n\\n'.lines()", Utils.listOf("", "abc", "", "xyz", ""));
+    test("'\\n\\nabc\\n\\nxyz\\n\\n'.lines()", Utils.listOf("", "", "abc", "", "xyz", ""));
+    test("def f = '\\n\\nabc\\n\\nxyz\\n\\n'.lines; f()", Utils.listOf("", "", "abc", "", "xyz", ""));
   }
 
-  @Test public void split() {
-    test("'a:b:c'.split(/:/)", Utils.listOf("a","b","c"));
-    test("'a:b:c'.split(regex:/:/)", Utils.listOf("a","b","c"));
-    test("'a:b:c'.split(regex:/:/,modifiers:'i')", Utils.listOf("a","b","c"));
-    test("def f = 'a:b:c'.split; f(regex:/:/,modifiers:'i')", Utils.listOf("a","b","c"));
+  @Test
+  public void split() {
+    test("'a:b:c'.split(/:/)", Utils.listOf("a", "b", "c"));
+    test("'a:b:c'.split(regex:/:/)", Utils.listOf("a", "b", "c"));
+    test("'a:b:c'.split(regex:/:/,modifiers:'i')", Utils.listOf("a", "b", "c"));
+    test("def f = 'a:b:c'.split; f(regex:/:/,modifiers:'i')", Utils.listOf("a", "b", "c"));
     testError("def f = 'a:b:c'.split; f(regexx:/:/,modifiers:'i')", "no such parameter");
     test("'abc'.split()", Utils.listOf("abc"));
     test("'abc'.split(null)", Utils.listOf("abc"));
@@ -320,34 +323,35 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("'abc'.split(/a/,'1')", "unexpected regex modifier");
     testError("'abc'.split(/a/,'f')", "unexpected regex modifier");
     testError("'abc'.split(/a/,'',1)", "too many arguments");
-    test("'abc'.split('')", Utils.listOf("a","b","c"));
-    test("'abc'.split(/./)", Utils.listOf("","","",""));
-    test("'aXbXYcX'.split(/[A-Z]+/)", Utils.listOf("a","b","c",""));
-    test("':aX:bXY:cX:'.split(/[A-Z]+/,'i')", Utils.listOf(":",":",":",":"));
-    test("'a::b:\\nc'.split(/:./)", Utils.listOf("a","b:\nc"));
-    test("'aX:bX\\nc'.split(/x./,'is')", Utils.listOf("a","b","c"));
-    test("'aX:bX\\nc'.split(/x./,'si')", Utils.listOf("a","b","c"));
+    test("'abc'.split('')", Utils.listOf("a", "b", "c"));
+    test("'abc'.split(/./)", Utils.listOf("", "", "", ""));
+    test("'aXbXYcX'.split(/[A-Z]+/)", Utils.listOf("a", "b", "c", ""));
+    test("':aX:bXY:cX:'.split(/[A-Z]+/,'i')", Utils.listOf(":", ":", ":", ":"));
+    test("'a::b:\\nc'.split(/:./)", Utils.listOf("a", "b:\nc"));
+    test("'aX:bX\\nc'.split(/x./,'is')", Utils.listOf("a", "b", "c"));
+    test("'aX:bX\\nc'.split(/x./,'si')", Utils.listOf("a", "b", "c"));
     test("'aX:bX\\nc'.split(/x$/,'si')", Utils.listOf("aX:bX\nc"));
-    test("'aX:bX\\nc'.split(/x$/,'mi')", Utils.listOf("aX:b","\nc"));
+    test("'aX:bX\\nc'.split(/x$/,'mi')", Utils.listOf("aX:b", "\nc"));
     test("'aX:bX\\nc'.split(/x$./,'mi')", Utils.listOf("aX:bX\nc"));
-    test("'aX:bX\\nc'.split(/x$./,'smi')", Utils.listOf("aX:b","c"));
-    test("def f = 'aX:bX\\nc'.split; f(/x$./,'smi')", Utils.listOf("aX:b","c"));
-    test("def x = 'aX:bX\\nc'; def f = x.split; f(/x$./,'smi')", Utils.listOf("aX:b","c"));
-    test("def x = 'a:b:c'; x.split(/:/)", Utils.listOf("a","b","c"));
+    test("'aX:bX\\nc'.split(/x$./,'smi')", Utils.listOf("aX:b", "c"));
+    test("def f = 'aX:bX\\nc'.split; f(/x$./,'smi')", Utils.listOf("aX:b", "c"));
+    test("def x = 'aX:bX\\nc'; def f = x.split; f(/x$./,'smi')", Utils.listOf("aX:b", "c"));
+    test("def x = 'a:b:c'; x.split(/:/)", Utils.listOf("a", "b", "c"));
     test("def x = 'abc'; x.split()", Utils.listOf("abc"));
-    test("def x = 'abc'; x.split('')", Utils.listOf("a","b","c"));
-    test("def x = 'abc'; x.split(/./)", Utils.listOf("","","",""));
-    test("def x = 'aXbXYcX'; x.split(/[A-Z]+/)", Utils.listOf("a","b","c",""));
+    test("def x = 'abc'; x.split('')", Utils.listOf("a", "b", "c"));
+    test("def x = 'abc'; x.split(/./)", Utils.listOf("", "", "", ""));
+    test("def x = 'aXbXYcX'; x.split(/[A-Z]+/)", Utils.listOf("a", "b", "c", ""));
     test("def x = 'aXbXYcX'; x.split(/[A-Z]+/).map{sleep(0,it)+sleep(0,'x')+sleep(0,it)}.join()", "axabxbcxcx");
-    test("def x = 'aXbXYcX'; def f = x.split; f(/[A-Z]+/)", Utils.listOf("a","b","c",""));
+    test("def x = 'aXbXYcX'; def f = x.split; f(/[A-Z]+/)", Utils.listOf("a", "b", "c", ""));
     testError("[1,2,3].split(/[A-Z]+/)", "no such method");
     testError("'abc'.split(/[A-Z]+/,'n')", "unexpected regex modifier 'n'");
     testError("'abc'.split(/[A-Z]+/,'r')", "unexpected regex modifier 'r'");
   }
 
-  @Test public void minMax() {
-    test("[(byte)1,2,3].min{ it }", (byte)1);
-    test("[(byte)1,(byte)2,(byte)3].min{ it }", (byte)1);
+  @Test
+  public void minMax() {
+    test("[(byte)1,2,3].min{ it }", (byte) 1);
+    test("[(byte)1,(byte)2,(byte)3].min{ it }", (byte) 1);
     test("[1,(byte)2,(byte)3].min{ it }", 1);
     test("[1,2,3].min{ it }", 1);
     test("[1,2,3].min()", 1);
@@ -379,7 +383,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def f = [1,2,3].max; f()", 3);
     test("[2L,3.5,1.0,4D].max()", 4D);
     test("['z','a','bbb'].max()", "z");
-    test("[[1,2,3],[1],[2,3]].max{it.size()}", Utils.listOf(1,2,3));
+    test("[[1,2,3],[1],[2,3]].max{it.size()}", Utils.listOf(1, 2, 3));
     test("['123.5','244','124'].max{ it as double }", "244");
     test("['123.5','244','124'].map{sleep(0,it)+sleep(0,'')}.max{ it as double }", "244");
     test("def f = ['123.5','244','124'].map{sleep(0,it)+sleep(0,'')}.max; f{ it as double }", "244");
@@ -388,7 +392,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [1,2,3]; def f = x.max; f()", 3);
     test("def x = [2L,3.5,1.0,4D]; x.max()", 4D);
     test("def x = ['z','a','bbb']; x.max()", "z");
-    test("def x = [[1,2,3],[1],[2,3]]; x.max{it.size()}", Utils.listOf(1,2,3));
+    test("def x = [[1,2,3],[1],[2,3]]; x.max{it.size()}", Utils.listOf(1, 2, 3));
     test("def x = ['123.5','244','124']; x.max{ it as double }", "244");
     test("def x = ['123.5','244','124']; x.map{sleep(0,it)+sleep(0,'')}.max{ it as double }", "244");
     test("def x = ['123.5','244','124']; x.map{sleep(0,it)+sleep(0,'')}.max(closure:{ it as double })", "244");
@@ -399,8 +403,9 @@ public class BuiltinFunctionTests extends BaseTest {
     test("3.max()", 2);
   }
 
-  @Test public void testSumAvg() {
-    test("[(byte)-1,(byte)2,(byte)3].sum()", 255+2+3);
+  @Test
+  public void testSumAvg() {
+    test("[(byte)-1,(byte)2,(byte)3].sum()", 255 + 2 + 3);
     test("[1,2,3].sum()", 6);
     test("[(byte)-1,(byte)-2,(byte)3,256].avg()", "#192");
     test("[1,2,3].avg()", "#2");
@@ -432,11 +437,12 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def f = { it + it }; def x = 1; def y = 2; [x,y].map(f).sum()", 6);
   }
 
-  @Test public void groupBy() {
+  @Test
+  public void groupBy() {
     testError("['a','b','a','c','b'].groupBy()", "missing mandatory argument");
     test("[].groupBy{ it }", Utils.mapOf());
-    test("['a','b','a','c','b'].groupBy{ it }", Utils.mapOf("a",Utils.listOf("a","a"), "b",Utils.listOf("b","b"), "c", Utils.listOf("c")));
-    test("['a','b','a','c','b'].map{ sleep(0,it) }.groupBy{ sleep(0,it) }", Utils.mapOf("a",Utils.listOf("a","a"), "b",Utils.listOf("b","b"), "c", Utils.listOf("c")));
+    test("['a','b','a','c','b'].groupBy{ it }", Utils.mapOf("a", Utils.listOf("a", "a"), "b", Utils.listOf("b", "b"), "c", Utils.listOf("c")));
+    test("['a','b','a','c','b'].map{ sleep(0,it) }.groupBy{ sleep(0,it) }", Utils.mapOf("a", Utils.listOf("a", "a"), "b", Utils.listOf("b", "b"), "c", Utils.listOf("c")));
     test("[1,2,3].groupBy{ it.toString() }.toString()", "['1':[1], '2':[2], '3':[3]]");
     test("([1,2,3] as int[]).groupBy{ it.toString() }.toString()", "['1':[1], '2':[2], '3':[3]]");
     test("'some text to use to count characters'.filter{ it != ' '}.groupBy{ it }.map{ k,v -> [k,v.size()] } as Map as String", "[s:3, o:4, m:1, e:4, t:6, x:1, u:2, c:3, n:1, h:1, a:2, r:2]");
@@ -450,7 +456,8 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[[a:1,b:2],[a:2,b:3],[a:1,c:2]].groupBy{ it }.toString()", "[([a:1, b:2]):[[a:1, b:2]], ([a:2, b:3]):[[a:2, b:3]], ([a:1, c:2]):[[a:1, c:2]]]");
   }
 
-  @Test public void listTranspose() {
+  @Test
+  public void listTranspose() {
     test("[].transpose()", Utils.listOf());
     testError("[{ -> 1 }].transpose()", "must be list");
     testError("[{ -> 1 }].map().transpose()", "must be list");
@@ -459,24 +466,24 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("['abc'].transpose()", "must be list");
     testError("['abc'].map().transpose()", "must be list");
     test("[[1]].transpose()", Utils.listOf(Utils.listOf(1)));
-    test("[[1],[2]].transpose()", Utils.listOf(Utils.listOf(1,2)));
-    test("[[1],[]].transpose()", Utils.listOf(Utils.listOf(1,null)));
-    test("[[1,2,3],[2]].transpose()", Utils.listOf(Utils.listOf(1,2),Utils.listOf(2,null),Utils.listOf(3,null)));
-    test("[[1],[2]].transpose()", Utils.listOf(Utils.listOf(1,2)));
-    test("[[1,2],[2]].transpose()", Utils.listOf(Utils.listOf(1,2),Utils.listOf(2,null)));
-    test("[[1,2],[3,4],[5,6]].transpose()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
-    test("def x = [[1,2],[3,4],[5,6]]; x.transpose()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
-    test("def x = [[1,2],[3,4],[5,6]]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
-    test("int[][] x = [[1,2],[3,4],[5,6]]; x.transpose()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
-    test("int[][] x = [[1,2],[3,4],[5,6]]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
-    test("def x = [[1,2],[3,4],[5,6]] as int[][]; x.transpose()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
-    test("def x = [[1,2],[3,4],[5,6]] as int[][]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
-    test("Object[][] x = [[1,2],[3,4],[5,6]] as Object[][]; x.transpose()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
-    test("Object[][] x = [[1,2],[3,4],[5,6]] as Object[][]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
-    test("def x = [[1,2],[3,4],[5,6]] as Object[][]; x.transpose()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
-    test("def x = [[1,2],[3,4],[5,6]] as Object[][]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1,3,5),Utils.listOf(2,4,6)));
-    test("[[1,2],[2,null]].transpose()", Utils.listOf(Utils.listOf(1,2),Utils.listOf(2,null)));
-    test("[[null,2],[2,null]].transpose()", Utils.listOf(Utils.listOf(null,2),Utils.listOf(2,null)));
+    test("[[1],[2]].transpose()", Utils.listOf(Utils.listOf(1, 2)));
+    test("[[1],[]].transpose()", Utils.listOf(Utils.listOf(1, null)));
+    test("[[1,2,3],[2]].transpose()", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(2, null), Utils.listOf(3, null)));
+    test("[[1],[2]].transpose()", Utils.listOf(Utils.listOf(1, 2)));
+    test("[[1,2],[2]].transpose()", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(2, null)));
+    test("[[1,2],[3,4],[5,6]].transpose()", Utils.listOf(Utils.listOf(1, 3, 5), Utils.listOf(2, 4, 6)));
+    test("def x = [[1,2],[3,4],[5,6]]; x.transpose()", Utils.listOf(Utils.listOf(1, 3, 5), Utils.listOf(2, 4, 6)));
+    test("def x = [[1,2],[3,4],[5,6]]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1, 3, 5), Utils.listOf(2, 4, 6)));
+    test("int[][] x = [[1,2],[3,4],[5,6]]; x.transpose()", Utils.listOf(Utils.listOf(1, 3, 5), Utils.listOf(2, 4, 6)));
+    test("int[][] x = [[1,2],[3,4],[5,6]]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1, 3, 5), Utils.listOf(2, 4, 6)));
+    test("def x = [[1,2],[3,4],[5,6]] as int[][]; x.transpose()", Utils.listOf(Utils.listOf(1, 3, 5), Utils.listOf(2, 4, 6)));
+    test("def x = [[1,2],[3,4],[5,6]] as int[][]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1, 3, 5), Utils.listOf(2, 4, 6)));
+    test("Object[][] x = [[1,2],[3,4],[5,6]] as Object[][]; x.transpose()", Utils.listOf(Utils.listOf(1, 3, 5), Utils.listOf(2, 4, 6)));
+    test("Object[][] x = [[1,2],[3,4],[5,6]] as Object[][]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1, 3, 5), Utils.listOf(2, 4, 6)));
+    test("def x = [[1,2],[3,4],[5,6]] as Object[][]; x.transpose()", Utils.listOf(Utils.listOf(1, 3, 5), Utils.listOf(2, 4, 6)));
+    test("def x = [[1,2],[3,4],[5,6]] as Object[][]; def f = x.transpose; f()", Utils.listOf(Utils.listOf(1, 3, 5), Utils.listOf(2, 4, 6)));
+    test("[[1,2],[2,null]].transpose()", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(2, null)));
+    test("[[null,2],[2,null]].transpose()", Utils.listOf(Utils.listOf(null, 2), Utils.listOf(2, null)));
     test("[3.map{ sleep(0,[it,it]) }, 4.map{ sleep(0,[sleep(0,it),sleep(0,it)]) }].transpose().collect().toString()", "[[[0, 0], [0, 0]], [[1, 1], [1, 1]], [[2, 2], [2, 2]], [null, [3, 3]]]");
     test("[[a:1],[b:2]].transpose() as String", "[[['a', 1], ['b', 2]]]");
     test("def f = [[a:1],[b:2]].transpose; f() as String", "[[['a', 1], ['b', 2]]]");
@@ -490,7 +497,8 @@ public class BuiltinFunctionTests extends BaseTest {
     test("sleep(0,[[['a',1],['b',2],['c',3]],[['aa',2],['bb',3],['cc',4]]].map{ sleep(0,it) }.transpose()).transpose() == [[['a',1],['b',2],['c',3]],[['aa',2],['bb',3],['cc',4]]]", true);
   }
 
-  @Test public void stringLength() {
+  @Test
+  public void stringLength() {
     test("''.length()", 0);
     test("''.size()", 0);
     test("def x = ''; x.length()", 0);
@@ -510,7 +518,8 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def i = 1; (X + i).size()", 4);
   }
 
-  @Test public void stringToUpperLowerCase() {
+  @Test
+  public void stringToUpperLowerCase() {
     test("'ABC'.toLowerCase()", "abc");
     test("'ABC'.toLowerCase(1)", "aBC");
     test("'ABC'.toLowerCase(4)", "abc");
@@ -554,7 +563,8 @@ public class BuiltinFunctionTests extends BaseTest {
     test("'AbC.D_eF'.toUpperCase()", "ABC.D_EF");
   }
 
-  @Test public void substring() {
+  @Test
+  public void substring() {
     test("''.substring(0)", "");
     test("''.substring(0,0)", "");
     testError("''.substring(-1)", "string index out of range");
@@ -610,7 +620,8 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("'abc1234'.substring(-4,1)", "StringIndexOutOfBounds");
   }
 
-  @Test public void join() {
+  @Test
+  public void join() {
     test("[].join()", "");
     test("[].join('')", "");
     test("[].join('x')", "");
@@ -680,7 +691,8 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("def f = ['a','b'].map{sleep(0,it)+sleep(0,it)}.join; f(separatorx:':')", "no such parameter");
   }
 
-  @Test public void asChar() {
+  @Test
+  public void asChar() {
     test("((byte)97).asChar()", "a");
     test("97.asChar()", "a");
     test("def f = 97.asChar; f()", "a");
@@ -695,7 +707,8 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("def x = 1L; x.asChar()", "no such method");
   }
 
-  @Test public void className() {
+  @Test
+  public void className() {
     test("((byte)1).className()", "byte");
     test("1.className()", "int");
     test("'abc'.className()", "String");
@@ -714,43 +727,45 @@ public class BuiltinFunctionTests extends BaseTest {
     test("class X { class Y{} }; def x = new X.Y[10]; def f = x.className; f()", "X.Y[]");
   }
 
-  @Test public void size() {
-    test("((byte)2).size()", 2);
-    test("2.size()", 2);
-    test("def x = 2; x.size()", 2);
-    test("def x = 2; def f = x.size; f()", 2);
-    test("List x; x.size()", 0);
-    test("List x = []; x.size()", 0);
-    test("List x = [1,2,3]; x.size()", 3);
-    test("def x = []; x.size()", 0);
-    test("def x = []; x?.size()", 0);
+  @Test
+  public void size() {
+    test("((byte)2).size()", 2L);
+    test("2.size()", 2L);
+    test("def x = 2; x.size()", 2L);
+    test("def x = 2; def f = x.size; f()", 2L);
+    test("List x; x.size()", 0L);
+    test("List x = []; x.size()", 0L);
+    test("List x = [1,2,3]; x.size()", 3L);
+    test("def x = []; x.size()", 0L);
+    test("def x = []; x?.size()", 0L);
     test("def x; x?.size()", null);
-    test("def x = [1,2,3]; x.size()", 3);
-    test("Map x; x.size()", 0);
-    test("Map x = [:]; x.size()", 0);
-    test("Map x = [a:1,b:2]; x.size()", 2);
-    test("Map x = [a:1,b:[c:3]]; x.b.size()", 1);
+    test("def x = [1,2,3]; x.size()", 3L);
+    test("Map x; x.size()", 0L);
+    test("Map x = [:]; x.size()", 0L);
+    test("Map x = [a:1,b:2]; x.size()", 2L);
+    test("Map x = [a:1,b:[c:3]]; x.b.size()", 1L);
     testError("def x; x.size()", "null value");
     test("def x; def y; y ?= x.size(); y", null);
-    test("def x = [:]; x.size()", 0);
-    test("def x = [a:1,b:2]; x.size()", 2);
-    test("def x = [a:1,b:2]; x?.size()", 2);
-    test("def x = [a:1,b:[c:3]]; x.b.size()", 1);
-    test("def x = [a:1,b:[1,2,3]]; x.b.size()", 3);
-    test("def x = [a:1,b:[c:3]]; x.b.c.size()", 3);
-    test("def x = [1,2,3]; def f = x.size; f()", 3);
-    test("List x = [1,2,3]; def f = x.size; f()", 3);
-    test("def x = [a:1,b:2,c:3]; def f = x.size; f()", 3);
-    test("Map x = [a:1,b:2,c:3]; def f = x.size; f()", 3);
-    test("Map x = [a:1,b:2,c:3]; def f = x.\"${'size'}\"; f()", 3);
-    test("List x = [1,2,3]; x.'size'()", 3);
+    test("def x = [:]; x.size()", 0L);
+    test("def x = [a:1,b:2]; x.size()", 2L);
+    test("def x = [a:1,b:2]; x?.size()", 2L);
+    test("def x = [a:1,b:[c:3]]; x.b.size()", 1L);
+    test("def x = [a:1,b:[1,2,3]]; x.b.size()", 3L);
+    test("def x = [a:1,b:[c:3]]; x.b.c.size()", 3L);
+    test("def x = [1,2,3]; def f = x.size; f()", 3L);
+    test("List x = [1,2,3]; def f = x.size; f()", 3L);
+    test("def x = [a:1,b:2,c:3]; def f = x.size; f()", 3L);
+    test("Map x = [a:1,b:2,c:3]; def f = x.size; f()", 3L);
+    test("Map x = [a:1,b:2,c:3]; def f = x.\"${'size'}\"; f()", 3L);
+    test("List x = [1,2,3]; x.'size'()", 3L);
     testError("def x = [1]; x.sizeXXX()", "no such method");
     test("def x; def y; y = x?.size()?.size(); y", null);
-    test("def x = 'size'; [1,2,3].\"$x\"()", 3);
-    test("def x = 'size'; def y = [1,2,3]; y.\"$x\"()", 3);
+    test("def x = 'size'; [1,2,3].\"$x\"()", 3L);
+    test("def x = 'size'; def y = [1,2,3]; y.\"$x\"()", 3L);
   }
 
-  @Test public void arraySize() {
+  @Test
+  public void arraySize() {
     test("([1,2,3] as byte[]).size()", 3);
     test("def x = [1,2,3] as byte[]; x.size()", 3);
     test("def f = ([1,2,3] as byte[]).size; f()", 3);
@@ -900,11 +915,12 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("def x = [[1,2],[2],[3,4,5]] as Object[][]; def f = x.sizexxx; f()", "field access not supported");
   }
 
-  @Test public void abs() {
-    test("((byte)0).abs()", (byte)0);
-    test("((byte)-0).abs()", (byte)0);
-    test("((byte)-1).abs()", (byte)-1);
-    test("((byte)1).abs()", (byte)1);
+  @Test
+  public void abs() {
+    test("((byte)0).abs()", (byte) 0);
+    test("((byte)-0).abs()", (byte) 0);
+    test("((byte)-1).abs()", (byte) -1);
+    test("((byte)1).abs()", (byte) 1);
     test("0.abs()", 0);
     test("-0.abs()", 0);
     test("-1.abs()", 1);
@@ -932,7 +948,8 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("def x = 'abc'; x.abs()", "no such method");
   }
 
-  @Test public void listEach() {
+  @Test
+  public void listEach() {
     test("[].each{}", null);
     test("int sum = 0; [].each{sum++}; sum", 0);
     test("int sum = 0; [10].each{ sum += it }; sum", 10);
@@ -963,17 +980,18 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("int sum = 0; def x = 3; def f = x.each; f(action:{ x=7,y=2 -> sum += x+y },xxx:1); sum", "no such parameter");
     test("int sum = 0; def x = 3; def f = x.each; f{ x=7,y=2 -> sum += x+y }; sum", 9);
     test("int sum = 0; def x = 3.4; def f = x.each; f{ x=7,y=2 -> sum += x+y }; sum", 9);
-    test("def x = 3\n[[1],[2]].size()", 2);
+    test("def x = 3\n[[1],[2]].size()", 2L);
   }
 
-  @Test public void mapEach() {
+  @Test
+  public void mapEach() {
     test("[:].each{ x,y -> ; }", null);
     test("[:].each{}", null);
     test("[:].each{ x-> }", null);
     test("def result = ''; [a:1,b:2].each{ x,y -> result += \"[$x,$y]\" }; result", "[a,1][b,2]");
     test("def result = ''; [a:1,b:2].each{ result += \"[${it[0]},${it[1]}]\" }; result", "[a,1][b,2]");
     test("def result = ''; [a:1,b:2].each{ x -> result += \"[${x[0]},${x[1]}]\" }; result", "[a,1][b,2]");
-    test("def result = 0; [a:1,b:2].each{ x -> result += x.size() }; result", 4);
+    test("def result = 0; [a:1,b:2].each{ x -> result += x.size() }; result", 4L);
     test("def result = ''; [a:1,b:2].each{ x -> result += x }; result", "['a', 1]['b', 2]");
     test("def result = 0; [a:1,b:2].each{ x -> x.each{ result++ } }; result", 4);
     test("def result = 0; [a:1,b:2].each(action:{ x -> def f = x.each; f(action:{ result++ }) }); result", 4);
@@ -985,48 +1003,51 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def result = ''; def x = [a:1,b:2]; x.each{ x -> def f = { \"${x[0]}-${x[1]}\" }; result += f() }; result", "a-1b-2");
     test("def result = ''; Map x = [a:1,b:2]; def f = x.each; f{ List x -> def f = { \"${x[0]}-${x[1]}\" }; result += f() }; result", "a-1b-2");
     test("def result = ''; def x = [a:1,b:2]; def f = x.each; f{ x -> def f = { \"${x[0]}-${x[1]}\" }; result += f() }; result", "a-1b-2");
-    test("3.map{ it+1 }", Utils.listOf(1,2,3));
+    test("3.map{ it+1 }", Utils.listOf(1, 2, 3));
     test("(-3).map{ it+1 }", Utils.listOf());
     test("[a:'abc'].each{ it[1] =~ s/b/x/ }", null);
     test("[a:1].each{ it[1] = 2 }", null);
   }
 
-  @Test public void listCollect() {
+  @Test
+  public void listCollect() {
     testError("[].collect{}{}", "too many arguments");
     testError("def x = []; x.collect{}{}", "too many arguments");
     test("[].collect()", Utils.listOf());
     test("[].collect{}", Utils.listOf());
     test("[1,2,3].collect{}", Arrays.asList(null, null, null));
-    test("[1,2,3].collect()", Utils.listOf(1,2,3));
+    test("[1,2,3].collect()", Utils.listOf(1, 2, 3));
     test("def x = [1,2,3]; x.collect{}", Arrays.asList(null, null, null));
-    test("def x = [1,2,3]; x.collect()", Utils.listOf(1,2,3));
+    test("def x = [1,2,3]; x.collect()", Utils.listOf(1, 2, 3));
     test("def x = []; x.collect{}", Utils.listOf());
     test("def x = []; x.collect()", Utils.listOf());
     test("List x = []; x.collect{}", Utils.listOf());
     testError("def x; x.collect{}", "null value");
-    test("List x = [1,2,3,4]; x.collect{it*it}", Utils.listOf(1,4,9,16));
-    test("List x = [1,2,3,4]; x.collect{it*it}.collect{ x -> x + x }", Utils.listOf(2,8,18,32));
-    test("def x = [1,2,3,4]; x.collect{it*it}.collect{ x -> x + x }", Utils.listOf(2,8,18,32));
-    test("def x = [1,2,3,4]; def f = x.collect{it*it}.collect; f{ x -> x + x }", Utils.listOf(2,8,18,32));
-    test("def x = [1,2,3,4]; x.collect{ x -> return {x*x}}.collect{it()}", Utils.listOf(1,4,9,16));
-    test("def x = [1,2,3,4]; x.collect(mapper:{ x -> return {x*x}}).collect{it()}", Utils.listOf(1,4,9,16));
+    test("List x = [1,2,3,4]; x.collect{it*it}", Utils.listOf(1, 4, 9, 16));
+    test("List x = [1,2,3,4]; x.collect{it*it}.collect{ x -> x + x }", Utils.listOf(2, 8, 18, 32));
+    test("def x = [1,2,3,4]; x.collect{it*it}.collect{ x -> x + x }", Utils.listOf(2, 8, 18, 32));
+    test("def x = [1,2,3,4]; def f = x.collect{it*it}.collect; f{ x -> x + x }", Utils.listOf(2, 8, 18, 32));
+    test("def x = [1,2,3,4]; x.collect{ x -> return {x*x}}.collect{it()}", Utils.listOf(1, 4, 9, 16));
+    test("def x = [1,2,3,4]; x.collect(mapper:{ x -> return {x*x}}).collect{it()}", Utils.listOf(1, 4, 9, 16));
     testError("def x = [1,2,3,4]; x.collect(closurex:{ x -> return {x*x}}).collect{it()}", "no such parameter");
-    test("def x = [1,2,3,4]; x.collect(mapper:{ x -> return {sleep(0,x)*sleep(0,x)}}).collect{it()}", Utils.listOf(1,4,9,16));
-    test("def x = [1,2,3,4]; def f = x.collect; f(mapper:{ x -> return {x*x}}).collect{it()}", Utils.listOf(1,4,9,16));
+    test("def x = [1,2,3,4]; x.collect(mapper:{ x -> return {sleep(0,x)*sleep(0,x)}}).collect{it()}", Utils.listOf(1, 4, 9, 16));
+    test("def x = [1,2,3,4]; def f = x.collect; f(mapper:{ x -> return {x*x}}).collect{it()}", Utils.listOf(1, 4, 9, 16));
   }
 
-  @Test public void mapCollect() {
+  @Test
+  public void mapCollect() {
     test("[:].collect{}", Utils.listOf());
     test("[:].collect()", Utils.listOf());
     test("def x = 1; x.collect{it}", Utils.listOf(0));
-    test("[a:1,b:2,c:3].collect{ [it[0]+it[0],it[1]+it[1]] }", Utils.listOf(Utils.listOf("aa",2),Utils.listOf("bb",4),Utils.listOf("cc",6)));
-    test("[a:1,b:2,c:3].collect{ it[0]+it[0]+it[1]+it[1] }", Utils.listOf("aa11","bb22","cc33"));
-    test("[a:1,b:2,c:3].collect{ it.collect{ it+it } }", Utils.listOf(Utils.listOf("aa",2),Utils.listOf("bb",4),Utils.listOf("cc",6)));
-    test("[a:1,b:2,c:3].collect{ x,y -> x + y }", Utils.listOf("a1","b2","c3"));
-    test("[a:1,b:2,c:3].collect(mapper:{ x,y -> x + y })", Utils.listOf("a1","b2","c3"));
+    test("[a:1,b:2,c:3].collect{ [it[0]+it[0],it[1]+it[1]] }", Utils.listOf(Utils.listOf("aa", 2), Utils.listOf("bb", 4), Utils.listOf("cc", 6)));
+    test("[a:1,b:2,c:3].collect{ it[0]+it[0]+it[1]+it[1] }", Utils.listOf("aa11", "bb22", "cc33"));
+    test("[a:1,b:2,c:3].collect{ it.collect{ it+it } }", Utils.listOf(Utils.listOf("aa", 2), Utils.listOf("bb", 4), Utils.listOf("cc", 6)));
+    test("[a:1,b:2,c:3].collect{ x,y -> x + y }", Utils.listOf("a1", "b2", "c3"));
+    test("[a:1,b:2,c:3].collect(mapper:{ x,y -> x + y })", Utils.listOf("a1", "b2", "c3"));
   }
-  
-  @Test public void collectEntries() {
+
+  @Test
+  public void collectEntries() {
     test("[].collectEntries()", Utils.mapOf());
     test("[].collectEntries{}", Utils.mapOf());
     test("[:].collectEntries()", Utils.mapOf());
@@ -1034,17 +1055,17 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[a:1].collectEntries()", Utils.mapOf("a", 1));
     test("[a:1].collectEntries{ it }", Utils.mapOf("a", 1));
     test("[a:1].collectEntries{ a,b -> [a,b] }", Utils.mapOf("a", 1));
-    test("[a:1,b:2].collectEntries{ it }", Utils.mapOf("a", 1,"b",2));
-    test("[a:1,b:2].collectEntries{ a,b -> [a,b] }", Utils.mapOf("a", 1,"b",2));
+    test("[a:1,b:2].collectEntries{ it }", Utils.mapOf("a", 1, "b", 2));
+    test("[a:1,b:2].collectEntries{ a,b -> [a,b] }", Utils.mapOf("a", 1, "b", 2));
     testError("[a:1].collectEntries{}", "got null");
-    test("[['a',1]].collectEntries()", Utils.mapOf("a",1));
-    test("[['a',1],['a',2]].collectEntries()", Utils.mapOf("a",2));
-    test("[a:1,b:2].collectEntries()", Utils.mapOf("a",1,"b",2));
-    test("[1,2,3,4].collectEntries{ [it.toString()*it,it*it] }", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
-    test("[1,2,3,4].map{ [it,it*it] }.map{ a,b -> [a,b] }.collectEntries{ a,b -> [a.toString()*a,b] }", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
-    test("[1,2,3,4].map{ [it,it*it] }.collectEntries{ a,b -> [a.toString()*a,b] }", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
-    test("[1,2,3,4].map{ [it.toString()*it,it*it] }.collectEntries()", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
-    test("[1,2,3,4].map{ [it,it*it] }.collectEntries()", Utils.mapOf(1,1,2,4,3,9,4,16));
+    test("[['a',1]].collectEntries()", Utils.mapOf("a", 1));
+    test("[['a',1],['a',2]].collectEntries()", Utils.mapOf("a", 2));
+    test("[a:1,b:2].collectEntries()", Utils.mapOf("a", 1, "b", 2));
+    test("[1,2,3,4].collectEntries{ [it.toString()*it,it*it] }", Utils.mapOf("1", 1, "22", 4, "333", 9, "4444", 16));
+    test("[1,2,3,4].map{ [it,it*it] }.map{ a,b -> [a,b] }.collectEntries{ a,b -> [a.toString()*a,b] }", Utils.mapOf("1", 1, "22", 4, "333", 9, "4444", 16));
+    test("[1,2,3,4].map{ [it,it*it] }.collectEntries{ a,b -> [a.toString()*a,b] }", Utils.mapOf("1", 1, "22", 4, "333", 9, "4444", 16));
+    test("[1,2,3,4].map{ [it.toString()*it,it*it] }.collectEntries()", Utils.mapOf("1", 1, "22", 4, "333", 9, "4444", 16));
+    test("[1,2,3,4].map{ [it,it*it] }.collectEntries()", Utils.mapOf(1, 1, 2, 4, 3, 9, 4, 16));
     test("def x = []; x.collectEntries()", Utils.mapOf());
     test("def x = []; x.collectEntries{}", Utils.mapOf());
     test("def x = [:]; x.collectEntries()", Utils.mapOf());
@@ -1052,23 +1073,24 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [a:1]; x.collectEntries()", Utils.mapOf("a", 1));
     test("def x = [a:1]; x.collectEntries{ it }", Utils.mapOf("a", 1));
     test("def x = [a:1]; x.collectEntries{ a,b -> [a,b] }", Utils.mapOf("a", 1));
-    test("def x = [a:1,b:2]; x.collectEntries{ it }", Utils.mapOf("a", 1,"b",2));
-    test("def x = [a:1,b:2]; x.collectEntries{ a,b -> [a,b] }", Utils.mapOf("a", 1,"b",2));
+    test("def x = [a:1,b:2]; x.collectEntries{ it }", Utils.mapOf("a", 1, "b", 2));
+    test("def x = [a:1,b:2]; x.collectEntries{ a,b -> [a,b] }", Utils.mapOf("a", 1, "b", 2));
     testError("def x = [a:1]; x.collectEntries{}", "got null");
-    test("def x = [['a',1]]; x.collectEntries()", Utils.mapOf("a",1));
-    test("def x = [['a',1],['a',2]]; x.collectEntries()", Utils.mapOf("a",2));
-    test("def x = [a:1,b:2]; x.collectEntries()", Utils.mapOf("a",1,"b",2));
-    test("def x = [1,2,3,4]; x.collectEntries{ [it.toString()*it,it*it] }", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
-    test("def x = [1,2,3,4]; x.map{ [it,it*it] }.collectEntries{ a,b -> [a.toString()*a,b] }", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
-    test("def x = [1,2,3,4]; x.map{ [it.toString()*it,it*it] }.collectEntries()", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
-    test("def x = [1,2,3,4]; x.collectEntries{ [sleep(0,it.toString())*sleep(0,it),sleep(0,it)*it] }", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
-    test("def x = [1,2,3,4]; x.collectEntries(mapper:{ [sleep(0,it.toString())*sleep(0,it),sleep(0,it)*it] })", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
-    test("def x = [1,2,3,4]; def f = x.collectEntries; f(mapper:{ [sleep(0,it.toString())*sleep(0,it),sleep(0,it)*it] })", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
+    test("def x = [['a',1]]; x.collectEntries()", Utils.mapOf("a", 1));
+    test("def x = [['a',1],['a',2]]; x.collectEntries()", Utils.mapOf("a", 2));
+    test("def x = [a:1,b:2]; x.collectEntries()", Utils.mapOf("a", 1, "b", 2));
+    test("def x = [1,2,3,4]; x.collectEntries{ [it.toString()*it,it*it] }", Utils.mapOf("1", 1, "22", 4, "333", 9, "4444", 16));
+    test("def x = [1,2,3,4]; x.map{ [it,it*it] }.collectEntries{ a,b -> [a.toString()*a,b] }", Utils.mapOf("1", 1, "22", 4, "333", 9, "4444", 16));
+    test("def x = [1,2,3,4]; x.map{ [it.toString()*it,it*it] }.collectEntries()", Utils.mapOf("1", 1, "22", 4, "333", 9, "4444", 16));
+    test("def x = [1,2,3,4]; x.collectEntries{ [sleep(0,it.toString())*sleep(0,it),sleep(0,it)*it] }", Utils.mapOf("1", 1, "22", 4, "333", 9, "4444", 16));
+    test("def x = [1,2,3,4]; x.collectEntries(mapper:{ [sleep(0,it.toString())*sleep(0,it),sleep(0,it)*it] })", Utils.mapOf("1", 1, "22", 4, "333", 9, "4444", 16));
+    test("def x = [1,2,3,4]; def f = x.collectEntries; f(mapper:{ [sleep(0,it.toString())*sleep(0,it),sleep(0,it)*it] })", Utils.mapOf("1", 1, "22", 4, "333", 9, "4444", 16));
     testError("def x = [1,2,3,4]; def f = x.collectEntries; f(closurex:{ [sleep(0,it.toString())*sleep(0,it),sleep(0,it)*it] })", "no such parameter");
-    test("def x = [1,2,3,4]; x.map{ [sleep(0,it),sleep(0,it)*sleep(0,it)] }.collectEntries{ a,b -> [sleep(0,a.toString())*sleep(0,a),sleep(0,b)] }", Utils.mapOf("1",1,"22",4,"333",9,"4444",16));
+    test("def x = [1,2,3,4]; x.map{ [sleep(0,it),sleep(0,it)*sleep(0,it)] }.collectEntries{ a,b -> [sleep(0,a.toString())*sleep(0,a),sleep(0,b)] }", Utils.mapOf("1", 1, "22", 4, "333", 9, "4444", 16));
   }
 
-  @Test public void mapWithIndex() {
+  @Test
+  public void mapWithIndex() {
     test("[null].map{it}", Collections.singletonList(null));
     ArrayList<Object> list = new ArrayList<>();
     list.add(null);
@@ -1078,39 +1100,40 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = []; x.mapWithIndex{ it[0] + it[1] }", Utils.listOf());
     test("def x = [:]; x.mapWithIndex{ it[0] + it[1] }", Utils.listOf());
     test("[1,2,3].mapWithIndex{ it[0] + it[1] }.sum()", 9);
-    test("[1,2,3].mapWithIndex()", Utils.listOf(Utils.listOf(1,0),Utils.listOf(2,1),Utils.listOf(3,2)));
+    test("[1,2,3].mapWithIndex()", Utils.listOf(Utils.listOf(1, 0), Utils.listOf(2, 1), Utils.listOf(3, 2)));
     test("def x = [1,2,3]; x.mapWithIndex{ it[0] + it[1] }.sum()", 9);
-    test("def x = [a:1,b:2]; x.mapWithIndex{ it,i -> it[0] + it[1] + i }", Utils.listOf("a10","b21"));
-    test("def x = [a:1,b:2]; def f = x.mapWithIndex; f{ it,i -> it[0] + it[1] + i }", Utils.listOf("a10","b21"));
-    test("def x = [a:1,b:2]; x.mapWithIndex{ it,i -> sleep(0,it[0]) + sleep(0,it[1]) + i }", Utils.listOf("a10","b21"));
-    test("def x = [a:1,b:2]; def f = x.mapWithIndex; f{ it,i -> sleep(0,it[0]) + sleep(0,it[1]) + i }", Utils.listOf("a10","b21"));
-    test("def x = [a:1,b:2]; x.mapWithIndex(mapper:{ it,i -> sleep(0,it[0]) + sleep(0,it[1]) + i })", Utils.listOf("a10","b21"));
-    test("def x = [a:1,b:2]; def f = x.mapWithIndex; f(mapper:{ it,i -> sleep(0,it[0]) + sleep(0,it[1]) + i })", Utils.listOf("a10","b21"));
+    test("def x = [a:1,b:2]; x.mapWithIndex{ it,i -> it[0] + it[1] + i }", Utils.listOf("a10", "b21"));
+    test("def x = [a:1,b:2]; def f = x.mapWithIndex; f{ it,i -> it[0] + it[1] + i }", Utils.listOf("a10", "b21"));
+    test("def x = [a:1,b:2]; x.mapWithIndex{ it,i -> sleep(0,it[0]) + sleep(0,it[1]) + i }", Utils.listOf("a10", "b21"));
+    test("def x = [a:1,b:2]; def f = x.mapWithIndex; f{ it,i -> sleep(0,it[0]) + sleep(0,it[1]) + i }", Utils.listOf("a10", "b21"));
+    test("def x = [a:1,b:2]; x.mapWithIndex(mapper:{ it,i -> sleep(0,it[0]) + sleep(0,it[1]) + i })", Utils.listOf("a10", "b21"));
+    test("def x = [a:1,b:2]; def f = x.mapWithIndex; f(mapper:{ it,i -> sleep(0,it[0]) + sleep(0,it[1]) + i })", Utils.listOf("a10", "b21"));
     testError("def x = [a:1,b:2]; def f = x.mapWithIndex; f(closurex:{ it,i -> sleep(0,it[0]) + sleep(0,it[1]) + i })", "no such parameter");
   }
 
-  @Test public void collectionMap() {
-    test("2.map{it}", Utils.listOf(0,1));
-    test("def x = 2; x.map{it}", Utils.listOf(0,1));
-    test("def x = 2; def f = x.map; f{it}", Utils.listOf(0,1));
+  @Test
+  public void collectionMap() {
+    test("2.map{it}", Utils.listOf(0, 1));
+    test("def x = 2; x.map{it}", Utils.listOf(0, 1));
+    test("def x = 2; def f = x.map; f{it}", Utils.listOf(0, 1));
     test("[].map()", Utils.listOf());
     test("def f = [].map; f()", Utils.listOf());
     testError("[].map{}{}", "too many arguments");
     testError("def x = []; x.map{}{}", "too many arguments");
     test("[].map{}", Utils.listOf());
     test("[1,2,3].map{}", Arrays.asList(null, null, null));
-    test("[1,2,3].map()", Utils.listOf(1,2,3));
+    test("[1,2,3].map()", Utils.listOf(1, 2, 3));
     test("def x = [1,2,3]; x.map{}", Arrays.asList(null, null, null));
-    test("def x = [1,2,3]; x.map()", Utils.listOf(1,2,3));
+    test("def x = [1,2,3]; x.map()", Utils.listOf(1, 2, 3));
     test("def x = []; x.map{}", Utils.listOf());
     test("def x = []; x.map()", Utils.listOf());
     test("List x = []; x.map{}", Utils.listOf());
     testError("def x; x.map{}", "null value");
-    test("List x = [1,2,3,4]; x.map{it*it}", Utils.listOf(1,4,9,16));
-    test("List x = [1,2,3,4]; x.map{it*it}.map{ x -> x + x }", Utils.listOf(2,8,18,32));
-    test("def x = [1,2,3,4]; x.map{it*it}.map{ x -> x + x }", Utils.listOf(2,8,18,32));
-    test("def x = [1,2,3,4]; def f = x.map{it*it}.map; f{ x -> x + x }", Utils.listOf(2,8,18,32));
-    test("def x = [1,2,3,4]; x.map{ x -> return {x*x}}.map{it()}", Utils.listOf(1,4,9,16));
+    test("List x = [1,2,3,4]; x.map{it*it}", Utils.listOf(1, 4, 9, 16));
+    test("List x = [1,2,3,4]; x.map{it*it}.map{ x -> x + x }", Utils.listOf(2, 8, 18, 32));
+    test("def x = [1,2,3,4]; x.map{it*it}.map{ x -> x + x }", Utils.listOf(2, 8, 18, 32));
+    test("def x = [1,2,3,4]; def f = x.map{it*it}.map; f{ x -> x + x }", Utils.listOf(2, 8, 18, 32));
+    test("def x = [1,2,3,4]; x.map{ x -> return {x*x}}.map{it()}", Utils.listOf(1, 4, 9, 16));
     test("[:].map{}", Utils.listOf());
     test("[:].map()", Utils.listOf());
     test("def x = 1; x.map{}", Collections.singletonList(null));
@@ -1119,22 +1142,22 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = 1; def f = x.map; f(mapper:{sleep(0,it)+sleep(0,1)-sleep(0,1)})", Utils.listOf(0));
     testError("def x = 1; x.map(closurex:{it})", "no such parameter");
     testError("def x = 1; def f = x.map; f(closurex:{it})", "no such parameter");
-    test("[a:1,b:2,c:3].map{ [it[0]+it[0],it[1]+it[1]] }", Utils.listOf(Utils.listOf("aa",2),Utils.listOf("bb",4),Utils.listOf("cc",6)));
-    test("[a:1,b:2,c:3].map{ it[0]+it[0]+it[1]+it[1] }", Utils.listOf("aa11","bb22","cc33"));
-    test("[a:1,b:2,c:3].map{ it.map{ it+it } }", Utils.listOf(Utils.listOf("aa",2),Utils.listOf("bb",4),Utils.listOf("cc",6)));
-    test("[a:1,b:2,c:3].map{ x,y -> x + y }", Utils.listOf("a1","b2","c3"));
-    test("[a:1,b:2,c:3].map(mapper:{ x,y -> x + y })", Utils.listOf("a1","b2","c3"));
-    test("[a:1,b:2,c:3].map(mapper:{ x,y -> sleep(0,x) + sleep(0,y) })", Utils.listOf("a1","b2","c3"));
+    test("[a:1,b:2,c:3].map{ [it[0]+it[0],it[1]+it[1]] }", Utils.listOf(Utils.listOf("aa", 2), Utils.listOf("bb", 4), Utils.listOf("cc", 6)));
+    test("[a:1,b:2,c:3].map{ it[0]+it[0]+it[1]+it[1] }", Utils.listOf("aa11", "bb22", "cc33"));
+    test("[a:1,b:2,c:3].map{ it.map{ it+it } }", Utils.listOf(Utils.listOf("aa", 2), Utils.listOf("bb", 4), Utils.listOf("cc", 6)));
+    test("[a:1,b:2,c:3].map{ x,y -> x + y }", Utils.listOf("a1", "b2", "c3"));
+    test("[a:1,b:2,c:3].map(mapper:{ x,y -> x + y })", Utils.listOf("a1", "b2", "c3"));
+    test("[a:1,b:2,c:3].map(mapper:{ x,y -> sleep(0,x) + sleep(0,y) })", Utils.listOf("a1", "b2", "c3"));
     testError("[a:1,b:2,c:3].map(closurex:{ x,y -> x + y })", "no such parameter");
     testError("def f = [a:1,b:2,c:3]; f.map(closurex:{ x,y -> x + y })", "no such parameter");
-    test("def x = [1,2,3]; def y = x.map{}; y.size()", 3);
-    test("var x = [1,2,3]; def y = x.map{}; y.size()", 3);
-    test("var x = [a:1,b:2]; def y = x.map{ def z = it.map(); z.size() }; y", Utils.listOf(2, 2));
-    test("def x = [a:1,b:2]; def y = x.map{ def z = it.map(); z.size() }; y", Utils.listOf(2, 2));
-    test("def x = [1,2,3]; x.map{}.size()", 3);
-    test("def x = [1,2,3]; x.map().size()", 3);
-    test("var x = [1,2,3]; x.map().size()", 3);
-    test("def x = [1,2,3]; x.map{it+it}.size()", 3);
+    test("def x = [1,2,3]; def y = x.map{}; y.size()", 3L);
+    test("var x = [1,2,3]; def y = x.map{}; y.size()", 3L);
+    test("var x = [a:1,b:2]; def y = x.map{ def z = it.map(); z.size() }; y", Utils.listOf(2L, 2L));
+    test("def x = [a:1,b:2]; def y = x.map{ def z = it.map(); z.size() }; y", Utils.listOf(2L, 2L));
+    test("def x = [1,2,3]; x.map{}.size()", 3L);
+    test("def x = [1,2,3]; x.map().size()", 3L);
+    test("var x = [1,2,3]; x.map().size()", 3L);
+    test("def x = [1,2,3]; x.map{it+it}.size()", 3L);
     test("var x = [1,2,3]; def i = 0; def y = x.map{it+it+i++}; i", 3);
     test("def x = [1,2,3]; def i = 0; def y = x.map{it+it+i++}; i", 3);
     test("def x = [1,2,3]; def i = 0; def y = x.\"${'map'}\"{it+it+i++}; i", 3);
@@ -1145,45 +1168,49 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [1,2,3]; x.map{it*it}.collect{it+it}.map{it-1}", Utils.listOf(1, 7, 17));
     test("[1,2,3].map{it} instanceof List", true);
     test("def x = [1,2,3]; x.map{it} instanceof List", true);
-    test("def f = [1,2,3].map; f{it+it}", Utils.listOf(2,4,6));
-    test("def f = [1,2,3].map; f()", Utils.listOf(1,2,3));
+    test("def f = [1,2,3].map; f{it+it}", Utils.listOf(2, 4, 6));
+    test("def f = [1,2,3].map; f()", Utils.listOf(1, 2, 3));
     testError("def f = [1,2,3].map; f('x')", "cannot be cast");
     test("[1].map{ [it,it] }.map{ a,b -> a + b }", Utils.listOf(2));
-    test("def x = [1,2,3]; def f = x.map{it*it}.map; f{it+it}", Utils.listOf(2,8,18));
-    test("def f = [1,2,3].map; f{it+it}", Utils.listOf(2,4,6));
-    test("def f = [1,2,3].map{it*it}.map; f{it+it}", Utils.listOf(2,8,18));
+    test("def x = [1,2,3]; def f = x.map{it*it}.map; f{it+it}", Utils.listOf(2, 8, 18));
+    test("def f = [1,2,3].map; f{it+it}", Utils.listOf(2, 4, 6));
+    test("def f = [1,2,3].map{it*it}.map; f{it+it}", Utils.listOf(2, 8, 18));
     test("[1,2,3].map{it*it}[1]", 4);
     test("'abcde'.map{it+it}.join()", "aabbccddee");
     test("def x = 'abcde'; x.map{it+it}.join()", "aabbccddee");
     test("def x = 'abcde'; def f = x.map; f{it+it}.join()", "aabbccddee");
     testError("[1,2,3].map{ -> }", "too many arguments");
-    test("[1,2,3].map{ int i -> i * i }", Utils.listOf(1,4,9));
-    test("int[] a = new int[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2,4,6));
-    test("long[] a = new long[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2L,4L,6L));
-    test("double[] a = new double[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2.0,4.0,6.0));
-    test("Decimal[] a = new Decimal[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(new BigDecimal(2),new BigDecimal(4),new BigDecimal(6)));
-    test("String[] a = new String[3]; a[0] = '1'; a[1] = '2'; a[2] = '3'; a.map{ it+it }", Utils.listOf("11","22","33"));
-    test("var a = new int[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2,4,6));
-    test("var a = new long[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2L,4L,6L));
-    test("var a = new double[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2.0,4.0,6.0));
-    test("var a = new Decimal[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(new BigDecimal(2),new BigDecimal(4),new BigDecimal(6)));
-    test("var a = new String[3]; a[0] = '1'; a[1] = '2'; a[2] = '3'; a.map{ it+it }", Utils.listOf("11","22","33"));
-    test("def a = new int[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2,4,6));
-    test("def a = new long[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2L,4L,6L));
-    test("def a = new double[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2.0,4.0,6.0));
-    test("def a = new Decimal[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(new BigDecimal(2),new BigDecimal(4),new BigDecimal(6)));
-    test("def a = new String[3]; a[0] = '1'; a[1] = '2'; a[2] = '3'; a.map{ it+it }", Utils.listOf("11","22","33"));
-    test("Object a = new int[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2,4,6));
-    test("Object a = new long[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2L,4L,6L));
-    test("Object a = new double[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2.0,4.0,6.0));
-    test("Object a = new Decimal[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(new BigDecimal(2),new BigDecimal(4),new BigDecimal(6)));
-    test("Object a = new String[3]; a[0] = '1'; a[1] = '2'; a[2] = '3'; a.map{ it+it }", Utils.listOf("11","22","33"));
-    test("int[][] a = new int[3][2]; a[0][0] = 1; a[0][1] = 1; a[1][0] = 2; a[1][1] = 2; a[2][0] = 3; a[2][1] = 3; a.map{ it.sum()+it.sum() }", Utils.listOf(4,8,12));
-    test("def a = new int[3][2]; a[0][0] = 1; a[0][1] = 1; a[1][0] = 2; a[1][1] = 2; a[2][0] = 3; a[2][1] = 3; a.map{ it.sum()+it.sum() }", Utils.listOf(4,8,12));
-    test("var a = new int[3][2]; a[0][0] = 1; a[0][1] = 1; a[1][0] = 2; a[1][1] = 2; a[2][0] = 3; a[2][1] = 3; a.map{ it.sum()+it.sum() }", Utils.listOf(4,8,12));
+    test("[1,2,3].map{ int i -> i * i }", Utils.listOf(1, 4, 9));
+    test("int[] a = new int[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2, 4, 6));
+    test("long[] a = new long[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2L, 4L, 6L));
+    test("double[] a = new double[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2.0, 4.0, 6.0));
+    test("Decimal[] a = new Decimal[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(new BigDecimal(2), new BigDecimal(4), new BigDecimal(6)));
+    test("String[] a = new String[3]; a[0] = '1'; a[1] = '2'; a[2] = '3'; a.map{ it+it }", Utils.listOf("11", "22", "33"));
+    test("var a = new int[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2, 4, 6));
+    test("var a = new long[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2L, 4L, 6L));
+    test("var a = new double[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2.0, 4.0, 6.0));
+    test("var a = new Decimal[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(new BigDecimal(2), new BigDecimal(4), new BigDecimal(6)));
+    test("var a = new String[3]; a[0] = '1'; a[1] = '2'; a[2] = '3'; a.map{ it+it }", Utils.listOf("11", "22", "33"));
+    test("def a = new int[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2, 4, 6));
+    test("def a = new long[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2L, 4L, 6L));
+    test("def a = new double[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2.0, 4.0, 6.0));
+    test("def a = new Decimal[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(new BigDecimal(2), new BigDecimal(4), new BigDecimal(6)));
+    test("def a = new String[3]; a[0] = '1'; a[1] = '2'; a[2] = '3'; a.map{ it+it }", Utils.listOf("11", "22", "33"));
+    test("Object a = new int[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2, 4, 6));
+    test("Object a = new long[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2L, 4L, 6L));
+    test("Object a = new double[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(2.0, 4.0, 6.0));
+    test("Object a = new Decimal[3]; a[0] = 1; a[1] = 2; a[2] = 3; a.map{ it+it }", Utils.listOf(new BigDecimal(2), new BigDecimal(4), new BigDecimal(6)));
+    test("Object a = new String[3]; a[0] = '1'; a[1] = '2'; a[2] = '3'; a.map{ it+it }", Utils.listOf("11", "22", "33"));
+    test("int[][] a = new int[3][2]; a[0][0] = 1; a[0][1] = 1; a[1][0] = 2; a[1][1] = 2; a[2][0] = 3; a[2][1] = 3; a.map{ it.sum()+it.sum() }", Utils.listOf(4, 8, 12));
+    test("def a = new int[3][2]; a[0][0] = 1; a[0][1] = 1; a[1][0] = 2; a[1][1] = 2; a[2][0] = 3; a[2][1] = 3; a.map{ it.sum()+it.sum() }", Utils.listOf(4, 8, 12));
+    test("var a = new int[3][2]; a[0][0] = 1; a[0][1] = 1; a[1][0] = 2; a[1][1] = 2; a[2][0] = 3; a[2][1] = 3; a.map{ it.sum()+it.sum() }", Utils.listOf(4, 8, 12));
+    test("5.map{ x -> {x+1}() }.sum()", 15);
+    test("5.map{ it -> {it+1}(it) }.sum()", 15);
+    test("5.map{ {it+1}(it) }.sum()", 15);
   }
-  
-  @Test public void nextLineAsync() throws IOException, ExecutionException, InterruptedException {
+
+  @Test
+  public void nextLineAsync() throws IOException, ExecutionException, InterruptedException {
     JactlContext ctx    = JactlContext.create().async(true).build();
     JactlScript  script = Compiler.compileScript("nextLine()", ctx, new HashMap<>());
     PipedReader  in     = new PipedReader();
@@ -1198,8 +1225,9 @@ public class BuiltinFunctionTests extends BaseTest {
     assertTrue(result.isDone());
     assertEquals("abc", result.get());
   }
-  
-  @Test public void nextLineSync() throws IOException, ExecutionException, InterruptedException {
+
+  @Test
+  public void nextLineSync() throws IOException, ExecutionException, InterruptedException {
     JactlContext ctx    = JactlContext.create().async(false).build();
     JactlScript  script = Compiler.compileScript("nextLine()", ctx, new HashMap<>());
     PipedReader  in     = new PipedReader();
@@ -1220,44 +1248,46 @@ public class BuiltinFunctionTests extends BaseTest {
     assertTrue(result.isDone());
     assertEquals("abc", result.get());
   }
-  
+
   @Test public void pipeline() {
     test("List list = [1,2,3,4]; list.sum()", 10);
     test("List list = [1,2,3,4]; list.filter{ it % 2 == 0 }", Utils.listOf(2, 4));
-    test("List list = [[1,2],[3,4]]; list.filter{ x,y -> x != y }", Utils.listOf(Utils.listOf(1,2), Utils.listOf(3, 4)));
-    test("def list = [[1,2],[3,4]]; list.filter{ x,y -> x != y }", Utils.listOf(Utils.listOf(1,2), Utils.listOf(3, 4)));
-    test("List list = [[1,2],[5,5],[3,4]]; list.map{ x,y -> [y,x] }.filter{ x,y -> x != y }", Utils.listOf(Utils.listOf(2,1), Utils.listOf(4, 3)));
-    test("def list = [[1,2],[5,5],[3,4]]; list.map{ x,y -> [y,x] }.filter{ x,y -> x != y }", Utils.listOf(Utils.listOf(2,1), Utils.listOf(4, 3)));
+    test("List list = [[1,2],[3,4]]; list.filter{ x,y -> x != y }", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3, 4)));
+    test("def list = [[1,2],[3,4]]; list.filter{ x,y -> x != y }", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3, 4)));
+    test("List list = [[1,2],[5,5],[3,4]]; list.map{ x,y -> [y,x] }.filter{ x,y -> x != y }", Utils.listOf(Utils.listOf(2, 1), Utils.listOf(4, 3)));
+    test("def list = [[1,2],[5,5],[3,4]]; list.map{ x,y -> [y,x] }.filter{ x,y -> x != y }", Utils.listOf(Utils.listOf(2, 1), Utils.listOf(4, 3)));
     test("List list = [1,2,3,4]; list.filter{ it % 2 == 0 }.sum()", 6);
     test("List list = [1,2,3,4]; list.filter{ it % 2 == 0 }.map{ it + it }.sum()", 12);
     test("def list = [1,2,3,4]; list.filter{ it % 2 == 0 }.map{ it + it }.sum()", 12);
     test("def list = [1,2,3,4]; if (true) list.filter{ it % 2 == 0 }.map{ it + it }.sum(); 13", 13);
     test("def list = [1,2,3,4]; list.filter{ it % 2 == 0 }.map{ it + it }.sum().filter{ it < 6 }.sum()", 15);
     test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(2).map{ it + it }.sum()", 12);
-    test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.sum()", 12+16+20);
-    test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.skip(1).sum()", 16+20);
+    test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.sum()", 12 + 16 + 20);
+    test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.skip(1).sum()", 16 + 20);
     test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.limit(2).skip(1).sum()", 16);
-    test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.skip(1).sum()", 16+20);
+    test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.skip(1).sum()", 16 + 20);
     test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(3).map{ it + it }.skip(1).sum()", 20);
     test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(2).map{ it + it }.limit(1).sum()", 4);
     test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(2).map{ it + it }.limit(3).sum()", 12);
     test("def list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(2).map{ it + it }.sum()", 12);
     test("def x = 2; List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(sleep(0,x)).map{ it + it }.sum()", 12);
-    test("def list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.sum()", 12+16+20);
+    test("def list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.sum()", 12 + 16 + 20);
     test("List list = [1,2,3,4]; list.limit(3).map{it+it}.skip(1).sum()", 10);
     test("def x = 2; List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(x).map{ it + it }.sum()", 12);
-    test("def x = 2; List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(x).map{ it + it }.sum()", 12+16+20);
+    test("def x = 2; List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(x).map{ it + it }.sum()", 12 + 16 + 20);
     test("def x = 2; def list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(x).map{ it + it }.sum()", 12);
-    test("def x = 2; def list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(x).map{ it + it }.sum()", 12+16+20);
+    test("def x = 2; def list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(x).map{ it + it }.sum()", 12 + 16 + 20);
     test("List list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap{ it + it }.sum()", 12);
     test("def list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap{ it + it }.sum()", 12);
     test("def list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap{ [it,it] }.sum()", 12);
     test("var list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap{ [it,it] }.sum()", 12);
     test("def list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap().sum()", 6);
     test("var list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap().sum()", 6);
+    test("5.map{ {it+1}(it) }.sum()", 15);
   }
-  
-  @Test public void pipelineNegativeSkipLimit() {
+
+  @Test
+  public void pipelineNegativeSkipLimit() {
     test("List list = [1,2,3,4]; list.skip(-3)", Utils.listOf(2, 3, 4));
     test("List list = [1,2,3,4]; list.skip(-3).limit(2).skip(-1)", Utils.listOf(3));
     test("def x = -3; def y = -1; List list = [1,2,3,4]; list.skip(x).limit(2).skip(y)", Utils.listOf(3));
@@ -1287,14 +1317,73 @@ public class BuiltinFunctionTests extends BaseTest {
     doTest("def i = 0; [[1,2],[3,4],[5,6]].map{ i++; it }.limit(3).flatMap{ it + it }.map{ i++; it }.limit(6); i", 8);
     doTest("def i = 0; [[1,2],[3,4],[5,6]].map{ i++; sleep(0,it) }.limit(3).flatMap{ it + it }.map{ i++; it }.limit(6); i", 8);
   }
-  
+
   @Test public void pipelineMapWithIndex() {
     test("List list = [[1,2]]; list.flatMap{ [it,it] }.flatMap{ sleep(0,it) }", Utils.listOf(1, 2, 1, 2));
-    test("List list = [1,2,3]; list.mapWithIndex{ it -> it }", Utils.listOf(Utils.listOf(1,0), Utils.listOf(2,1), Utils.listOf(3,2)));
+    test("List list = [1,2,3]; list.mapWithIndex{ it -> it }", Utils.listOf(Utils.listOf(1, 0), Utils.listOf(2, 1), Utils.listOf(3, 2)));
     test("List list = [1,2,3]; list.mapWithIndex{ it,i -> [it*it,i+1] }.flatMap().sum()", 20);
-    test("def list = [1,2,3]; list.mapWithIndex{ it -> it }", Utils.listOf(Utils.listOf(1,0), Utils.listOf(2,1), Utils.listOf(3,2)));
+    test("def list = [1,2,3]; list.mapWithIndex{ it -> it }", Utils.listOf(Utils.listOf(1, 0), Utils.listOf(2, 1), Utils.listOf(3, 2)));
     test("def list = [1,2,3]; list.mapWithIndex{ it,i -> [it*it,i+1] }.flatMap{ sleep(0,it) }.sum()", 20);
     test("def list = [[1,2,3]]; list.flatMap{ it }.mapWithIndex{ it,i -> [it*it,i+1] }.flatMap{ sleep(0,it) }.sum()", 20);
     test("def list = [[1,2,3]]; list.flatMap{ it }.mapWithIndex().flatMap{ sleep(0,it) }.sum()", 9);
+    test("def x = [1,2,3]; def i = 0; def n = { i < x.size() ? x[i++] : null }; int[][] arr = stream(n).mapWithIndex{ it,i -> [it,i] }", new int[][] { new int[]{1,0}, new int[]{2,1}, new int[]{3,2} });
+  }
+
+  @Test
+  public void pipelineSize() {
+    test("sleep(0,[1,2,3].map()).sum()", 6);
+    doTest("sleep(0,[1,2,3].map()).size()", 3L);
+    test("List list = [1,2,3]; list.map().size()", 3L);
+    test("def list = [1,2,3]; list.map().size()", 3L);
+    test("def x = [a:1,b:2]; x.map().size()", 2L);
+    test("Map x = [a:1,b:2]; x.map().size()", 2L);
+    test("def list = [1,2,3]; list.size()", 3L);
+    test("List list = [1,2,3]; list.size()", 3L);
+    test("Map x = [a:1,b:2]; x.size()", 2L);
+    test("def x = [a:1,b:2]; x.size()", 2L);
+    test("def x = [1,2,3,4]; x.flatMap{ x.size().filter{ it % 2 == 0 } }.sum()", 8);
+  }
+
+  @Test
+  public void pipelineEach() {
+    test("def sum = 0; [1,2,3].each{ sum += it }; sum", 6);
+    test("def sum = 0; def x = [1,2,3]; x.each{ sum += it }; sum", 6);
+    test("def sum =''; Map x = [a:1,b:2,c:3]; x.each{ a,b -> sum += \"$a=$b,\" }; sum", "a=1,b=2,c=3,");
+    test("def sum = 0; def x = [a:1,b:2,c:3]; x.each{ a,b -> sum += b }; sum", 6);
+  }
+
+  @Test
+  public void pipelineSortJoin() {
+    String str = "somerandomcharacterstojointogether";
+    test("'" + str + "'.map{ it + it }.sort().map{it+it}.join(':')", str.chars().mapToObj(c -> Character.toString((char) c) + (char) c).sorted().map(s -> s + s).collect(Collectors.joining(":")));
+    test("List list = ['tuvw', 'mnopqrs', 'abcd', 'xyz']; list.filter{ it.size() > 3 }.map{ it.toUpperCase() }.sort().map{ it + '[' + it.size() + ']' }.join(',')", "ABCD[4],MNOPQRS[7],TUVW[4]");
+    test("List list = ['tuvw', 'mnopqrs', 'abcd', 'xyz']; list.filter{ it.size() > 3 }.map{ it.toUpperCase() }.sort{ a,b -> a <=> b }.map{ it + '[' + it.size() + ']' }.join(',')", "ABCD[4],MNOPQRS[7],TUVW[4]");
+  }
+
+  @Test
+  public void heapLocalInvokeDynamic() {
+    test("def x = 3; def f = { sleep(0,x) }; def g = f; g()", 3);
+    test("def x = 3; def y = 4; def f = { i = x -> i + y }; def g = { def xx = x; def h = f; h(7) + xx }; def j = g; j() + j()", 28);
+    test("def x = 3; def y = 4; def f(i = x) { i + y }; def g() { def xx = x; def h = f; h(7) + xx }; def j = g; j() + j()", 28);
+  }
+
+  @Test
+  public void pipelineScript() {
+    String input = "1122334321\n" +
+                   "1122536321\n" +
+                   "1122534321\n" +
+                   "1122334321\n";
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    test("def rows = stream(nextLine).map{ it.map{ it as int } }\n" +
+         "def cols = rows[0].size().map{ col -> rows.map{ it[col] } }\n" +
+         "\n" +
+         "def invisible = { x,y,h ->\n" +
+         "  rows[x].skip(y+1).anyMatch{ it >= h } && rows[x].limit(y).anyMatch{ it >= h } &&\n" +
+         "  cols[y].skip(x+1).anyMatch{ it >= h } && cols[y].limit(x).anyMatch{ it >= h }\n" +
+         "}\n" +
+         "\n" +
+         "rows.size()\n" +
+         "    .flatMap{ x -> cols.size().filter{ y -> !invisible(x,y,rows[x][y]) } }\n" +
+         "    .size()", input, output, 34L);
   }
 }

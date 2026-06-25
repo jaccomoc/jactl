@@ -27,6 +27,7 @@ import java.util.function.BiConsumer;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.TypeEnum.STRING_BUFFER;
+import static io.jactl.JactlType.TypeEnum.STRING_BUILDER;
 
 /**
  * Class for saving checkpoint state. Saves into a buffer with layout of:
@@ -162,6 +163,7 @@ public class Checkpointer {
     else if (obj instanceof String)         { writeString((String)obj); }
     else if (obj.getClass().isArray())      { writeArray(obj);          }
     else if (obj instanceof StringBuffer)   { writeStringBuffer((StringBuffer)obj); }
+    else if (obj instanceof StringBuilder)  { writeStringBuilder((StringBuilder)obj); }
     else if (obj instanceof Class)          { writeClass((Class)obj);   }
     else {
       Class<?>                        objClass     = obj.getClass();
@@ -502,6 +504,11 @@ public class Checkpointer {
 
   private void writeStringBuffer(StringBuffer sb) {
     writeByte((byte) STRING_BUFFER.ordinal());
+    _writeString(sb.toString());
+  }
+
+  private void writeStringBuilder(StringBuilder sb) {
+    writeByte((byte) STRING_BUILDER.ordinal());
     _writeString(sb.toString());
   }
 

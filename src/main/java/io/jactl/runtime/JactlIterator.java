@@ -32,6 +32,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
 
   public enum IteratorType {
     OBJECT_ARR,
+    BYTE_ARR,
     INT_ARR,
     LONG_ARR,
     DOUBLE_ARR,
@@ -55,6 +56,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
   public static JactlIterator create(int ordinal) {
     switch (IteratorType.values()[ordinal]) {
       case OBJECT_ARR:     return new ObjArrIterator();
+      case BYTE_ARR:       return new ByteArrIterator();
       case INT_ARR:        return new IntArrIterator();
       case LONG_ARR:       return new LongArrIterator();
       case DOUBLE_ARR:     return new DoubleArrIterator();
@@ -223,14 +225,14 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     @Override public Byte next()    { return arr[idx++];       }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);
-      checkpointer.writeCInt(IteratorType.INT_ARR.ordinal());
+      checkpointer.writeCInt(IteratorType.BYTE_ARR.ordinal());
       checkpointer.writeCInt(VERSION);
       checkpointer.writeObject(arr);
       checkpointer.writeCInt(idx);
     }
     @Override public void _$j$restore(Restorer restorer) {
       restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-      restorer.expectCInt(IteratorType.INT_ARR.ordinal(), "Expected INT_ARR");
+      restorer.expectCInt(IteratorType.BYTE_ARR.ordinal(), "Expected BYTE_ARR");
       restorer.expectCInt(VERSION, "Bad version");
       arr = (byte[])restorer.readObject();
       idx = restorer.readCInt();

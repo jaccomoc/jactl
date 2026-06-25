@@ -477,8 +477,8 @@ public class CompilerTests2 extends BaseTest {
     test("Map m = [a:[b:1]]; String x = 'b'; m.a.(x)", 1);
     test("Map m = [a:[b:1]]; def x = 'b'; m.a.(x)", 1);
     test("Map m = [a:[b:1]]; def x = \"${'b'}\"; m.a.(x)", 1);
-    test("def it = 'itx'; Map m = [a:[b:1],c:2]; def x = \"${'size'}\"; m.(x)()", 2);
-    test("def it = 'itx'; Map m = [a:[b:1],c:2]; def x = /${'size'}/; m.(x)()", 2);
+    test("def it = 'itx'; Map m = [a:[b:1],c:2]; def x = \"${'size'}\"; m.(x)()", 2L);
+    test("def it = 'itx'; Map m = [a:[b:1],c:2]; def x = /${'size'}/; m.(x)()", 2L);
     test("def it = 'itx'; Map m = [a:[b:1]]; def x = /${'b'}/; m.a.(x)", 1);
     test("def it = 'itx'; Map m = [a:[b:1]]; def x = /${'b'}/; m.a[x]", 1);
     test("def it = 'itx'; def x = /${'abcde'}/; x[2]", "c");
@@ -2390,6 +2390,10 @@ public class CompilerTests2 extends BaseTest {
     test("def x = 7; def reset() { x = 0 }; for (x=5, reset(), reset(); x < 10; x++) {}; x", 10);
   }
   
+  @Test public void testStuff() {
+    doTest("int sum; for (i in 3.map{ it + 1 }) { sum += sleep(0,i) }; sum", 6);
+  }
+  
   @Test public void forInLoops() {
     test("for (int i in [1,2,3]) { }", null);
     test("for (int i: [1,2,3]) { }", null);
@@ -2841,7 +2845,7 @@ public class CompilerTests2 extends BaseTest {
     test("Map s = null; { s }(); s", null);
     test("Decimal s = null; { s }(); s", null);
     test("String s = null; { s }(); s", null);
-    test("int x = 1; def f() { x.size() }; f()", 1);
+    test("int x = 1; def f() { x.size() }; f()", 1L);
     test("byte x = 1; def f() { x-- }; x = 2; x", (byte)2);
     test("byte x = 1; def f() { x-- }; x++", (byte)1);
     test("byte x = 1; def f() { x-- }; ++x", (byte)2);

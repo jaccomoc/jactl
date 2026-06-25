@@ -176,18 +176,18 @@ public class AsyncTest {
     async("def s = sleep; sleep(0,1)", 1);
     sync("sprintf('%03d',1)", "001");
     sync("def s = sprintf; s('%03d',1)", "001");
-    sync("[1,2,3].size()", 3);
-    sync("[{it},{it*it}].size()", 2);
+    sync("[1,2,3].size()", 3L);
+    sync("[{it},{it*it}].size()", 2L);
     sync("[1,2].map{it*it}", Utils.listOf(1,4));
     async("[{it},{it*it}].map{it(2)}", Utils.listOf(2,4));
-    async("[{it},{it*it}].map{it(2)}.size()", 2);
-    async("def f = [1,2,3].size; f()", 3);
-    async("def f = [1,2,3].map{sleep(0,it)}.size; f()", 3);
+    async("[{it},{it*it}].map{it(2)}.size()", 2L);
+    async("def f = [1,2,3].size; f()", 3L);
+    async("def f = [1,2,3].map{sleep(0,it)}.size; f()", 3L);
     sync("[1,2,3,4,5].filter{it>2}.map{it+it}", Utils.listOf(6,8,10));
     async("[1,2,3,4,5].filter{sleep(0,it)>2}.map{it+it}", Utils.listOf(6,8,10));
-    sync("[1,2,3].size()", 3);
-    sync("[1,2,3].map{it}.size()", 3);
-    async("[1,2,3].map{sleep(0,it)}.size()", 3);
+    sync("[1,2,3].size()", 3L);
+    sync("[1,2,3].map{it}.size()", 3L);
+    async("[1,2,3].map{sleep(0,it)}.size()", 3L);
     sync("[3,2,1].sort()", Utils.listOf(1,2,3));
     sync("[3,2,1].map{it}.sort()", Utils.listOf(1,2,3));
     async("[3,2,1].map{sleep(0,it)}.sort()", Utils.listOf(1,2,3));
@@ -205,8 +205,8 @@ public class AsyncTest {
     sync("[1,2,3].avg()", "#2");
     async("[1,2,3].map{sleep(0,it)}.sum()", 6);
     sync("[1,2,3].map{it}.sum()", 6);
-    async("[1,2,3].map{it.size()}.sum()", 6);   // don't know type of it so have to assume async
-    sync("[1,2,3].map{int it -> it.size()}.sum()", 6);
+    async("[1,2,3].map{it.size()}.sum()", 6L);   // don't know type of it so have to assume async
+    sync("[1,2,3].map{int it -> it.size()}.sum()", 6L);
     async("[1,2,3].map{sleep(0,it)}.avg()", "#2");
     async("stream{nextLine()}", "1\n2\n3", Utils.listOf("1","2","3"));
     async("stream(nextLine)", "1\n2\n3", Utils.listOf("1","2","3"));
