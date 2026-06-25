@@ -1354,10 +1354,10 @@ public class BuiltinFunctionTests extends BaseTest {
 
   @Test
   public void pipelineSortJoin() {
-    String str = "somerandomcharacterstojointogether";
-    test("'" + str + "'.map{ it + it }.sort().map{it+it}.join(':')", str.chars().mapToObj(c -> Character.toString((char) c) + (char) c).sorted().map(s -> s + s).collect(Collectors.joining(":")));
     test("List list = ['tuvw', 'mnopqrs', 'abcd', 'xyz']; list.filter{ it.size() > 3 }.map{ it.toUpperCase() }.sort().map{ it + '[' + it.size() + ']' }.join(',')", "ABCD[4],MNOPQRS[7],TUVW[4]");
     test("List list = ['tuvw', 'mnopqrs', 'abcd', 'xyz']; list.filter{ it.size() > 3 }.map{ it.toUpperCase() }.sort{ a,b -> a <=> b }.map{ it + '[' + it.size() + ']' }.join(',')", "ABCD[4],MNOPQRS[7],TUVW[4]");
+    String str = "somerandomcharacterstojointogether";
+    test("'" + str + "'.map{ it + it }.sort().map{it+it}.join(':')", str.chars().mapToObj(c -> Character.toString((char) c) + (char) c).sorted().map(s -> s + s).collect(Collectors.joining(":")));
   }
 
   @Test

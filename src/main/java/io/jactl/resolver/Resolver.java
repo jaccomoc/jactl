@@ -1954,6 +1954,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     if (expr.initExpr instanceof Expr.MethodCall) {
       // Set this to false so that we don't convert back to a list if we already have an iterator
+      ((Expr.MethodCall) expr.initExpr).forInIterator = true;
       ((Expr.MethodCall) expr.initExpr).isMethodCallTarget = true;
     }
     return expr.type = expr.initExpr.type;

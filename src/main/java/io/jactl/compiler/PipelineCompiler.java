@@ -51,7 +51,17 @@ public class PipelineCompiler {
       case "anyMatch":
       case "allMatch":
       case "noneMatch":
+      case "unique":
+      case "reverse":
         return true;
+      case "reduce":
+      case "groupBy":
+      case "grouped":
+      case "collect":
+      case "collectEntries":
+      case "windowSliding":
+      case "subList":
+      case "transpose":
       default:
         return false;
     }
@@ -97,6 +107,8 @@ public class PipelineCompiler {
       case "anyMatch":      return new InlineAnyMatch(expr, args, methodCompiler);
       case "allMatch":      return new InlineAllMatch(expr, args, methodCompiler);
       case "noneMatch":     return new InlineNoneMatch(expr, args, methodCompiler);
+      case "unique":        return new InlineUnique(expr, methodCompiler);
+      case "reverse":       return new InlineReverse(expr, methodCompiler);
       default:
         throw new UnsupportedOperationException("Unsupported method " + expr.methodName);
     }
@@ -579,6 +591,70 @@ public class PipelineCompiler {
     }
   }
 
+  private static class InlineReverse extends InlineFn {
+    Label startIter = new Label();
+    Label subLoop     = new Label();
+    int   listIdxSlot = -1;
+    int   listSlot    = -1;
+    InlineReverse(Expr.MethodCall expr, MethodCompiler methodCompiler) { super(expr, methodCompiler); }
+    @Override void initialise() {
+      listSlot = methodCompiler.stack.allocateSlot(LIST);
+      methodCompiler.mv.visitTypeInsn(NEW, "java/util/ArrayList");
+      methodCompiler.mv.visitInsn(DUP);
+      methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, "java/util/ArrayList", "<init>", "()V", false);
+      methodCompiler._storeLocal(listSlot);
+      listIdxSlot = methodCompiler.stack.allocateSlot(INT);
+      methodCompiler.loadConst(0);
+      methodCompiler.storeLocal(listIdxSlot);
+    }
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
+      // Keep adding results to our list
+      methodCompiler.loadLocal(listSlot);
+      methodCompiler.swap();
+      methodCompiler.invokeMethod(MethodCompiler.LIST_ADD_METHOD);
+      methodCompiler.popVal();
+      methodCompiler.mv.visitJumpInsn(GOTO, loopLabel);
+      
+      methodCompiler.mv.visitLabel(startIter);    // :START ITERATION
+      methodCompiler.loadLocal(listSlot);
+      methodCompiler.invokeMethod(MethodCompiler.LIST_SIZE_METHOD);
+      methodCompiler.storeLocal(listIdxSlot);
+      
+      methodCompiler.mv.visitLabel(subLoop);      // :SUB LOOP
+      // Set location since we could have jumped to this label and location will not have been updated
+      if (locationSlot != -1) {
+        methodCompiler.loadConst(4 + idx * 2);
+        methodCompiler.storeLocal(locationSlot);
+      }
+      
+      // Need to allow for a subsequent limit in the pipeline to short circuit us
+      for (int i = idx + 1; i < fns.size(); i++) {
+        fns.get(i).compileLimitCheck();
+      }
+      methodCompiler.loadLocal(listIdxSlot);
+      methodCompiler.popType();
+      // Jump to end if no more data
+      methodCompiler.mv.visitJumpInsn(IFEQ, endLabel);
+      methodCompiler.mv.visitIincInsn(listIdxSlot, -1);
+      methodCompiler.loadLocal(listSlot);
+      methodCompiler.loadLocal(listIdxSlot);
+      methodCompiler.invokeMethod(MethodCompiler.LIST_GET_METHOD);
+    }
+    @Override void cleanUp() {
+      super.cleanUp();
+      methodCompiler.stack.freeSlot(listIdxSlot);
+      methodCompiler.stack.freeSlot(listSlot);
+    }
+    @Override Label setStartLabel(Label loop) {
+      loopLabel = loop;
+      return subLoop;
+    }
+    @Override Label setEndLabel(Label loop) {
+      endLabel = loop;
+      return startIter;
+    }
+  }
+
   private static class InlineFilter extends InlineClosureInvoker {
     InlineFilter(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler); }
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
@@ -606,6 +682,44 @@ public class PipelineCompiler {
       methodCompiler.loadLocal(valueSlot);
       methodCompiler.loadLocal(contResultSlot);
       doFilter();
+    }
+  }
+  
+  private static class InlineUnique extends InlineFn {
+    int previousValueSlot = -1;
+    int firstTimeSlot = -1;
+    InlineUnique(Expr.MethodCall expr, MethodCompiler methodCompiler) { super(expr, methodCompiler); }
+    @Override void initialise() {
+      previousValueSlot = methodCompiler.stack.allocateSlot(ANY);
+      methodCompiler.loadConst(null);
+      methodCompiler.storeLocal(previousValueSlot);
+      firstTimeSlot = methodCompiler.stack.allocateSlot(BOOLEAN);
+      methodCompiler.loadConst(true);
+      methodCompiler.storeLocal(firstTimeSlot);
+    }
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
+      methodCompiler._loadLocal(firstTimeSlot);
+      Label FIRST_TIME = new Label();
+      Label NOT_EQUAL = new Label();
+      methodCompiler.mv.visitJumpInsn(IFNE, FIRST_TIME);
+      methodCompiler.dupVal();
+      methodCompiler.loadLocal(previousValueSlot);
+      methodCompiler.loadLocation(expr.location);
+      methodCompiler.invokeMethod(RuntimeUtils.IS_EQUALS_METHOD);
+      methodCompiler.popType();
+      methodCompiler.mv.visitJumpInsn(IFEQ, NOT_EQUAL);
+      methodCompiler._popVal();
+      methodCompiler.mv.visitJumpInsn(GOTO, loopLabel); // Ignore duplicate
+      methodCompiler.mv.visitLabel(FIRST_TIME);         // :FIRST_TIME
+      methodCompiler.loadConst(false);
+      methodCompiler.storeLocal(firstTimeSlot);
+      methodCompiler.mv.visitLabel(NOT_EQUAL);          // :NOT_EQUAL
+      methodCompiler.dupVal();
+      methodCompiler.storeLocal(previousValueSlot);
+    }
+    @Override void cleanUp() {
+      methodCompiler.stack.freeSlot(previousValueSlot);
+      methodCompiler.stack.freeSlot(firstTimeSlot);
     }
   }
   

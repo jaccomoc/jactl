@@ -305,6 +305,8 @@ public abstract class Expr extends JactlUserDataHolder {
     // a side effect will still run and cause the side effects to happen even though the end result
     // is not actually used.
     public boolean isMethodCallTarget = false;
+    
+    public boolean forInIterator = false;  // true if used as iterator in "for (i in ...)"
     public MethodCall(Token leftParen, Expr parent, Token accessOperator, String methodName, SourceLocation methodNameLocation, Expr methodNameExpr, List<Expr> args) {
       this.leftParen = leftParen;
       this.parent = parent;

@@ -2354,7 +2354,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private static final boolean USE_PIPELINE_INLINING = Boolean.parseBoolean(System.getProperty("jactl.pipelineInlining", "true")); 
   
   @Override public Void visitMethodCall(Expr.MethodCall expr) {
-    if (USE_PIPELINE_INLINING && classCompiler.context.invokeDynamic && PipelineCompiler.inlineable(expr) && !expr.isMethodCallTarget) {
+    if (USE_PIPELINE_INLINING && classCompiler.context.invokeDynamic && PipelineCompiler.inlineable(expr) && !expr.forInIterator) {
       // Check if we have something that looks like it could be a function that acts on an
       // iterator.
       // We can only inline if we are the end function in the pipeline (one that collapses

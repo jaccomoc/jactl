@@ -242,6 +242,8 @@ class Expr extends JactlUserDataHolder {
     // a side effect will still run and cause the side effects to happen even though the end result
     // is not actually used.
     boolean @isMethodCallTarget = false;
+    
+    boolean @forInIterator = false;  // true if used as iterator in "for (i in ...)"
   }
 
   class Literal extends Expr {

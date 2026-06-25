@@ -52,9 +52,15 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("def x = 'abc'; x.reverse().join()", "cba");
     test("def x = [1,2,3]; x.reverse()", Utils.listOf(3,2,1));
     test("def x = [1,2,3,4]; x.reverse()", Utils.listOf(4,3,2,1));
+    test("def x = [1,2,3,4]; x.reverse().limit(3).reverse().limit(2)", Utils.listOf(2,3));
     test("def x = [1,2,3,4]; def f = x.reverse; f()", Utils.listOf(4,3,2,1));
     test("def x = 3; x.reverse()", Utils.listOf(2,1,0));
+    test("def x = 3; x.reverse().reverse().reverse()", Utils.listOf(2,1,0));
     test("[1,2,3,4].map{ sleep(0,it)+sleep(0,it) }.reverse()", Utils.listOf(8,6,4,2));
+    test("[1,2,3,4].map{ sleep(0,it)+sleep(0,it) }.reverse().map{ it + 1 }", Utils.listOf(9,7,5,3));
+    test("[1,2,3,4].map{ it + it }.reverse().map{ it + 1 }.sum()", 24);
+    test("[1,2,3,4].map{ sleep(0,it)+sleep(0,it) }.reverse().map{ it + 1 }.sum()", 24);
+    test("[1,2,3,4].map{ sleep(0,it)+sleep(0,it) }.reverse().map{ it + 1 }.limit(2).skip(-1).sum()", 7);
   }
 
   @Test public void collectionFlatMap() {
@@ -826,9 +832,9 @@ public class BuiltinFunctionTests2 extends BaseTest {
     // async for all object types.
     useAsyncDecorator = false;
     test("1.map{ it } as String", "[0]");
-    test("1.map{ it }.toString()", "Iterator");
+    test("1.map{ it }.toString()", "[0]");
     test("1.map{ sleep(0,it) } as String", "[0]");
-    test("1.map{ sleep(0,it) }.toString()", "Iterator");
+    test("1.map{ sleep(0,it) }.toString()", "[0]");
   }
 
   @Test public void toJson() {

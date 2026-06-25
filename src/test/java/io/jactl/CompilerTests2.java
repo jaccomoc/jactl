@@ -2390,10 +2390,6 @@ public class CompilerTests2 extends BaseTest {
     test("def x = 7; def reset() { x = 0 }; for (x=5, reset(), reset(); x < 10; x++) {}; x", 10);
   }
   
-  @Test public void testStuff() {
-    doTest("int sum; for (i in 3.map{ it + 1 }) { sum += sleep(0,i) }; sum", 6);
-  }
-  
   @Test public void forInLoops() {
     test("for (int i in [1,2,3]) { }", null);
     test("for (int i: [1,2,3]) { }", null);

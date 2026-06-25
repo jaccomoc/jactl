@@ -719,6 +719,7 @@ public class RuntimeUtils {
     throw new IllegalStateException("Internal error: unexpected operator " + operator);
   }
 
+  public static final MethodRef IS_EQUALS_METHOD = Utils.getMethod(RuntimeUtils.class, "isEquals", Object.class, Object.class, String.class, int.class);
   public static boolean isEquals(Object left, Object right, String source, int offset) {
     return booleanOp(left, right, EQUAL_EQUAL, source, offset);
   }
