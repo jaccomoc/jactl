@@ -2351,7 +2351,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
-  private static final boolean USE_PIPELINE_INLINING = Boolean.parseBoolean(System.getProperty("jactl.pipelineInlining", "false")); 
+  private static final boolean USE_PIPELINE_INLINING = Boolean.parseBoolean(System.getProperty("jactl.pipelineInlining", "true")); 
   
   @Override public Void visitMethodCall(Expr.MethodCall expr) {
     if (USE_PIPELINE_INLINING && classCompiler.context.invokeDynamic && PipelineCompiler.inlineable(expr) && !expr.isMethodCallTarget) {

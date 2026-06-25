@@ -1256,7 +1256,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
     checkpointTest("checkpoint{1}{2}; checkpoint{5}{6}; checkpoint{3}{4}", 3, 4);
     checkpointTest("checkpoint{1}{2}; checkpoint{sleep(0,5)}{sleep(0,6)}; checkpoint{sleep(0,3)}{sleep(0,4)}", 3, 4);
     checkpointTest("10.each{ x -> checkpoint{x}{x+1} }; checkpoint{3}{4}", 3, 4);
-    checkpointTest("10.each{ checkpoint{sleep(0,it)}{sleep(0,it+1)} }; checkpoint{sleep(0,3)}{sleep(0,4)}", 3, 4);
+    checkpointTest("10.each{ x -> checkpoint{sleep(0,x)}{sleep(0,x+1)} }; checkpoint{sleep(0,3)}{sleep(0,4)}", 3, 4);
     checkpointTest("checkpoint{ [1,2,3].map{ sleep(0,it) } }{ 'abc'.map{ sleep(0,it) }.join() }", Utils.listOf(1,2,3), "abc");
     checkpointTest("def x = checkpoint{ [1,2,3] }{ 'abc' }; checkpoint{ [1,2,3] }{ 'abc' }", Utils.listOf(1,2,3), "abc");
     checkpointTest("def x = checkpoint{ [1,2,3] }{ 'abc' }; checkpoint{ sleep(0,[1,2,3]) }{ sleep(0,'abc') }", Utils.listOf(1,2,3), "abc");
