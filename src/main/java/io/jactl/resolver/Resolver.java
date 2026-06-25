@@ -1618,7 +1618,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         // immediate parent. That way each parent will know how to copy the heap var from its own
         // parameter list (or its actual variable decl) into the appropriate arg for invoking the
         // nested function.
-        expr.heapLocalsByName.forEach((name, varDecl) -> addHeapLocalToParents(name, varDecl));
+        expr.heapLocalsByName.forEach((name, varDecl) -> addHeapLocalToParent(name, varDecl));
       }
     }
   }
@@ -2538,7 +2538,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return expr.type;
   }
 
-  private void addHeapLocalToParents(String name, Expr.VarDecl varDecl) {
+  private void addHeapLocalToParent(String name, Expr.VarDecl varDecl) {
     // Nothing to do if we are just resolving expressions in IntelliJ debugger
     if (contextLocation != null) {
       return;
@@ -2546,35 +2546,31 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     Expr.VarDecl childVarDecl = varDecl;
 
-    // Now iterate through parents linking VarDecls until we get to one that already
-    // has a var by that name (which will be the actual VarDecl or an intermediate function
-    // that already has it being passed in as a parameter).
-    for (Iterator<Expr.FunDecl> iter = getFunctions().iterator(); iter.hasNext(); ) {
-      // If parent already has this var as a parameter then point child to this and return
-      Expr.FunDecl funDecl       = iter.next();
-      Expr.VarDecl parentVarDecl = funDecl.heapLocalsByName.get(name);
-      if (parentVarDecl != null) {
-        childVarDecl.parentVarDecl = parentVarDecl;
-        return;
-      }
-
-      // If we have reached function that originally declared this var then point child
-      // to this one and return
-      if (funDecl == varDecl.owner) {
-        childVarDecl.parentVarDecl = varDecl.originalVarDecl;
-        return;
-      }
-
-      // Otherwise build a new VarDecl for an intermediate value and make it a parameter
-      // of the current function by adding to its heapLocal Parameters
-      parentVarDecl = Utils.createVarDecl(name, varDecl, funDecl);
-      funDecl.heapLocalsByName.put(name, parentVarDecl);
+    // We have three possibilities:
+    // 1. Parent has HeapLocal of same name so we link our one to it
+    // 2. Parent is the owner of the HeapLocal to link our VarDecl to the actual VarDecl
+    // 3. Parent is not the owner and doesn't already have a HeapLocal for this var so we add to its HeapLocals
+    Expr.FunDecl funDecl = getFunctions().peek();
+    
+    // If parent already has this var as a parameter then point child to this and return
+    Expr.VarDecl parentVarDecl = funDecl.heapLocalsByName.get(name);
+    if (parentVarDecl != null) {
       childVarDecl.parentVarDecl = parentVarDecl;
-
-      // Now parent becomes the child for the next iteration
-      childVarDecl = parentVarDecl;
+      return;
     }
-    throw new IllegalStateException("Internal error: couldn't find owner of variable " + varDecl.name.getStringValue());
+
+    // If we have reached function that originally declared this var then point child
+    // to this one and return
+    if (funDecl == varDecl.owner) {
+      childVarDecl.parentVarDecl = varDecl.originalVarDecl;
+      return;
+    }
+
+    // Otherwise build a new VarDecl for an intermediate value and make it a parameter
+    // of the current function by adding to its heapLocal Parameters
+    parentVarDecl = Utils.createVarDecl(name, varDecl, funDecl);
+    funDecl.heapLocalsByName.put(name, parentVarDecl);
+    childVarDecl.parentVarDecl = parentVarDecl;
   }
 
   private static Object incOrDec(boolean isInc, JactlType type, Object val) {
