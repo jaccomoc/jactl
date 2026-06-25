@@ -53,21 +53,21 @@ public class PipelineCompiler {
       case "noneMatch":
       case "unique":
       case "reverse":
+      case "collect":
+      case "collectEntries":
+      case "subList":
         return true;
       case "reduce":
       case "groupBy":
       case "grouped":
-      case "collect":
-      case "collectEntries":
       case "windowSliding":
-      case "subList":
       case "transpose":
       default:
         return false;
     }
   }
 
-  public static boolean isCollapsing(String methodName) {
+  public static boolean isTerminating(String methodName) {
     switch (methodName) {
       case "sum":
       case "avg":
@@ -80,6 +80,9 @@ public class PipelineCompiler {
       case "anyMatch":
       case "allMatch":
       case "noneMatch":
+      case "collect":
+      case "collectEntries":
+      case "subList":
         return true;
       default:
         return false;
@@ -88,27 +91,30 @@ public class PipelineCompiler {
 
   private static InlineFn createInlineFn(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) {
     switch (expr.methodName) {
-      case "map":           return new InlineMap(expr, args, methodCompiler);
-      case "mapWithIndex":  return new InlineMapWithIndex(expr, args, methodCompiler);
-      case "mapi":          return new InlineMapWithIndex(expr, args, methodCompiler);
-      case "flatMap":       return new InlineFlatMap(expr, args, methodCompiler);
-      case "fmap":          return new InlineFlatMap(expr, args, methodCompiler);
-      case "filter":        return new InlineFilter(expr, args, methodCompiler);
-      case "sum":           return new InlineAvgSum(expr, methodCompiler, false);
-      case "avg":           return new InlineAvgSum(expr, methodCompiler, true);
-      case "skip":          return new InlineSkip(expr, args.get(0), methodCompiler);
-      case "limit":         return new InlineLimit(expr, args.get(0), methodCompiler);
-      case "size":          return new InlineSize(expr, methodCompiler);
-      case "each":          return new InlineEach(expr, args, methodCompiler);
-      case "min":           return new InlineMinMax(expr, args, methodCompiler, true);
-      case "max":           return new InlineMinMax(expr, args, methodCompiler, false);
-      case "join":          return new InlineJoin(expr, args, methodCompiler);
-      case "sort":          return new InlineSort(expr, args, methodCompiler);
-      case "anyMatch":      return new InlineAnyMatch(expr, args, methodCompiler);
-      case "allMatch":      return new InlineAllMatch(expr, args, methodCompiler);
-      case "noneMatch":     return new InlineNoneMatch(expr, args, methodCompiler);
-      case "unique":        return new InlineUnique(expr, methodCompiler);
-      case "reverse":       return new InlineReverse(expr, methodCompiler);
+      case "map":            return new InlineMap(expr, args, methodCompiler);
+      case "mapWithIndex":   return new InlineMapWithIndex(expr, args, methodCompiler);
+      case "mapi":           return new InlineMapWithIndex(expr, args, methodCompiler);
+      case "flatMap":        return new InlineFlatMap(expr, args, methodCompiler);
+      case "fmap":           return new InlineFlatMap(expr, args, methodCompiler);
+      case "filter":         return new InlineFilter(expr, args, methodCompiler);
+      case "sum":            return new InlineAvgSum(expr, methodCompiler, false);
+      case "avg":            return new InlineAvgSum(expr, methodCompiler, true);
+      case "skip":           return new InlineSkip(expr, args.get(0), methodCompiler);
+      case "limit":          return new InlineLimit(expr, args.get(0), methodCompiler);
+      case "size":           return new InlineSize(expr, methodCompiler);
+      case "each":           return new InlineEach(expr, args, methodCompiler);
+      case "min":            return new InlineMinMax(expr, args, methodCompiler, true);
+      case "max":            return new InlineMinMax(expr, args, methodCompiler, false);
+      case "join":           return new InlineJoin(expr, args, methodCompiler);
+      case "sort":           return new InlineSort(expr, args, methodCompiler);
+      case "anyMatch":       return new InlineAnyMatch(expr, args, methodCompiler);
+      case "allMatch":       return new InlineAllMatch(expr, args, methodCompiler);
+      case "noneMatch":      return new InlineNoneMatch(expr, args, methodCompiler);
+      case "unique":         return new InlineUnique(expr, methodCompiler);
+      case "reverse":        return new InlineReverse(expr, methodCompiler);
+      case "collect":        return new InlineCollect(expr, args, methodCompiler, false);
+      case "collectEntries": return new InlineCollect(expr, args, methodCompiler, true);
+      case "subList":        return new InlineSubList(expr, args, methodCompiler);
       default:
         throw new UnsupportedOperationException("Unsupported method " + expr.methodName);
     }
@@ -132,7 +138,7 @@ public class PipelineCompiler {
 
     // If last function returns an Iterator or needs a list to post process then we need to convert back to a list
     InlineFn lastFn        = fns.get(fns.size() - 1);
-    boolean  convertToList = !lastFn.isCollapsing() || lastFn.isPostProcessing();
+    boolean  convertToList = !lastFn.isTerminating() || lastFn.isPostProcessing();
 
     if (methodCompiler.asyncEnabled() && isAsync) {
       compilePipelineAsync(methodCompiler, exprs, fns, convertToList);
@@ -308,7 +314,7 @@ public class PipelineCompiler {
           methodCompiler.mv.visitLabel(switchLabels[index++]);
           methodCompiler.loadLocal(valueSlot);
           fn.compile(valueSlot, locationSlot, fns, i);
-          if (!fn.isCollapsing()) {
+          if (!fn.isTerminating()) {
             methodCompiler.storeLocal(valueSlot);
           }
           methodCompiler.mv.visitIincInsn(locationSlot, 2);
@@ -317,7 +323,7 @@ public class PipelineCompiler {
           // async handler for fn
           methodCompiler.mv.visitLabel(switchLabels[index++]);
           fn.asyncResumed(contResultSlot, valueSlot);
-          if (!fn.isCollapsing()) {
+          if (!fn.isTerminating()) {
             methodCompiler.storeLocal(valueSlot);
           }
           methodCompiler.mv.visitIincInsn(locationSlot, 1);
@@ -396,19 +402,17 @@ public class PipelineCompiler {
       this.expr = expr;
       this.methodCompiler = methodCompiler;
     }
-    boolean isCollapsing() { return false; }   // True for functions like sum that collapse pipeline into a single value
-    boolean canBeDirect()  { return false; }   // True for functions like size() that can he a direct, more efficient, implementation
+    boolean isTerminating() { return false; }   // True for functions like sum that collapse pipeline into a single value
+    boolean canBeDirect()   { return false; }   // True for functions like size() that can have a direct, more efficient, implementation
     void initialise() {}
-    
     void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {}
     void compileLimitCheck() {}                // Allow limit() to short circuit if limit reached
     void finish() {}
     void cleanUp() {}
     boolean isPostProcessing() { return false; }
     void postProcess() {}
-    void storeLocal(int valueSlot) {}
     void asyncResumed(int contResultSlot, int valueSlot) {
-      if (!isCollapsing()) {
+      if (!isTerminating()) {
         // The value object should be on the stack after asyncResumed completes so by default
         // just load it from its existing slot
         methodCompiler.loadLocal(valueSlot);
@@ -482,7 +486,7 @@ public class PipelineCompiler {
 
   private static class InlineEach extends InlineClosureInvoker {
     InlineEach(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler); }
-    @Override boolean isCollapsing() { return true; }
+    @Override boolean isTerminating() { return true; }
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       if (closureSlot >= 0) {
         methodCompiler.loadLocal(closureSlot);
@@ -588,6 +592,109 @@ public class PipelineCompiler {
     @Override Label setStartLabel(Label loop) {
       loopLabel = loop;
       return subLoop;
+    }
+  }
+
+  private static class InlineCollect extends InlineClosureInvoker {
+    int resultSlot = -1;
+    boolean isCollectEntries = false;
+    InlineCollect(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler, boolean isCollectEntries) { super(expr, args, methodCompiler); this.isCollectEntries = isCollectEntries; }
+    @Override boolean isTerminating() { return true; }
+    @Override void initialise() {
+      super.initialise();
+      resultSlot = methodCompiler.stack.allocateSlot(isCollectEntries ? MAP: LIST);
+      String type = isCollectEntries ? "java/util/LinkedHashMap" : "java/util/ArrayList";
+      methodCompiler.mv.visitTypeInsn(NEW, type);
+      methodCompiler.mv.visitInsn(DUP);
+      methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, type, "<init>", "()V", false);
+      methodCompiler._storeLocal(resultSlot);
+    }
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
+      if (closureSlot >= 0) {
+        methodCompiler.loadLocal(closureSlot);
+        invokeClosure(methodCompiler, expr.location);
+      }
+      addToResult();
+    }
+    private void addToResult() {
+      methodCompiler.loadLocal(resultSlot);
+      methodCompiler.swap();
+      if (isCollectEntries) {
+        methodCompiler.loadLocation(expr.location);
+      }
+      methodCompiler.invokeMethod(isCollectEntries ? RuntimeUtils.ADD_MAP_ENTRY : MethodCompiler.LIST_ADD_METHOD);
+      if (!isCollectEntries) {
+        methodCompiler.popVal();
+      }
+    }
+    @Override void asyncResumed(int contResultSlot, int valueSlot) {
+      methodCompiler.loadLocal(contResultSlot);
+      addToResult();
+    }
+    @Override void finish() {
+      super.finish();
+      methodCompiler._loadLocal(resultSlot);
+    }
+    @Override void cleanUp() {
+      super.cleanUp();
+      methodCompiler.stack.freeSlot(resultSlot);
+    }
+  }
+
+  private static class InlineSubList extends InlineFn {
+    int resultSlot = -1;
+    int startIdxSlot = -1;
+    int endIdxSlot = -1;
+    List<Expr> args;
+    InlineSubList(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, methodCompiler); this.args = args; }
+    @Override boolean isTerminating() { return true; }
+    @Override void initialise() {
+      super.initialise();
+      resultSlot = methodCompiler.stack.allocateSlot(LIST);
+      String type = "java/util/ArrayList";
+      methodCompiler.mv.visitTypeInsn(NEW, type);
+      methodCompiler.mv.visitInsn(DUP);
+      methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, type, "<init>", "()V", false);
+      methodCompiler._storeLocal(resultSlot);
+      methodCompiler.desiredType = INT;
+      Expr arg = args.get(0);
+      methodCompiler.compile(arg);
+      methodCompiler.convertTo(INT, arg, arg.couldBeNull, arg.location);
+      startIdxSlot = methodCompiler.stack.allocateSlot(INT);
+      methodCompiler.storeLocal(startIdxSlot);
+      if (args.size() > 1) {
+        arg = args.get(1);
+        methodCompiler.compile(arg);
+        methodCompiler.convertTo(INT, arg, arg.couldBeNull, arg.location);
+        endIdxSlot = methodCompiler.stack.allocateSlot(INT);
+        methodCompiler.storeLocal(endIdxSlot);
+      }
+    }
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
+      methodCompiler.loadLocal(resultSlot);
+      methodCompiler.swap();
+      methodCompiler.invokeMethod(MethodCompiler.LIST_ADD_METHOD);
+      methodCompiler.popVal();
+    }
+    @Override void finish() {
+      super.finish();
+      methodCompiler.loadLocal(resultSlot);
+      methodCompiler.loadLocation(expr.location);
+      methodCompiler.loadLocal(startIdxSlot);
+      if (endIdxSlot == -1) {
+        methodCompiler.loadConst(Integer.MAX_VALUE);
+      }
+      else {
+        methodCompiler.loadLocal(endIdxSlot);
+      }
+      methodCompiler.invokeMethod(BuiltinFunctions.LIST_SUB_LIST_METHOD);
+      methodCompiler.popType();
+    }
+    @Override void cleanUp() {
+      super.cleanUp();
+      methodCompiler.stack.freeSlot(resultSlot);
+      methodCompiler.stack.freeSlot(startIdxSlot);
+      methodCompiler.stack.freeSlot(endIdxSlot);
     }
   }
 
@@ -758,7 +865,7 @@ public class PipelineCompiler {
       methodCompiler.loadLocal(contResultSlot);
       checkResult();
     }
-    @Override boolean isCollapsing() { return true; }
+    @Override boolean isTerminating() { return true; }
     @Override void finish() {
       methodCompiler.loadLocal(resultSlot);
       methodCompiler.box();
@@ -796,7 +903,7 @@ public class PipelineCompiler {
     int countSlot = -1;
     boolean isAvg;
     InlineAvgSum(Expr.MethodCall expr, MethodCompiler methodCompiler, boolean isAvg) { super(expr, methodCompiler); this.isAvg = isAvg; }
-    @Override boolean isCollapsing() { return true; }
+    @Override boolean isTerminating() { return true; }
     @Override void initialise() {
       sumSlot = methodCompiler.stack.allocateSlot(ANY);
       methodCompiler.loadConst(0);
@@ -867,7 +974,7 @@ public class PipelineCompiler {
     int isFirstSlot = -1;
     List<Expr> args;
     InlineJoin(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, methodCompiler); this.args = args; }
-    @Override boolean isCollapsing() { return true; }
+    @Override boolean isTerminating() { return true; }
     @Override void initialise() {
       bufferSlot = methodCompiler.stack.allocateSlot(ANY);
       methodCompiler.mv.visitTypeInsn(NEW, "java/lang/StringBuilder");
@@ -926,7 +1033,7 @@ public class PipelineCompiler {
     boolean isMin;
     Label asyncCont = new Label();
     InlineMinMax(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler, boolean isMin) { super(expr, args, methodCompiler); this.isMin = isMin; }
-    @Override boolean isCollapsing() { return true; }
+    @Override boolean isTerminating() { return true; }
     @Override void initialise() {
       super.initialise();
       minMaxValueSlot  = methodCompiler.stack.allocateSlot(ANY);
@@ -986,7 +1093,7 @@ public class PipelineCompiler {
   private static class InlineSize extends InlineFn {
     int sizeSlot = -1;
     InlineSize(Expr.MethodCall expr, MethodCompiler methodCompiler) { super(expr, methodCompiler); }
-    @Override boolean isCollapsing() { return true; }
+    @Override boolean isTerminating() { return true; }
     @Override boolean canBeDirect()  { return true; }
     @Override void initialise() {
       super.initialise();

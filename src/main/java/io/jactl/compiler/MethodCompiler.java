@@ -2380,7 +2380,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         if (!PipelineCompiler.inlineable(methodCallParent)) {
           break;
         }
-        if (expr != parent && PipelineCompiler.isCollapsing(methodCallParent.methodName)) {
+        if (expr != parent && PipelineCompiler.isTerminating(methodCallParent.methodName)) {
           break;
         }
         if (methodCallParent.methodDescriptor != null) {

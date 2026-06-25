@@ -1019,6 +1019,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[1,2,3].collect()", Utils.listOf(1, 2, 3));
     test("def x = [1,2,3]; x.collect{}", Arrays.asList(null, null, null));
     test("def x = [1,2,3]; x.collect()", Utils.listOf(1, 2, 3));
+    test("def x = [1,2,3,4,5,6]; x.collect{ it - 1 }.limit(-3).collect{ it + 1 }", Utils.listOf(1, 2, 3));
     test("def x = []; x.collect{}", Utils.listOf());
     test("def x = []; x.collect()", Utils.listOf());
     test("List x = []; x.collect{}", Utils.listOf());
@@ -1046,8 +1047,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[a:1,b:2,c:3].collect(mapper:{ x,y -> x + y })", Utils.listOf("a1", "b2", "c3"));
   }
 
-  @Test
-  public void collectEntries() {
+  @Test public void collectEntries() {
     test("[].collectEntries()", Utils.mapOf());
     test("[].collectEntries{}", Utils.mapOf());
     test("[:].collectEntries()", Utils.mapOf());
@@ -1087,6 +1087,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [1,2,3,4]; def f = x.collectEntries; f(mapper:{ [sleep(0,it.toString())*sleep(0,it),sleep(0,it)*it] })", Utils.mapOf("1", 1, "22", 4, "333", 9, "4444", 16));
     testError("def x = [1,2,3,4]; def f = x.collectEntries; f(closurex:{ [sleep(0,it.toString())*sleep(0,it),sleep(0,it)*it] })", "no such parameter");
     test("def x = [1,2,3,4]; x.map{ [sleep(0,it),sleep(0,it)*sleep(0,it)] }.collectEntries{ a,b -> [sleep(0,a.toString())*sleep(0,a),sleep(0,b)] }", Utils.mapOf("1", 1, "22", 4, "333", 9, "4444", 16));
+    test("def x = [1,2,3,4]; x.map{ [sleep(0,it),sleep(0,it)*sleep(0,it)] }.collectEntries{ a,b -> [sleep(0,a.toString())*sleep(0,a),sleep(0,b)] }.limit(-1).collectEntries()", Utils.mapOf("1", 1, "22", 4, "333", 9));
   }
 
   @Test

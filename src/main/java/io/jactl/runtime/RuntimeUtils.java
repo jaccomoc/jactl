@@ -3081,6 +3081,7 @@ public class RuntimeUtils {
     throw new RuntimeError("Cannot coerce object of type " + className(obj) + " to Map", source, offset);
   }
 
+  public static final MethodRef ADD_MAP_ENTRY = Utils.getMethod(RuntimeUtils.class, "addMapEntry", Map.class, Object.class, String.class, int.class);
   public static void addMapEntry(Map mapObj, Object elem, String source, int offset) {
     Map map = mapObj;
     Object key;
