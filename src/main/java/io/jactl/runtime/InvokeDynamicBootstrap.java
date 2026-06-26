@@ -177,6 +177,9 @@ public class InvokeDynamicBootstrap {
   // args: args[0] = JMH, args[1] = Continuation, args[2] = source, args[3] = offset, args[4..] = typed call args.
   public static Object adapter(MaxDepthCallSite cs, Object[] args) throws Throwable {
     JactlMethodHandle jmh      = (JactlMethodHandle) args[0];
+    if (jmh == null) {
+      throw new RuntimeError("Cannot invoke null closure", (String)args[2], (int)args[3]);
+    }
     MethodType        siteType = cs.type();
     
     Object[] actualArgs = Arrays.copyOfRange(args, 4, args.length);

@@ -56,8 +56,8 @@ public class PipelineCompiler {
       case "collect":
       case "collectEntries":
       case "subList":
-        return true;
       case "reduce":
+        return true;
       case "groupBy":
       case "grouped":
       case "windowSliding":
@@ -83,6 +83,7 @@ public class PipelineCompiler {
       case "collect":
       case "collectEntries":
       case "subList":
+      case "reduce":
         return true;
       default:
         return false;
@@ -115,6 +116,7 @@ public class PipelineCompiler {
       case "collect":        return new InlineCollect(expr, args, methodCompiler, false);
       case "collectEntries": return new InlineCollect(expr, args, methodCompiler, true);
       case "subList":        return new InlineSubList(expr, args, methodCompiler);
+      case "reduce":         return new InlineReduce(expr, args, methodCompiler);
       default:
         throw new UnsupportedOperationException("Unsupported method " + expr.methodName);
     }
@@ -432,20 +434,21 @@ public class PipelineCompiler {
     int closureSlot = -1;
     boolean isAsyncClosure = false;
     List<Expr> args;
-    InlineClosureInvoker(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { 
+    int argNum;
+    InlineClosureInvoker(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) {
+      this(expr, args, methodCompiler, 0);
+    }
+    InlineClosureInvoker(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler, int closureArg) { 
       super(expr, methodCompiler); 
       this.args = args;
+      this.argNum = closureArg;
     }
     @Override void initialise() {
-      if (!args.isEmpty()) {
-        Expr arg;
-        if (Utils.isNamedArgs(args)) {
-          // Assume single named arg which is the closure
-          arg = ((Expr.MapLiteral)args.get(0)).entries.get(0).second;
-        }
-        else {
-          arg = args.get(0);
-        }
+      if (Utils.isNamedArgs(args)) {
+        throw new IllegalStateException("Not expecting named args");
+      }
+      Expr arg = argNum < args.size() ? args.get(argNum) : null;
+      if (arg != null) {
         isAsyncClosure = arg.isAsync;
         methodCompiler.compile(arg);
         methodCompiler.dupVal();
@@ -485,7 +488,7 @@ public class PipelineCompiler {
   }
 
   private static class InlineEach extends InlineClosureInvoker {
-    InlineEach(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler); }
+    InlineEach(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler, 0); }
     @Override boolean isTerminating() { return true; }
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       if (closureSlot >= 0) {
@@ -502,7 +505,7 @@ public class PipelineCompiler {
 
   private static class InlineMapWithIndex extends InlineClosureInvoker {
     int indexSlot = -1;
-    InlineMapWithIndex(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler); }
+    InlineMapWithIndex(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler, 0); }
     @Override void initialise() {
       super.initialise();
       indexSlot = methodCompiler.stack.allocateSlot(INT);
@@ -546,7 +549,7 @@ public class PipelineCompiler {
     Label subLoop = new Label();
     Label asyncCont = new Label();
     int subIterSlot = -1;
-    InlineFlatMap(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler); }
+    InlineFlatMap(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler, 0); }
     @Override void initialise() {
       super.initialise();
       subIterSlot = methodCompiler.stack.allocateSlot(ITERATOR);
@@ -598,7 +601,7 @@ public class PipelineCompiler {
   private static class InlineCollect extends InlineClosureInvoker {
     int resultSlot = -1;
     boolean isCollectEntries = false;
-    InlineCollect(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler, boolean isCollectEntries) { super(expr, args, methodCompiler); this.isCollectEntries = isCollectEntries; }
+    InlineCollect(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler, boolean isCollectEntries) { super(expr, args, methodCompiler, 0); this.isCollectEntries = isCollectEntries; }
     @Override boolean isTerminating() { return true; }
     @Override void initialise() {
       super.initialise();
@@ -763,7 +766,7 @@ public class PipelineCompiler {
   }
 
   private static class InlineFilter extends InlineClosureInvoker {
-    InlineFilter(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler); }
+    InlineFilter(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler, 0); }
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       methodCompiler.dupVal();
       if (closureSlot >= 0) {
@@ -832,7 +835,7 @@ public class PipelineCompiler {
   
   private abstract static class InlineAnyAllNoneMatch extends InlineClosureInvoker {
     int resultSlot = -1;
-    InlineAnyAllNoneMatch(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler);}
+    InlineAnyAllNoneMatch(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler, 0);}
     abstract boolean defaultValue();   // default result
     abstract boolean resultOnBreak();  // result if we break out of loop early
     abstract int jumpInstruction();    // jump instruction that determines whether we continue
@@ -947,7 +950,7 @@ public class PipelineCompiler {
   }
 
   private static class InlineSort extends InlineClosureInvoker {
-    InlineSort(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler); }
+    InlineSort(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler, 0); }
     @Override boolean isPostProcessing() { return true; }
     @Override void postProcess() {
       if (closureSlot == -1) {
@@ -1070,8 +1073,8 @@ public class PipelineCompiler {
       methodCompiler.popType();
       Label END = new Label();
       methodCompiler.mv.visitJumpInsn(isMin ? IFLT : IFGT, STORE_NEW_OBJ_VALUE);
-      methodCompiler._popVal();      
-      methodCompiler._popVal();      
+      methodCompiler._popVal();
+      methodCompiler._popVal();
       methodCompiler.mv.visitJumpInsn(GOTO, END);
       methodCompiler.mv.visitLabel(STORE_NEW_OBJ_VALUE);   // :STORE_NEW_OBJ_VALUE
       methodCompiler.storeLocal(minMaxValueSlot);
@@ -1084,9 +1087,60 @@ public class PipelineCompiler {
     }
     @Override void cleanUp() {
       super.cleanUp();
-      methodCompiler._loadLocal(minMaxObjectSlot);
       methodCompiler.stack.freeSlot(minMaxValueSlot);
       methodCompiler.stack.freeSlot(minMaxObjectSlot);
+    }
+    @Override void finish() {
+      methodCompiler._loadLocal(minMaxObjectSlot);
+    }
+  }
+
+  private static class InlineReduce extends InlineClosureInvoker {
+    int resultSlot;
+    List<Expr> args;
+    InlineReduce(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler, 1); this.args = args; }
+    @Override boolean isTerminating() { return true; }
+    @Override void initialise() {
+      super.initialise();
+      assert closureSlot != -1: "Missing closure arg that should already have been validated";
+      Expr initialValue = args.get(0);
+      methodCompiler.compile(initialValue);
+      methodCompiler.box();
+      resultSlot = methodCompiler.stack.allocateSlot(ANY);
+      methodCompiler.storeLocal(resultSlot);
+    }
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
+      methodCompiler.box();
+      // Build a two element list of [accumulatedResult, element]
+      methodCompiler.mv.visitTypeInsn(NEW, "java/util/ArrayList");
+      methodCompiler.mv.visitInsn(DUP);
+      methodCompiler._loadConst(2);
+      methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, "java/util/ArrayList", "<init>", "(I)V", false);
+      methodCompiler.mv.visitInsn(DUP);
+      methodCompiler._loadLocal(resultSlot);
+      methodCompiler.mv.visitMethodInsn(INVOKEINTERFACE, "java/util/List", "add", "(Ljava/lang/Object;)Z", true);
+      methodCompiler.mv.visitInsn(POP);
+      methodCompiler.mv.visitInsn(DUP_X1);
+      methodCompiler.mv.visitInsn(SWAP);
+      methodCompiler.mv.visitMethodInsn(INVOKEINTERFACE, "java/util/List", "add", "(Ljava/lang/Object;)Z", true);
+      methodCompiler.mv.visitInsn(POP);
+      methodCompiler.popType();
+      methodCompiler.pushType(ANY);
+      
+      methodCompiler.loadLocal(closureSlot);
+      invokeClosure(methodCompiler, expr.location);
+      methodCompiler.storeLocal(resultSlot);
+    }
+    @Override void asyncResumed(int contResultSlot, int valueSlot) {
+      methodCompiler._loadLocal(contResultSlot);
+      methodCompiler._storeLocal(resultSlot);
+    }
+    @Override void cleanUp() {
+      super.cleanUp();
+      methodCompiler.stack.freeSlot(resultSlot);
+    }
+    @Override void finish() {
+      methodCompiler._loadLocal(resultSlot);
     }
   }
 

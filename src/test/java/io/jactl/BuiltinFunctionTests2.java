@@ -107,6 +107,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
     testError("[a:1,b:2,c:3].flatMap(closurex:{ x,y -> x + y })", "no such parameter");
     testError("def f = [a:1,b:2,c:3]; f.flatMap(closurex:{ x,y -> x + y })", "no such parameter");
     test("[3,3,3,3,3].flatMap{ [it,it] }", Utils.listOf(3,3,3,3,3,3,3,3,3,3));
+    testError("[3,3,3,3,3].map(null).flatMap{ [it,it] }", "cannot invoke null closure");
   }
 
   @Test public void mapEntryAsList() {
@@ -138,9 +139,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("[a:1,b:2].reduce(''){ it[0] + it[1] }", "['a', 1]['b', 2]");
     test("def x = [a:1,b:2]; def f = x.reduce; f(''){ v,e -> v + e }", "['a', 1]['b', 2]");
     test("'abcasfiieefaeiihsaiggaaasdh'.reduce([:]){m,c -> m[c]++; m}.sort{a,b -> b[1] <=> a[1]}.join(':')", "['a', 7]:['i', 5]:['s', 3]:['e', 3]:['f', 2]:['h', 2]:['g', 2]:['b', 1]:['c', 1]:['d', 1]");
-    // TO BE FIXED:
-    //    test("[['a',1],['b',2],['c',3]].reduce([:]){ m,it -> println \"$m:${it[0]}\"; m[it[0]] = 0 }", "xxx");
-    //    test("[['a',1],['b',2],['c',3]].reduce([:]){ it,m -> m[it[0]] = 0 }", "xxx");
+    test("[['a',1],['b',2],['c',3]].reduce([:]){ m,it -> m[it[0]] = it[1]; m }.toString()", "[a:1, b:2, c:3]");
   }
 
   @Test public void skipLimit() {

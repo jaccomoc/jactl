@@ -1090,8 +1090,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [1,2,3,4]; x.map{ [sleep(0,it),sleep(0,it)*sleep(0,it)] }.collectEntries{ a,b -> [sleep(0,a.toString())*sleep(0,a),sleep(0,b)] }.limit(-1).collectEntries()", Utils.mapOf("1", 1, "22", 4, "333", 9));
   }
 
-  @Test
-  public void mapWithIndex() {
+  @Test public void mapWithIndex() {
     test("[null].map{it}", Collections.singletonList(null));
     ArrayList<Object> list = new ArrayList<>();
     list.add(null);

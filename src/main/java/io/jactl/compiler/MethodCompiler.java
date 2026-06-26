@@ -2344,7 +2344,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private List<Expr> checkForValidArgs(Expr.MethodCall expr, FunctionDescriptor desc) {
     try {
       Pair<Boolean,List<Expr>> validationResult = validateArgs(expr.args, desc, expr.location, false, null);
-      return validationResult.first ?  validationResult.second : null;
+      return validationResult.first ? validationResult.second : null;
     }
     catch (CompileError e) {
       return null;
