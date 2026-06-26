@@ -57,8 +57,8 @@ public class PipelineCompiler {
       case "collectEntries":
       case "subList":
       case "reduce":
-        return true;
       case "groupBy":
+        return true;
       case "grouped":
       case "windowSliding":
       case "transpose":
@@ -84,6 +84,7 @@ public class PipelineCompiler {
       case "collectEntries":
       case "subList":
       case "reduce":
+      case "groupBy":
         return true;
       default:
         return false;
@@ -117,6 +118,7 @@ public class PipelineCompiler {
       case "collectEntries": return new InlineCollect(expr, args, methodCompiler, true);
       case "subList":        return new InlineSubList(expr, args, methodCompiler);
       case "reduce":         return new InlineReduce(expr, args, methodCompiler);
+      case "groupBy":        return new InlineGroupBy(expr, args, methodCompiler);
       default:
         throw new UnsupportedOperationException("Unsupported method " + expr.methodName);
     }
@@ -1092,6 +1094,57 @@ public class PipelineCompiler {
     }
     @Override void finish() {
       methodCompiler._loadLocal(minMaxObjectSlot);
+    }
+  }
+
+  private static class InlineGroupBy extends InlineClosureInvoker {
+    int resultSlot;
+    List<Expr> args;
+    InlineGroupBy(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler, 0); this.args = args; }
+    @Override boolean isTerminating() { return true; }
+    @Override void initialise() {
+      super.initialise();
+      assert closureSlot != -1: "Missing closure arg that should already have been validated";
+      methodCompiler.mv.visitTypeInsn(NEW, "java/util/LinkedHashMap");
+      methodCompiler.mv.visitInsn(DUP);
+      methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, "java/util/LinkedHashMap", "<init>", "()V", false);
+      resultSlot = methodCompiler.stack.allocateSlot(MAP);
+      methodCompiler._storeLocal(resultSlot);
+    }
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
+      if (valueSlot == -1) {
+        // Sync case
+        methodCompiler.dupVal();
+      }
+      methodCompiler.loadLocal(closureSlot);
+      invokeClosure(methodCompiler, expr.location);
+      if (valueSlot == -1) {
+        methodCompiler.swap();
+      }
+      else {
+        methodCompiler.loadLocal(valueSlot);
+      }
+      methodCompiler.popType(2);
+      methodCompiler._loadLocal(resultSlot);
+      methodCompiler.mv.visitInsn(DUP_X2);
+      methodCompiler.mv.visitInsn(POP);
+      methodCompiler.pushType(MAP);
+      methodCompiler.pushType(ANY);
+      methodCompiler.pushType(ANY);
+      methodCompiler.invokeMethod(RuntimeUtils.GROUP_BY_ADD_ELEM);
+    }
+    @Override void asyncResumed(int contResultSlot, int valueSlot) {
+      methodCompiler.loadLocal(resultSlot);
+      methodCompiler.loadLocal(contResultSlot);
+      methodCompiler.loadLocal(valueSlot);
+      methodCompiler.invokeMethod(RuntimeUtils.GROUP_BY_ADD_ELEM);
+    }
+    @Override void cleanUp() {
+      super.cleanUp();
+      methodCompiler.stack.freeSlot(resultSlot);
+    }
+    @Override void finish() {
+      methodCompiler._loadLocal(resultSlot);
     }
   }
 

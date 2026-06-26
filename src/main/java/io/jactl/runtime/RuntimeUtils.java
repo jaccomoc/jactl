@@ -3250,4 +3250,14 @@ public class RuntimeUtils {
   public static Object throwRuntimeError(String msg, String source, int offset) {
     throw new RuntimeError(msg, source, offset);
   }
+  
+  public static final MethodRef GROUP_BY_ADD_ELEM = Utils.getMethod(RuntimeUtils.class, "groupByAddElem", Map.class, Object.class, Object.class);
+  public static void groupByAddElem(Map map, Object key, Object value) {
+    List list = (List)map.get(key);
+    if (list == null) {
+      list = new ArrayList();
+      map.put(key, list);
+    }
+    list.add(value);
+  }
 }
