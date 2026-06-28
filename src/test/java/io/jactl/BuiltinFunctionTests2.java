@@ -637,6 +637,11 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("[1,2].windowSliding(2)", Utils.listOf(Utils.listOf(1,2)));
     test("def x = 2; [1,2].windowSliding(x)", Utils.listOf(Utils.listOf(1,2)));
     test("[1,2].windowSliding(5)", Utils.listOf(Utils.listOf(1,2)));
+    test("[1,2].windowed(1)", Utils.listOf(Utils.listOf(1),Utils.listOf(2)));
+    test("def x = 1; [1,2].windowed(x)", Utils.listOf(Utils.listOf(1),Utils.listOf(2)));
+    test("[1,2].windowed(2)", Utils.listOf(Utils.listOf(1,2)));
+    test("def x = 2; [1,2].windowed(x)", Utils.listOf(Utils.listOf(1,2)));
+    test("[1,2].windowed(5)", Utils.listOf(Utils.listOf(1,2)));
     test("[1,2,3].windowSliding(2)", Utils.listOf(Utils.listOf(1,2),Utils.listOf(2,3)));
     test("[1,2,3].windowSliding(4)", Utils.listOf(Utils.listOf(1,2,3)));
     test("[1].windowSliding(2)", Utils.listOf(Utils.listOf(1)));

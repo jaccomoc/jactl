@@ -717,9 +717,9 @@ public class BuiltinFunctions {
 
   // = abs
   public static byte byteAbs(byte n)                { return n; }   // All byte values treated as 0-255
-  public static int intAbs(int n)                   { return n < 0 ? -n : n; }
-  public static long longAbs(long n)                { return n < 0 ? -n : n; }
-  public static double doubleAbs(double n)          { return n < 0 ? -n : n; }
+  public static int intAbs(int n)                   { return Math.abs(n); }
+  public static long longAbs(long n)                { return Math.abs(n); }
+  public static double doubleAbs(double n)          { return Math.abs(n); }
   public static BigDecimal decimalAbs(BigDecimal n) { return n.abs(); }
 
   // = asChar
