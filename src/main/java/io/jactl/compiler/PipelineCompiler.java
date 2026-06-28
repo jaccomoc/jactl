@@ -58,9 +58,10 @@ public class PipelineCompiler {
       case "subList":
       case "reduce":
       case "groupBy":
-        return true;
-      case "grouped":
       case "windowSliding":
+      case "windowed":
+      case "grouped":
+        return true;
       case "transpose":
       default:
         return false;
@@ -119,6 +120,9 @@ public class PipelineCompiler {
       case "subList":        return new InlineSubList(expr, args, methodCompiler);
       case "reduce":         return new InlineReduce(expr, args, methodCompiler);
       case "groupBy":        return new InlineGroupBy(expr, args, methodCompiler);
+      case "windowSliding":  return new InlineWindowed(expr, args.get(0), methodCompiler);
+      case "windowed":       return new InlineWindowed(expr, args.get(0), methodCompiler);
+      case "grouped":        return new InlineGrouped(expr, args.get(0), methodCompiler);
       default:
         throw new UnsupportedOperationException("Unsupported method " + expr.methodName);
     }
@@ -409,7 +413,21 @@ public class PipelineCompiler {
     boolean isTerminating() { return false; }   // True for functions like sum that collapse pipeline into a single value
     boolean canBeDirect()   { return false; }   // True for functions like size() that can have a direct, more efficient, implementation
     void initialise() {}
+    
+    /**
+     * <p>Generate code for the inlined function. Stack has current iteration element on it.
+     * At end of function the stack should have an element on it for the next iteration function.
+     * </p>
+     * <p>NOTE: if the function creates a label that it expects other functions to jump to, then
+     * it should update the location (if async) to preserve the state machine semantics for
+     * handling async behaviour.</p>
+     * @param valueSlot     the slot for the iteration element (if async), or -1 if sync
+     * @param locationSlot  the slot for the location (if async), or -1 if sync
+     * @param fns           the list of InlineFn functions
+     * @param idx           our index into the list of functions
+     */
     void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {}
+    
     void compileLimitCheck() {}                // Allow limit() to short circuit if limit reached
     void finish() {}
     void cleanUp() {}
@@ -1226,6 +1244,234 @@ public class PipelineCompiler {
     }
   }
 
+  private static class InlineWindowed extends InlineFn {
+    int   bufferSlot = -1;
+    Expr  argExpr;
+    Label SUB_LOOP = new Label();
+    InlineWindowed(Expr.MethodCall expr, Expr argExpr, MethodCompiler methodCompiler) {
+      super(expr,  methodCompiler);
+      this.argExpr = argExpr;
+    }
+    @Override void initialise() { 
+      Label NON_ZERO = new Label();
+      if (argExpr.isConst && argExpr.constValue instanceof Number) {
+        int windowSize = ((Number)argExpr.constValue).intValue();
+        if (windowSize < 0) { throw new CompileError("Window size must be >= 0", argExpr.location); }
+        bufferSlot = methodCompiler.stack.allocateSlot(ANY);
+        if (windowSize == 0) {
+          methodCompiler._loadConst(null);
+        }
+        else {
+          methodCompiler.mv.visitTypeInsn(NEW, CircularBuffer.INTERNAL_NAME);
+          methodCompiler.mv.visitInsn(DUP);
+          methodCompiler._loadConst(windowSize);
+          methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, CircularBuffer.INTERNAL_NAME, "<init>", "(I)V", false);
+        }
+        methodCompiler._storeLocal(bufferSlot);
+        return;
+      }
+
+      methodCompiler.desiredType = INT;
+      methodCompiler.compile(argExpr);
+      methodCompiler.convertTo(INT, argExpr, argExpr.couldBeNull, argExpr.location);
+      methodCompiler.expect(1);
+      methodCompiler.popType();
+      methodCompiler.mv.visitInsn(DUP);
+      Label POSITIVE = new Label();
+      methodCompiler.mv.visitJumpInsn(IFGE, POSITIVE);
+      methodCompiler.throwError("Window size must be >= 0", argExpr.location);
+      methodCompiler.mv.visitLabel(POSITIVE);           // :POSITIVE
+      methodCompiler.mv.visitInsn(DUP);
+      methodCompiler.mv.visitJumpInsn(IFGT, NON_ZERO);
+      methodCompiler.mv.visitInsn(POP);
+      bufferSlot = methodCompiler.stack.allocateSlot(ANY);
+      methodCompiler.loadConst(null);
+      methodCompiler.storeLocal(bufferSlot);
+      Label END = new Label();
+      methodCompiler.mv.visitJumpInsn(GOTO, END);
+      methodCompiler.mv.visitLabel(NON_ZERO);           // :NON_ZERO
+      methodCompiler.mv.visitTypeInsn(NEW, CircularBuffer.INTERNAL_NAME);
+      methodCompiler.mv.visitInsn(DUP_X1);
+      methodCompiler.mv.visitInsn(SWAP);
+      methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, CircularBuffer.INTERNAL_NAME, "<init>", "(I)V", false);
+      methodCompiler._storeLocal(bufferSlot);
+      methodCompiler.mv.visitLabel(END);           // :END
+    }
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
+      // Put value into circular buffer and jump back to top of loop if buffer is not full.
+      // If buffer is full then buffer contents becomes the next element in iteration pipeline.
+      // When main loop finishes it will jump to SUBLOOP and, if buffer is not yet full,
+      // we send the incomplete buffer contents as the last iteration element.
+      methodCompiler._loadLocal(bufferSlot);
+      Label NEXT = new Label();
+      methodCompiler.mv.visitJumpInsn(IFNULL, NEXT);
+      methodCompiler.loadLocal(bufferSlot);
+      methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.INTERNAL_NAME);
+      methodCompiler.swap();
+      methodCompiler.invokeMethod(CircularBuffer.ADD_METHOD);
+      methodCompiler.popType();
+      methodCompiler.mv.visitJumpInsn(IFNE, loopLabel);        // Not yet full, wait for more data
+      methodCompiler.loadLocal(bufferSlot);
+      methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.INTERNAL_NAME);
+      methodCompiler.invokeMethod(CircularBuffer.TO_LIST_METHOD);
+      methodCompiler.mv.visitJumpInsn(GOTO, NEXT);
+      
+      // Main loop will jump here once finished. Any subsequent fns will jump
+      // back to main loop (if they need to) and it then sees it has finished 
+      // and jumps here again.
+      methodCompiler.mv.visitLabel(SUB_LOOP);             // :SUB_LOOP
+      if (locationSlot != -1) {
+        methodCompiler.loadConst(4 + idx * 2);
+        methodCompiler.storeLocal(locationSlot);
+      }
+
+      // If buffer is full or empty then nothing to do. If partially occupied
+      // then we need to produce an element with a partial window
+      methodCompiler._loadLocal(bufferSlot);
+      methodCompiler.mv.visitJumpInsn(IFNULL, endLabel);
+      methodCompiler.loadLocal(bufferSlot);
+      methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.INTERNAL_NAME);
+      methodCompiler.invokeMethod(CircularBuffer.SIZE_METHOD);
+      methodCompiler.popType();
+      methodCompiler.mv.visitJumpInsn(IFEQ, endLabel);
+      methodCompiler.loadLocal(bufferSlot);
+      methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.INTERNAL_NAME);
+      methodCompiler.invokeMethod(CircularBuffer.FREE_METHOD);
+      methodCompiler.popType();
+      methodCompiler.mv.visitJumpInsn(IFEQ, endLabel);
+      methodCompiler.loadLocal(bufferSlot);
+      methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.INTERNAL_NAME);
+      methodCompiler.dupVal();
+      methodCompiler.invokeMethod(CircularBuffer.TO_LIST_METHOD);
+      methodCompiler.swap();
+      methodCompiler.invokeMethod(CircularBuffer.CLEAR_METHOD);
+      methodCompiler.popType();
+      
+      methodCompiler.mv.visitLabel(NEXT);      // :NEXT
+    }
+    @Override Label setEndLabel(Label loop) {
+      super.setEndLabel(loop);
+      return SUB_LOOP;
+    }
+    @Override void cleanUp() {
+      methodCompiler.stack.freeSlot(bufferSlot);
+    }
+  }
+  
+  private static class InlineGrouped extends InlineFn {
+    int   bufferSlot = -1;
+    int   groupedSizeSlot = -1;
+    Expr  argExpr;
+    Label SUB_LOOP = new Label();
+    InlineGrouped(Expr.MethodCall expr, Expr argExpr, MethodCompiler methodCompiler) {
+      super(expr,  methodCompiler);
+      this.argExpr = argExpr;
+    }
+    @Override void initialise() { 
+      Label NON_ZERO = new Label();
+      if (argExpr.isConst && argExpr.constValue instanceof Number) {
+        int groupedSize = ((Number)argExpr.constValue).intValue();
+        if (groupedSize < 0) { throw new CompileError("Value for grouped() must be >= 0", argExpr.location); }
+        groupedSizeSlot = methodCompiler.stack.allocateSlot(INT);
+        bufferSlot = methodCompiler.stack.allocateSlot(LIST);
+        if (groupedSize == 0) {
+          methodCompiler._loadConst(null);
+        }
+        else {
+          methodCompiler.mv.visitTypeInsn(NEW, "java/util/ArrayList");
+          methodCompiler.mv.visitInsn(DUP);
+          methodCompiler._loadConst(groupedSize);
+          methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, "java/util/ArrayList", "<init>", "(I)V", false);
+        }
+        methodCompiler._storeLocal(bufferSlot);
+        methodCompiler._loadConst(groupedSize);
+        methodCompiler._storeLocal(groupedSizeSlot);
+        return;
+      }
+
+      methodCompiler.desiredType = INT;
+      methodCompiler.compile(argExpr);
+      methodCompiler.convertTo(INT, argExpr, argExpr.couldBeNull, argExpr.location);
+      methodCompiler.expect(1);
+      groupedSizeSlot = methodCompiler.stack.allocateSlot(INT);
+      methodCompiler.storeLocal(groupedSizeSlot);
+      Label POSITIVE = new Label();
+      methodCompiler._loadLocal(groupedSizeSlot);
+      methodCompiler.mv.visitJumpInsn(IFGE, POSITIVE);
+      methodCompiler.throwError("Value for grouped() must be >= 0", argExpr.location);
+      methodCompiler.mv.visitLabel(POSITIVE);           // :POSITIVE
+      methodCompiler._loadLocal(groupedSizeSlot);
+      methodCompiler.mv.visitJumpInsn(IFGT, NON_ZERO);
+      bufferSlot = methodCompiler.stack.allocateSlot(ANY);
+      methodCompiler.loadConst(null);
+      methodCompiler.storeLocal(bufferSlot);
+      Label END = new Label();
+      methodCompiler.mv.visitJumpInsn(GOTO, END);
+      methodCompiler.mv.visitLabel(NON_ZERO);           // :NON_ZERO
+      methodCompiler.mv.visitTypeInsn(NEW, "java/util/ArrayList");
+      methodCompiler.mv.visitInsn(DUP);
+      methodCompiler._loadLocal(groupedSizeSlot);
+      methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, "java/util/ArrayList", "<init>", "(I)V", false);
+      methodCompiler._storeLocal(bufferSlot);
+      methodCompiler.mv.visitLabel(END);                // :END
+    }
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
+      // Put value into buffer and jump back to top of loop if buffer is not full.
+      // If buffer is full then buffer contents becomes the next element in iteration pipeline.
+      // When main loop finishes it will jump to SUBLOOP and, if buffer is not yet full,
+      // we send the incomplete buffer contents as the last iteration element.
+      methodCompiler._loadLocal(bufferSlot);
+      Label NEXT = new Label();
+      methodCompiler.mv.visitJumpInsn(IFNULL, NEXT);     // grouped by size of 0 means we don't actually do anything
+      methodCompiler.loadLocal(bufferSlot);
+      methodCompiler.swap();
+      methodCompiler.invokeMethod(MethodCompiler.LIST_ADD_METHOD);
+      methodCompiler.popVal();
+      methodCompiler.loadLocal(bufferSlot);
+      methodCompiler.invokeMethod(MethodCompiler.LIST_SIZE_METHOD);
+      methodCompiler.popType();
+      methodCompiler._loadLocal(groupedSizeSlot);
+      methodCompiler.mv.visitJumpInsn(IF_ICMPNE, loopLabel);        // Not yet full, wait for more data
+      methodCompiler.loadLocal(bufferSlot);                         // buffer becomes next element so create new buffer for next group
+      methodCompiler.mv.visitTypeInsn(NEW, "java/util/ArrayList");
+      methodCompiler.mv.visitInsn(DUP);
+      methodCompiler._loadLocal(groupedSizeSlot);
+      methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, "java/util/ArrayList", "<init>", "(I)V", false);
+      methodCompiler._storeLocal(bufferSlot);
+      methodCompiler.mv.visitJumpInsn(GOTO, NEXT);
+      
+      // Main loop will jump here once finished. Any subsequent fns will jump
+      // back to main loop (if they need to) and it then sees it has finished 
+      // and jumps here again.
+      methodCompiler.mv.visitLabel(SUB_LOOP);             // :SUB_LOOP
+      if (locationSlot != -1) {
+        methodCompiler.loadConst(4 + idx * 2);
+        methodCompiler.storeLocal(locationSlot);
+      }
+
+      // If buffer is null or empty then nothing to do. If partially occupied
+      // then we need to produce an element with a partial group
+      methodCompiler._loadLocal(bufferSlot);
+      methodCompiler.mv.visitJumpInsn(IFNULL, endLabel);
+      methodCompiler.loadLocal(bufferSlot);
+      methodCompiler.invokeMethod(MethodCompiler.LIST_SIZE_METHOD);
+      methodCompiler.popType();
+      methodCompiler.mv.visitJumpInsn(IFEQ, endLabel);      // empty buffer
+      methodCompiler._loadLocal(bufferSlot);                // put buffer on stack as next element 
+      methodCompiler._loadConst(null);                 // store null to indicate we are now done
+      methodCompiler._storeLocal(bufferSlot);
+      methodCompiler.mv.visitLabel(NEXT);      // :NEXT
+    }
+    @Override Label setEndLabel(Label loop) {
+      super.setEndLabel(loop);
+      return SUB_LOOP;
+    }
+    @Override void cleanUp() {
+      methodCompiler.stack.freeSlot(groupedSizeSlot);
+      methodCompiler.stack.freeSlot(bufferSlot);
+    }
+  }
+
   private static abstract class InlineSkipLimit extends InlineFn {
     int argSlot;
     int isNegativeSlot = -1;
@@ -1256,10 +1502,10 @@ public class PipelineCompiler {
       // the last x elements are the only ones we will let through.
       if (constNegative) {
         bufferSlot = methodCompiler.stack.allocateSlot(ANY);
-        methodCompiler.mv.visitTypeInsn(NEW, CircularBuffer.CIRCULAR_BUFFER_INTERNAL_NAME);
+        methodCompiler.mv.visitTypeInsn(NEW, CircularBuffer.INTERNAL_NAME);
         methodCompiler.mv.visitInsn(DUP);
         methodCompiler._loadConst(-((Number)argExpr.constValue).intValue() + (isLimit ? 1 : 0));
-        methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, CircularBuffer.CIRCULAR_BUFFER_INTERNAL_NAME, "<init>", "(I)V", false);
+        methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, CircularBuffer.INTERNAL_NAME, "<init>", "(I)V", false);
         methodCompiler._storeLocal(bufferSlot);
       }
       else if (!argExpr.isConst) {
@@ -1273,7 +1519,7 @@ public class PipelineCompiler {
         Label isPositive = new Label();
         methodCompiler.mv.visitJumpInsn(IFEQ, isPositive);
         // We have a negative arg
-        methodCompiler.mv.visitTypeInsn(NEW, CircularBuffer.CIRCULAR_BUFFER_INTERNAL_NAME);
+        methodCompiler.mv.visitTypeInsn(NEW, CircularBuffer.INTERNAL_NAME);
         methodCompiler.mv.visitInsn(DUP);
         methodCompiler._loadLocal(argSlot);
         methodCompiler.mv.visitInsn(INEG);
@@ -1281,7 +1527,7 @@ public class PipelineCompiler {
           methodCompiler._loadConst(1);
           methodCompiler.mv.visitInsn(IADD);
         }
-        methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, CircularBuffer.CIRCULAR_BUFFER_INTERNAL_NAME, "<init>", "(I)V", false);
+        methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, CircularBuffer.INTERNAL_NAME, "<init>", "(I)V", false);
         methodCompiler._storeLocal(bufferSlot);
         Label finish = new Label();
         methodCompiler.mv.visitJumpInsn(GOTO, finish);
@@ -1314,9 +1560,10 @@ public class PipelineCompiler {
         // When main loop finishes it will jump to SUBLOOP and, we will then feed
         // values from circular buffer to subsequent steps in pipeline
         methodCompiler.loadLocal(bufferSlot);
-        methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.CIRCULAR_BUFFER_INTERNAL_NAME);
+        methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.INTERNAL_NAME);
         methodCompiler.swap();
-        methodCompiler.invokeMethod(CircularBuffer.CIRCULAR_BUFFER_ADD_METHOD);
+        methodCompiler.invokeMethod(CircularBuffer.ADD_METHOD);
+        methodCompiler.popVal();
         methodCompiler.mv.visitJumpInsn(GOTO, loopLabel);
         
         // Main loop will jump here once finished. Any subsequent fns will jump
@@ -1333,13 +1580,13 @@ public class PipelineCompiler {
           methodCompiler.mv.visitJumpInsn(IFEQ, endLabel);   // positive skip so nothing to do
         }
         methodCompiler.loadLocal(bufferSlot);
-        methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.CIRCULAR_BUFFER_INTERNAL_NAME);
-        methodCompiler.invokeMethod(CircularBuffer.CIRCULAR_BUFFER_SIZE_METHOD);
+        methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.INTERNAL_NAME);
+        methodCompiler.invokeMethod(CircularBuffer.SIZE_METHOD);
         methodCompiler.mv.visitJumpInsn(IFLE, endLabel);
         methodCompiler.popType();
         methodCompiler.loadLocal(bufferSlot);
-        methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.CIRCULAR_BUFFER_INTERNAL_NAME);
-        methodCompiler.invokeMethod(CircularBuffer.CIRCULAR_BUFFER_REMOVE_METHOD);
+        methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.INTERNAL_NAME);
+        methodCompiler.invokeMethod(CircularBuffer.REMOVE_METHOD);
         methodCompiler.mv.visitJumpInsn(GOTO, NEXT);
       }
       if (!constNegative) {
@@ -1381,17 +1628,18 @@ public class PipelineCompiler {
         // make our buffer size n+1 so we can always add and then check 
         // after if we should remove rather than having to check size first.
         methodCompiler.loadLocal(bufferSlot);
-        methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.CIRCULAR_BUFFER_INTERNAL_NAME);
+        methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.INTERNAL_NAME);
         methodCompiler.swap();
-        methodCompiler.invokeMethod(CircularBuffer.CIRCULAR_BUFFER_ADD_METHOD);
+        methodCompiler.invokeMethod(CircularBuffer.ADD_METHOD);
+        methodCompiler.popVal();
         methodCompiler.loadLocal(bufferSlot);
-        methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.CIRCULAR_BUFFER_INTERNAL_NAME);
-        methodCompiler.invokeMethod(CircularBuffer.CIRCULAR_BUFFER_FREE_METHOD);
+        methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.INTERNAL_NAME);
+        methodCompiler.invokeMethod(CircularBuffer.FREE_METHOD);
         methodCompiler.mv.visitJumpInsn(IFNE, loopLabel);      // Jump back to top of loop if still space in buffer
         methodCompiler.popType();
         methodCompiler.loadLocal(bufferSlot);
-        methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.CIRCULAR_BUFFER_INTERNAL_NAME);
-        methodCompiler.invokeMethod(CircularBuffer.CIRCULAR_BUFFER_REMOVE_METHOD);
+        methodCompiler.mv.visitTypeInsn(CHECKCAST, CircularBuffer.INTERNAL_NAME);
+        methodCompiler.invokeMethod(CircularBuffer.REMOVE_METHOD);
         methodCompiler.mv.visitJumpInsn(GOTO, NEXT);
       }
       if (!constNegative) {

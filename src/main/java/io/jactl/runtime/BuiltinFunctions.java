@@ -267,6 +267,7 @@ public class BuiltinFunctions {
 
       Jactl.method(ITERATOR)
            .name("windowSliding")
+           .alias("windowed")
            .asyncInstance(true)
            .param("size")
            .impl(BuiltinFunctions.class, "iteratorWindowSliding")

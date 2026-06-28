@@ -609,9 +609,12 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("[].grouped(2)", Utils.listOf());
     test("[a:1,b:2,c:3,d:4].grouped(2)", Utils.listOf(Utils.listOf(Utils.listOf("a",1),Utils.listOf("b",2)),Utils.listOf(Utils.listOf("c",3),Utils.listOf("d",4))));
     test("[1,2].grouped(0)", Utils.listOf(1,2));
+    test("def x = 0; [1,2].grouped(x)", Utils.listOf(1,2));
     testError("[1,2].grouped(-1)", "value for grouped() must be >= 0");
     test("[1,2].grouped(1)", Utils.listOf(Utils.listOf(1),Utils.listOf(2)));
+    test("def x = 1; [1,2].grouped(x)", Utils.listOf(Utils.listOf(1),Utils.listOf(2)));
     test("[1,2].grouped(2)", Utils.listOf(Utils.listOf(1,2)));
+    test("def x = 2; [1,2].grouped(x)", Utils.listOf(Utils.listOf(1,2)));
     test("[1].grouped(2)", Utils.listOf(Utils.listOf(1)));
     test("[1,2,3,4].grouped(2)", Utils.listOf(Utils.listOf(1,2),Utils.listOf(3,4)));
     test("[1,2,3].grouped(2)", Utils.listOf(Utils.listOf(1,2),Utils.listOf(3)));
@@ -622,14 +625,17 @@ public class BuiltinFunctionTests2 extends BaseTest {
   }
 
   @Test public void windowSliding() {
-    testError("[].windowSliding(-1)", "value for windowSliding() must be >= 0");
+    testError("[].windowSliding(-1)", "size must be >= 0");
     test("[].windowSliding(0)", Utils.listOf());
     test("def f = [].windowSliding; f(0)", Utils.listOf());
     test("[].windowSliding(1)", Utils.listOf());
     test("[].windowSliding(2)", Utils.listOf());
     test("[1,2].windowSliding(0)", Utils.listOf(1,2));
+    test("def x = 0; [1,2].windowSliding(x)", Utils.listOf(1,2));
     test("[1,2].windowSliding(1)", Utils.listOf(Utils.listOf(1),Utils.listOf(2)));
+    test("def x = 1; [1,2].windowSliding(x)", Utils.listOf(Utils.listOf(1),Utils.listOf(2)));
     test("[1,2].windowSliding(2)", Utils.listOf(Utils.listOf(1,2)));
+    test("def x = 2; [1,2].windowSliding(x)", Utils.listOf(Utils.listOf(1,2)));
     test("[1,2].windowSliding(5)", Utils.listOf(Utils.listOf(1,2)));
     test("[1,2,3].windowSliding(2)", Utils.listOf(Utils.listOf(1,2),Utils.listOf(2,3)));
     test("[1,2,3].windowSliding(4)", Utils.listOf(Utils.listOf(1,2,3)));

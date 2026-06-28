@@ -1329,8 +1329,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [1,2,3]; def i = 0; def n = { i < x.size() ? x[i++] : null }; int[][] arr = stream(n).mapWithIndex{ it,i -> [it,i] }", new int[][] { new int[]{1,0}, new int[]{2,1}, new int[]{3,2} });
   }
 
-  @Test
-  public void pipelineSize() {
+  @Test public void pipelineSize() {
     test("sleep(0,[1,2,3].map()).sum()", 6);
     doTest("sleep(0,[1,2,3].map()).size()", 3L);
     test("List list = [1,2,3]; list.map().size()", 3L);
@@ -1344,31 +1343,27 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [1,2,3,4]; x.flatMap{ x.size().filter{ it % 2 == 0 } }.sum()", 8);
   }
 
-  @Test
-  public void pipelineEach() {
+  @Test public void pipelineEach() {
     test("def sum = 0; [1,2,3].each{ sum += it }; sum", 6);
     test("def sum = 0; def x = [1,2,3]; x.each{ sum += it }; sum", 6);
     test("def sum =''; Map x = [a:1,b:2,c:3]; x.each{ a,b -> sum += \"$a=$b,\" }; sum", "a=1,b=2,c=3,");
     test("def sum = 0; def x = [a:1,b:2,c:3]; x.each{ a,b -> sum += b }; sum", 6);
   }
 
-  @Test
-  public void pipelineSortJoin() {
+  @Test public void pipelineSortJoin() {
     test("List list = ['tuvw', 'mnopqrs', 'abcd', 'xyz']; list.filter{ it.size() > 3 }.map{ it.toUpperCase() }.sort().map{ it + '[' + it.size() + ']' }.join(',')", "ABCD[4],MNOPQRS[7],TUVW[4]");
     test("List list = ['tuvw', 'mnopqrs', 'abcd', 'xyz']; list.filter{ it.size() > 3 }.map{ it.toUpperCase() }.sort{ a,b -> a <=> b }.map{ it + '[' + it.size() + ']' }.join(',')", "ABCD[4],MNOPQRS[7],TUVW[4]");
     String str = "somerandomcharacterstojointogether";
     test("'" + str + "'.map{ it + it }.sort().map{it+it}.join(':')", str.chars().mapToObj(c -> Character.toString((char) c) + (char) c).sorted().map(s -> s + s).collect(Collectors.joining(":")));
   }
 
-  @Test
-  public void heapLocalInvokeDynamic() {
+  @Test public void heapLocalInvokeDynamic() {
     test("def x = 3; def f = { sleep(0,x) }; def g = f; g()", 3);
     test("def x = 3; def y = 4; def f = { i = x -> i + y }; def g = { def xx = x; def h = f; h(7) + xx }; def j = g; j() + j()", 28);
     test("def x = 3; def y = 4; def f(i = x) { i + y }; def g() { def xx = x; def h = f; h(7) + xx }; def j = g; j() + j()", 28);
   }
 
-  @Test
-  public void pipelineScript() {
+  @Test public void pipelineScript() {
     String input = "1122334321\n" +
                    "1122536321\n" +
                    "1122534321\n" +

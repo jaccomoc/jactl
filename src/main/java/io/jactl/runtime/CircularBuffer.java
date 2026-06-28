@@ -21,7 +21,9 @@ import io.jactl.Utils;
 import io.jactl.compiler.MethodRef;
 import org.objectweb.asm.Type;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import static io.jactl.JactlType.TypeEnum.BUILTIN;
 
@@ -41,13 +43,16 @@ import static io.jactl.JactlType.TypeEnum.BUILTIN;
  * </p>
  */
 public class CircularBuffer<T> implements Checkpointable {
-  public static final String    CIRCULAR_BUFFER_INTERNAL_NAME = Type.getInternalName(CircularBuffer.class);
-  public static final MethodRef CIRCULAR_BUFFER_ADD_METHOD    = Utils.getMethod(CircularBuffer.class, "add", Object.class);
-  public static final MethodRef CIRCULAR_BUFFER_REMOVE_METHOD = Utils.getMethod(CircularBuffer.class, "remove");
-  public static final MethodRef CIRCULAR_BUFFER_SIZE_METHOD   = Utils.getMethod(CircularBuffer.class, "size");
-  public static final MethodRef CIRCULAR_BUFFER_FREE_METHOD   = Utils.getMethod(CircularBuffer.class, "free");
+  public static final String    INTERNAL_NAME  = Type.getInternalName(CircularBuffer.class);
+  public static final MethodRef ADD_METHOD     = Utils.getMethod(CircularBuffer.class, "add", Object.class);
+  public static final MethodRef REMOVE_METHOD  = Utils.getMethod(CircularBuffer.class, "remove");
+  public static final MethodRef SIZE_METHOD    = Utils.getMethod(CircularBuffer.class, "size");
+  public static final MethodRef FREE_METHOD    = Utils.getMethod(CircularBuffer.class, "free");
+  public static final MethodRef TO_LIST_METHOD = Utils.getMethod(CircularBuffer.class, "toList");
+  public static final MethodRef CLEAR_METHOD   = Utils.getMethod(CircularBuffer.class, "clear");
+  
   private static      int       VERSION                       = 1;
-  Object[] buffer;
+  T[]      buffer;
   int      bufferSize;
   boolean  canGrow = false;  // true if we can grow buffer when it fills up
   int      head = 0;
@@ -57,7 +62,7 @@ public class CircularBuffer<T> implements Checkpointable {
 
   public CircularBuffer(int capacity) {
     this.bufferSize = capacity + 1;
-    buffer = new Object[this.bufferSize];
+    buffer = (T[])new Object[this.bufferSize];
   }
 
   CircularBuffer(int capacity, boolean canGrow) {
@@ -73,10 +78,16 @@ public class CircularBuffer<T> implements Checkpointable {
     return (tail + bufferSize - head) % bufferSize;
   }
 
-  public void add(T t) {
+  /**
+   * Add element to circular buffer, potentially pushing out the oldest
+   * element if buffer is full and canGrow is false.
+   * @param t  the new element
+   * @return true if buffer is not yet full
+   */
+  public boolean add(T t) {
     if (free() == 0) {
       if (canGrow) {
-        Object[] newBuf = new Object[bufferSize << 1];
+        T[] newBuf = (T[])new Object[bufferSize << 1];
         for (int i = head, dst = 0; i != tail; i = (i + 1) % bufferSize) {
           newBuf[dst++] = buffer[i];
           buffer[i] = null;
@@ -94,6 +105,7 @@ public class CircularBuffer<T> implements Checkpointable {
     }
     buffer[tail] = t;
     tail = (tail + 1) % bufferSize;
+    return canGrow || free() > 0;
   }
 
   public T remove() {
@@ -107,6 +119,14 @@ public class CircularBuffer<T> implements Checkpointable {
     return elem;
   }
 
+  public List<T> toList() {
+    ArrayList<T> list = new ArrayList<>(size());
+    for (int i = head; i != tail; i = (i + 1) % bufferSize) {
+      list.add((T)buffer[i]);
+    }
+    return list;
+  }
+  
   /**
    * How much free space in the buffer
    * @return number of unoccupied elements in buffer
@@ -115,7 +135,7 @@ public class CircularBuffer<T> implements Checkpointable {
     return bufferSize - 1 - size();
   }
 
-  void clear() {
+  public void clear() {
     Arrays.fill(buffer, null);
     head = tail = 0;
   }
@@ -139,10 +159,10 @@ public class CircularBuffer<T> implements Checkpointable {
     restorer.expectCInt(VERSION, "Bad version");
     bufferSize   = restorer.readCInt();
     canGrow      = restorer.readBoolean();
-    buffer       = new Object[bufferSize];
+    buffer       = (T[])new Object[bufferSize];
     int size     = restorer.readCInt();
     for (int i = 0; i < size; i++) {
-      buffer[i] = restorer.readObject();
+      buffer[i] = (T)restorer.readObject();
     }
     head = 0;
     tail = size;
