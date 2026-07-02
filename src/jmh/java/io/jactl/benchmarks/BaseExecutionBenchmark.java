@@ -54,9 +54,13 @@ public abstract class BaseExecutionBenchmark {
   protected String  groovySource;
 
   public void setup() throws Exception {
-    setupJava();
+    if (javaSource != null) {
+      setupJava();
+    }
     setupJactl();
-    setupGroovy();
+    if (groovySource != null) {
+      setupGroovy();
+    }
   }
 
   public void tearDown() {
@@ -118,7 +122,7 @@ public abstract class BaseExecutionBenchmark {
   public void jactlExecution() throws Exception {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     PrintStream           out  = new PrintStream(baos);
-    jactlScript.eval(Collections.singletonMap("source", input), null, out);
+    jactlScript.eval(Collections.singletonMap("source", input), new StringReader(input), out);
     out.close();
     String diff = diff(expectedOutput, baos.toString());
     assert diff == null : "Jactl output mismatch: diff=\n" + diff;

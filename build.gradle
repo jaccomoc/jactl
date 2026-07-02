@@ -53,18 +53,22 @@ dependencies {
     implementation 'org.ow2.asm:asm-util:9.7.1'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+
+    // JMH benchmarks
     jmhImplementation 'org.openjdk.jmh:jmh-core:1.37'
     jmhAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
-    jmhImplementation 'org.apache.groovy:groovy:4.0.31'
+    jmhImplementation 'org.apache.groovy:groovy:5.0.6'
+    jmhImplementation 'org.apache.commons:commons-jexl3:3.6.2'
+    jmhImplementation 'org.mvel:mvel2:2.5.2.Final'
+    jmhImplementation 'org.springframework:spring-expression:5.3.39'
 }
 
 tasks.withType(JavaCompile) { options.deprecation = true }
 
 java {
+    toolchain { languageVersion = JavaLanguageVersion.of(8) }
     withJavadocJar()
     withSourcesJar()
-    sourceCompatibility = "1.8"
-    targetCompatibility = "1.8"
 }
 
 test { 
@@ -156,7 +160,15 @@ publishing {
 //}
 
 tasks.named('compileJmhJava') {
+    javaCompiler = javaToolchains.compilerFor { languageVersion = JavaLanguageVersion.of(25) }
+    options.release = 25
     options.annotationProcessorPath = configurations.jmhAnnotationProcessor
+    // Exclude the 'generated' subtree from Gradle's source inputs. IntelliJ's
+    // annotation processor writes JMH wrapper classes to src/jmh/java/generated/;
+    // Gradle's AP writes to build/generated/sources/annotationProcessor/java/jmh/.
+    // Including both during a single javac invocation produces duplicate-class
+    // errors. Gradle's AP still compiles its own generated output automatically.
+    source = fileTree(dir: 'src/jmh/java', include: '**/*.java', exclude: 'generated/**')
 }
 
 tasks.register('jmh', Jar) {
