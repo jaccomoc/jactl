@@ -494,8 +494,10 @@ public class ClassCompiler {
     if (!context.allowHostAccess || noHostClass(classDescriptor.getAllFields())) {
       compileToJsonFunction();
       compileReadJsonFunction();
-      compileCheckpointFunction();
-      compileRestoreFunction();
+      if (context.isAsync) {
+        compileCheckpointFunction();
+        compileRestoreFunction();
+      }
     }
     compileInitNoAsync();
     compileEqualsFunction();

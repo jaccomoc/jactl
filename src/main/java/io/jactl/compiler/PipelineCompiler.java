@@ -384,19 +384,13 @@ public class PipelineCompiler {
     }
   }
 
-  private static List<JactlType> CLOSURE_STACK_TYPES = Utils.listOf(FUNCTION, CONTINUATION, STRING, INT, ANY);
+  private static List<JactlType> CLOSURE_STACK_TYPES = Utils.listOf(FUNCTION, ANY);
   
   // Expect on stack: Object arg, MethodHandle closure
   private static void invokeClosure(MethodCompiler methodCompiler, Token location) {
     Utils.checkCast(methodCompiler.mv, FUNCTION);
     methodCompiler.swap();
-    methodCompiler.loadNullContinuation();
-    methodCompiler.swap();
-    methodCompiler.loadConst(location.getSource());
-    methodCompiler.swap();
-    methodCompiler.loadConst(location.getOffset());
-    methodCompiler.swap();
-    methodCompiler.invokeMethodHandle(CLOSURE_STACK_TYPES);
+    methodCompiler.invokeMethodHandle(CLOSURE_STACK_TYPES, location);
   }
   
   //////////////////////////////////////////////////////////////////

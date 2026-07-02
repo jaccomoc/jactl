@@ -330,7 +330,7 @@ public class Jactl {
   boolean      verbose;
 
   public int run(String[] args) throws IOException {
-    final Map<Character, Object> argMap = Utils.parseArgs(args, "d*EvcCpng:e:P:V:*", usage);
+    final Map<Character, Object> argMap = Utils.parseArgs(args, "d*EIvcCpng:e:P:V:*", usage);
     if (argMap.containsKey('v')) {
       System.out.println("Jactl version " + Utils.JACTL_VERSION);
       return 0;
@@ -393,6 +393,7 @@ public class Jactl {
       };
 
       JactlContext.JactlContextBuilder builder = JactlContext.create()
+                                                             .invokeDynamic(!argMap.containsKey('I'))
                                                              .replMode(argMap.containsKey('p') || argMap.containsKey('n'))
                                                              .debug(argMap.containsKey('d') ? (int)argMap.get('d') : 0)
                                                              .printLoop(argMap.containsKey('p'))

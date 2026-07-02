@@ -1381,4 +1381,36 @@ public class BuiltinFunctionTests extends BaseTest {
          "    .flatMap{ x -> cols.size().filter{ y -> !invisible(x,y,rows[x][y]) } }\n" +
          "    .size()", input, output, 34L);
   }
+  
+  @Test public void pipelineScript2() {
+    String input = "[[],[1],[[[1,3],2,1,3]]]\n" +
+                   "[[[],6,[3,8]],[]]\n";
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    test("def compare(lhs,rhs) {\n" +
+         "  return 1           if rhs == null\n" +
+         "  return lhs <=> rhs if lhs !instanceof List && rhs !instanceof List\n" +
+         "  rhs = [rhs]        if rhs !instanceof List\n" +
+         "  lhs = [lhs]        if lhs !instanceof List\n" +
+         "  def cmp = lhs.mapWithIndex{ it,i -> compare(it,rhs[i]) }.filter().limit(1)[0]\n" +
+         "  return cmp ? cmp : (rhs.size() > lhs.size() ? -1 : 0)\n" +
+         "}\n" +
+         "\n" +
+         "def dividers = [ [[2]], [[6]] ]\n" +
+         "def data   = stream(nextLine).filter().map { eval(it) } + dividers\n" +
+         "data.sort{ a,b -> compare(a,b) }\n" +
+         "    .mapWithIndex{ it,i -> it in dividers ? i+1 : 1 }\n" +
+         "    .reduce(1){ m,it -> m*it }",
+         input, output, 12);
+  }
+  
+  @Test public void pipelineScript3() {
+    String input = "a: 1\n" +
+                   "b: c\n" +
+                   "c: a + a\n";
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    test("def monkeys = stream(nextLine).map{ s/:/=/; s/(\\d+)/$1L/ }.filter{ it }\n" +
+         "Map vars = monkeys.map{ s/=.*// }.collectEntries{ [it,null] }\n" +
+         "while (monkeys.filter{ eval(it, vars) == null }) {}\n" +
+         "vars.b", input, output, 2L);
+  }
 }

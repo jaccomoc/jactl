@@ -24,6 +24,7 @@ import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
+import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.*;
 import java.math.BigDecimal;
@@ -724,7 +725,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // If doing ?= then if rhs is null or throws a NullError we don't perform
     // the assignment
-    if (isConditionalAssign) {
+    if (isConditionalAssign && !expr.expr.type.isPrimitive()) {
       Label end = new Label();
       tryCatch(NullError.class, true,
                () -> {
@@ -740,12 +741,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                    // so we don't need to check again when checking for type conversion
                    convertTo(expr.identifierExpr.type, null, false, expr.expr.location);
                    storeVar(expr.identifierExpr.varDecl);
-                   if (expr.isResultUsed) {
-                     // Need to box if primitive because when we don't do the assign due to NullError
-                     // we leave null as the result so we need to box so that type of entire expression
-                     // is compatible with use of null
-                     box();
-                   }
                  };
 
                  // Only need check for null value if not a primitive
@@ -1211,8 +1206,36 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitBinary(Expr.Binary expr) {
     // If we don't know the type of one of the operands then we delegate to RuntimeUtils.binaryOp
     if (expr.operator.is(numericOperator) && (expr.left.type.is(ANY) || expr.right.type.is(ANY))) {
-      // Special case for string concatenation
+      // Skip numeric op handling if we know we have string concatenation
       if (!expr.operator.is(PLUS) || !expr.type.is(STRING)) {
+        MethodRef method = methodNames.get(expr.operator.getType());
+        assert method != null : "unsupported operator type " + expr.operator.getChars();
+        if (classCompiler.context.invokeDynamic) {
+          compile(expr.left);
+          JactlType leftType = peek();
+          compile(expr.right);
+          JactlType rightType = peek();
+          expect(2);
+          // Convert byte to short because call site will try to box byte to Byte and since
+          // we have unsigned bytes we will get an error during boxing for values over 127
+          Function<JactlType,Class> siteArgType = jt -> jt.is(BYTE) ? short.class : jt.classFromType();
+          MethodType methodType = MethodType.methodType(Object.class, siteArgType.apply(leftType), siteArgType.apply(rightType));
+          Handle bsmHandle = new Handle(H_INVOKESTATIC, Type.getInternalName(InvokeDynamicBootstrap.class), "bootstrapBinaryOp",
+                                        "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/String;Ljava/lang/String;IILjava/lang/String;I)Ljava/lang/invoke/CallSite;",
+                                        false);
+          mv.visitInvokeDynamicInsn(method.methodName, methodType.toMethodDescriptorString(), bsmHandle,
+                                    new Handle(H_INVOKESTATIC, Utils.RUNTIME_UTILS_INTERNAL, method.methodName, method.methodDescriptor, false),          
+                                    RuntimeUtils.getOperatorType(expr.operator.getType()),
+                                    expr.originalOperator == null ? "" : RuntimeUtils.getOperatorType(expr.originalOperator.getType()),
+                                    classCompiler.context.minScale,
+                                    !insideTryCatchNullError() ? 1 : 0,
+                                    expr.location.getSource(),
+                                    expr.location.getOffset());
+          popType(2);
+          pushType(ANY);
+          convertTo(expr.type, expr, true, expr.operator);  // Convert to expected type
+          return null;
+        }
         compile(expr.left);
         box();
         compile(expr.right);
@@ -1223,8 +1246,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         loadConst(classCompiler.context.minScale);
         loadConst(!insideTryCatchNullError());
         loadLocation(expr.operator);
-        MethodRef method = methodNames.get(expr.operator.getType());
-        assert method != null : "unsupported operator type " + expr.operator.getChars();
         invokeMethod(method);
         convertTo(expr.type, expr, true, expr.operator);  // Convert to expected type
         return null;
@@ -2308,13 +2329,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        
                        // NOTE: we don't have to passed closed over vars here because the method handle we get
                        //       has already had these values bound to it
-                       loadNullContinuation();
-                       stackTypes.add(CONTINUATION);
-                       loadLocation(expr.location);
-                       stackTypes.add(STRING);
-                       stackTypes.add(INT);
-                       
                        if (!useInvokeDynamic) {
+                         loadNullContinuation();
+                         stackTypes.add(CONTINUATION);
+                         loadLocation(expr.location);
+                         stackTypes.add(STRING);
+                         stackTypes.add(INT);
                          // Any arguments will be stored in an Object[]
                          loadArgsAsObjectArr(expr.args);
                        }
@@ -2325,7 +2345,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          }
                        }
                      },
-                     () -> invokeMethodHandle(useInvokeDynamic, stackTypes));
+                     () -> invokeMethodHandle(useInvokeDynamic, stackTypes, expr.location));
 
     // We don't know if function was script local or not since we invoked
     // via method handle so we need to refresh aliases just in case
@@ -2493,20 +2513,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (classCompiler.context.invokeDynamic && !isNamedArgs(expr.args)) {
      // Use invokeDynamic for fast runtime performance after initial bootstrap
       MethodType methodType = getTypeForMethodCall(Object.class, expr.args);
-      int argCount          = expr.args.size() + 1 + 1 + 2;  // size + target + Continuation + source + offset
+      int argCount          = expr.args.size() + 1;  // size + target
       Handle bsmHandle      = new Handle(H_INVOKESTATIC, Type.getInternalName(InvokeDynamicBootstrap.class), "bootstrapMethodOrField",
-                                         "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                                         "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;I)Ljava/lang/invoke/CallSite;",
                                          false);
       
       Runnable emitInvokeDynamic = () -> invokeMaybeAsync(asyncEnabled(), ANY, 1, expr.location,
                                                           () -> {
-                                                            loadNullContinuation();
-                                                            loadLocation(expr.methodNameLocation);
                                                             expr.args.forEach(this::compile);
                                                           },
                                                           () -> {
                                                             expect(argCount);
-                                                            mv.visitInvokeDynamicInsn(expr.methodName, methodType.toMethodDescriptorString(), bsmHandle);
+                                                            mv.visitInvokeDynamicInsn(expr.methodName, methodType.toMethodDescriptorString(), bsmHandle, ((Token)expr.methodNameLocation).getSource(), ((Token)expr.methodNameLocation).getOffset());
                                                             popType(argCount);
                                                             pushType(ANY);
                                                           });
@@ -3650,13 +3668,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   public static MethodType getTypeForMethodCall(Class<?> returnType, List<Expr> exprs) {
-    // Allow space for the target, the Continuation, and the source/offset
-    Class[] paramClasses = new Class[exprs.size() + 1 + 1 + 2];
+    Class[] paramClasses = new Class[exprs.size() + 1];
     int idx = 0;
     paramClasses[idx++] = Object.class;        // the target object
-    paramClasses[idx++] = Continuation.class;
-    paramClasses[idx++] = String.class;
-    paramClasses[idx++] = int.class;
     for (int i = 0; i < exprs.size(); i++) {
       paramClasses[idx++] = exprs.get(i).type.classFromType();
     }
@@ -5250,11 +5264,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     invokeMethod(JactlMethodHandle.INVOKE_METHOD);
   }
 
-  void invokeMethodHandle(List<JactlType> stackTypes) {
-    invokeMethodHandle(classCompiler.context.invokeDynamic, stackTypes);
+  void invokeMethodHandle(List<JactlType> stackTypes, Location location) {
+    invokeMethodHandle(classCompiler.context.invokeDynamic, stackTypes, location);
   }
   
-  void invokeMethodHandle(boolean useInvokeDynamic, List<JactlType> stackTypes) {
+  void invokeMethodHandle(boolean useInvokeDynamic, List<JactlType> stackTypes, Location location) {
     if (!useInvokeDynamic) {
       // Fallback to old way
       invokeMethod(JactlMethodHandle.INVOKE_METHOD);
@@ -5262,10 +5276,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     expect(stackTypes.size());
     Handle bsmHandle = new Handle(H_INVOKESTATIC, Type.getInternalName(InvokeDynamicBootstrap.class), "bootstrap",
-                                  "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;",
+                                  "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;I)Ljava/lang/invoke/CallSite;",
                                   false);
     MethodType methodType = getMethodType(Object.class, stackTypes);
-    mv.visitInvokeDynamicInsn("invokeMethodHandle", methodType.toMethodDescriptorString(), bsmHandle);
+    mv.visitInvokeDynamicInsn("invokeMethodHandle", methodType.toMethodDescriptorString(), bsmHandle, location.getSource(), location.getOffset());
     popType(stackTypes.size());
     pushType(ANY);
   }
@@ -5584,7 +5598,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadGlobals();
     loadConst(varName);
     invokeMethod(MAP_GET_METHOD);
-    if (create) {
+    if (create && !varDecl.type.is(ANY)) {
       tryCatch(ClassCastException.class, false,
                () -> Utils.checkCast(mv, varDecl.type),
                () -> throwError("Global var " + varName + " not of type " + varDecl.type.toString(), methodFunDecl.location));

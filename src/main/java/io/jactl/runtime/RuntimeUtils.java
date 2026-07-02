@@ -292,12 +292,12 @@ public class RuntimeUtils {
    * @param originalOperator  original operator (as a String) (will be -- or ++ if inc/dec turned into binaryOp or null
    *                          otherwise)
    * @param minScale          maximum scale for BigDecimal operations
-   * @param captureStackTrace
+   * @param captureStackTrace whether to capture stack strace for errors
    * @param source            source code
    * @param offset            offset into source code of operator
    * @return result of operation
    */
-  private static Object binaryOp(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
+  public static Object binaryOp(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     if (left == null) {
       throwOperandError(left, true, operator, captureStackTrace, source, offset);
     }
@@ -407,6 +407,9 @@ public class RuntimeUtils {
       return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
+    // Sometimes we pass bytes as short because in Jactl bytes are unsigned
+    if (left instanceof Short)  { left = (byte) ((short)left & 0xff); }
+    if (right instanceof Short) { right = (byte) ((short)right & 0xff); }
     if (left instanceof Byte && right instanceof Byte) {
       return (byte)((byte)left + (byte)right);
     }
@@ -452,6 +455,9 @@ public class RuntimeUtils {
       return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
+    // Sometimes we pass bytes as short because in Jactl bytes are unsigned
+    if (left instanceof Short)  { left = (byte) ((short)left & 0xff); }
+    if (right instanceof Short) { right = (byte) ((short)right & 0xff); }
     if (left instanceof Byte && right instanceof Byte) {
       return (byte)((byte)left * (byte)right);
     }
@@ -492,6 +498,10 @@ public class RuntimeUtils {
       return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
 
+    // Sometimes we pass bytes as short because in Jactl bytes are unsigned
+    if (left instanceof Short)  { left = (byte) ((short)left & 0xff); }
+    if (right instanceof Short) { right = (byte) ((short)right & 0xff); }
+
     if (left instanceof Byte && right instanceof Byte) {
       return (byte)((byte)left - (byte)right);
     }
@@ -528,6 +538,10 @@ public class RuntimeUtils {
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
       return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
+
+    // Sometimes we pass bytes as short because in Jactl bytes are unsigned
+    if (left instanceof Short)  { left = (byte) ((short)left & 0xff); }
+    if (right instanceof Short) { right = (byte) ((short)right & 0xff); }
 
     boolean resultIsByte = left instanceof Byte && right instanceof Byte;
     if (left  instanceof Byte) { left  = ((int)(byte)left) & 0xff; }
@@ -570,6 +584,10 @@ public class RuntimeUtils {
     if (left instanceof BigDecimal || right instanceof BigDecimal) {
       return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
     }
+
+    // Sometimes we pass bytes as short because in Jactl bytes are unsigned
+    if (left instanceof Short)  { left = (byte) ((short)left & 0xff); }
+    if (right instanceof Short) { right = (byte) ((short)right & 0xff); }
 
     boolean resultIsByte = left instanceof Byte && right instanceof Byte;
     if (left  instanceof Byte) { left  = ((int)(byte)left) & 0xff; }
@@ -619,6 +637,10 @@ public class RuntimeUtils {
       if (left instanceof BigDecimal || right instanceof BigDecimal) {
         return decimalBinaryOperation(toBigDecimal(left), toBigDecimal(right), operator, minScale, source, offset);
       }
+
+      // Sometimes we pass bytes as short because in Jactl bytes are unsigned
+      if (left instanceof Short)  { left = (byte) ((short)left & 0xff); }
+      if (right instanceof Short) { right = (byte) ((short)right & 0xff); }
 
       boolean resultIsByte = left instanceof Byte && right instanceof Byte;
       if (left  instanceof Byte) { left  = ((int)(byte)left) & 0xff; }
@@ -2695,6 +2717,7 @@ public class RuntimeUtils {
     if (val instanceof Long)       { return BigDecimal.valueOf((long)val); }
     if (val instanceof Double)     { return BigDecimal.valueOf((double)val); }
     if (val instanceof Byte)       { return BigDecimal.valueOf(((int)(byte)val) & 0xff); }
+    if (val instanceof Short)      { return BigDecimal.valueOf((short)val); }
     return null;
   }
 

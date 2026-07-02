@@ -49,8 +49,10 @@ public class ScriptCompiler extends ClassCompiler {
 
     compileInnerClasses();
     compileScriptMain();
-    compileCheckpointFunction();
-    compileRestoreFunction();
+    if (context.isAsync) {
+      compileCheckpointFunction();
+      compileRestoreFunction();
+    }
     finishClassCompile();
     return compiledClass;
   }

@@ -195,6 +195,7 @@ class CompilerTests extends BaseTest {
   }
 
   @Test public void simpleConstExpressions() {
+    test("1 + 2", 3);
     testError("(byte)1 + true", "non-numeric operand for right-hand side");
     testError("1 + true", "non-numeric operand for right-hand side");
     testError("false + 1", "non-numeric operand for left-hand side");
@@ -239,7 +240,9 @@ class CompilerTests extends BaseTest {
     test("1 - 2", -1);
     test("1 - -2", 3);
     test("(byte)2 * 3", 6);
+    test("(byte)-2 * 3", (256 - 2) * 3);
     test("(byte)2 * (byte)3", (byte)6);
+    test("(byte)2 * (byte)-3", (byte)-6);
     test("2 * 3", 6);
     test("(byte)6 / 3", 2);
     test("6 / (byte)3", 2);
@@ -2291,8 +2294,7 @@ class CompilerTests extends BaseTest {
     test("def x = -18.0D; int y = 7; x %%= y", -4.0D);
   }
 
-  @Test
-  public void defVariableArithmetic() {
+  @Test public void defVariableArithmetic() {
     test("def v = 1", 1);
     testError("def v = 1; v + true", "non-numeric operand for right-hand side");
     testError("def v = false; v + 1", "non-numeric operand for left-hand side");
@@ -2317,6 +2319,7 @@ class CompilerTests extends BaseTest {
     test("def x = false; !x", true);
     test("def x = true; !x", false);
     test("def x = (byte)1; x + (byte)2", (byte)3);
+    test("def x = (byte)-1; x + (byte)2", (byte)1);
     test("def x = (byte)2; (byte)1 + x", (byte)3);
     test("def x = (byte)1; def y = (byte)2; x + y", (byte)3);
     test("def x = (byte)1; x - (byte)2", (byte)-1);

@@ -934,6 +934,7 @@ public class CompilerTests2 extends BaseTest {
     test("Map m; Map x; m.a.b.c = 1; m.a.(x.b ?= 'b').c += (x.c ?= 2); m.a.b.c", 3);
     test("Map m; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += 2", 3);
     test("Map m; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += (x ?= 2)", 3);
+    test("Map m; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += (x ?= (true ? 2 : sleep(0,3)))", 3);
     test("Map m; def x; m.a.b.c = 1; m.a.(x ?= 'b').c += (x ?= 2); m.a.b.c", 3);
     test("def m = [:]; Map x; (m.a ?= 1) + (x.a ?= 2)", 3);
     test("def m = [:]; Map x; m.a.b.c = 1; m.a.(x.b ?= 'b').c += 2", 3);

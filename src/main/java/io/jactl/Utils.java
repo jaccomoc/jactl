@@ -25,6 +25,8 @@ import org.objectweb.asm.Type;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -951,7 +953,7 @@ public class Utils {
    */
   public static Expr.VarDecl createVarDecl(String name, Expr.VarDecl varDecl, Expr.FunDecl funDecl) {
     Expr.VarDecl newVarDecl    = new Expr.VarDecl(varDecl.name, null, null);
-    newVarDecl.type            = varDecl.type.boxed();
+    newVarDecl.type            = varDecl.type;
     newVarDecl.owner           = varDecl.owner;
     newVarDecl.isHeapLocal     = true;
     newVarDecl.isParam         = true;
@@ -960,13 +962,13 @@ public class Utils {
 
     // We need to check for scenarios where the current function has been used as a forward
     // reference at some point in the code but between the point of the reference and the
-    // declaration of our function there is a variable declared that we know close over.
+    // declaration of our function there is a variable declared that we now close over.
     // Since that variable didn't exist when the original forward reference was made we
     // have to disallow such forward references.
     // E.g.:
     //   def f(x){g(x)}; def v = ... ; def g(x) { v + x }
     // Since g uses v and v does not exist when f invokes g we have to throw an error.
-    // To detect such references we remember the earlies reference and check that the
+    // To detect such references we remember the earliest reference and check that the
     // variable we are now closing over was not declared after that reference.
     // NOTE: even if v were another function we still need to disallow this since the
     // JactlMethodHandle for v won't exist at the time that g is invoked.
@@ -1408,7 +1410,8 @@ public class Utils {
     try {
       Method method = clss.getMethod(methodName, parameterTypes);
       return new MethodRef(method);
-    } catch (NoSuchMethodException e) {
+    }
+    catch (NoSuchMethodException e) {
       System.err.println("Method " + methodName + " for class " + clss.getName() + " not found");
       throw new RuntimeException(e);
     }

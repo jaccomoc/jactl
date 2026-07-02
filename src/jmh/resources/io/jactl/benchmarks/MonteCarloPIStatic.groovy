@@ -19,7 +19,7 @@ class MonteCarloPI {
     }
 
     int nextInt(int bound) {
-      return ((nextLong() % bound) + bound) % bound
+      return (int)(((nextLong() % bound) + bound) % bound)
     }
     
     static long rol(long i, int amt) { return (i << amt) | (i >>> -amt) }
