@@ -1540,7 +1540,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           convertTo(maxType, expr.right, false, expr.right.location);
           expect(2);
           switch (maxType.getType()) {
-            case DECIMAL: invokeMethod(BIG_DECIMAL_COMPARE_TO_METHOD);                          break;
+            case DECIMAL: invokeMethod(BIG_DECIMAL_COMPARE_TO_METHOD);                   break;
             case DOUBLE:  mv.visitInsn(DCMPL);    popType(2);   pushType(INT);     break;
             case LONG:    mv.visitInsn(LCMP);     popType(2);   pushType(INT);     break;
             default: throw new IllegalStateException("Internal error: unexpected type " + maxType.getType());
@@ -1595,10 +1595,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                               expr.left.type.is(DOUBLE) || expr.right.type.is(DOUBLE) ? DOUBLE :
                               expr.left.type.is(LONG)   || expr.right.type.is(LONG)   ? LONG :
                               INT;
-      if (operandType.is(INT) && expr.operator.is(LESS_THAN,LESS_THAN_EQUAL,GREATER_THAN,GREATER_THAN_EQUAL)) {
-        // Promote ints to longs for these comparisons
-        operandType = LONG;
-      }
       desiredType = operandType;
       compile(expr.left);
       convertTo(operandType, expr.left, false, expr.left.location);
@@ -1608,30 +1604,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       convertTo(operandType, expr.right, false, expr.right.location);
       unbox();
       expect(2);
+      Label IS_TRUE = new Label();
       if (operandType.is(INT)) {
         // We have INT
         switch (expr.operator.getType()) {
-          // Turn -x, 0, x value into appropriate boolean of 0 or 1
-          case EQUAL_EQUAL:
-          case TRIPLE_EQUAL:
-            mv.visitInsn(IXOR);       // a ^ b
-            mv.visitInsn(DUP);
-            mv.visitInsn(INEG);
-            mv.visitInsn(IOR);        // (a - b) | -(a - b)
-            mv.visitInsn(ICONST_M1);
-            mv.visitInsn(ISHR);      // ((a - b) | -(a - b)) >> 31 : 0 if equal, -1 if unequal
-            mv.visitInsn(ICONST_1);
-            mv.visitInsn(IADD);
-            break;
-          case BANG_EQUAL:
-          case BANG_EQUAL_EQUAL:
-            mv.visitInsn(IXOR);       // a ^ b
-            mv.visitInsn(DUP);
-            mv.visitInsn(INEG);
-            mv.visitInsn(IOR);        // (a - b) | -(a - b)
-            mv.visitInsn(ICONST_M1);
-            mv.visitInsn(IUSHR);      // ((a - b) | -(a - b)) >> 31 : 0 if equal, 1 if unequal 
-            break;
+          case EQUAL_EQUAL: case TRIPLE_EQUAL:      mv.visitJumpInsn(IF_ICMPEQ, IS_TRUE);   break;
+          case BANG_EQUAL:  case BANG_EQUAL_EQUAL:  mv.visitJumpInsn(IF_ICMPNE, IS_TRUE);   break;
+          case LESS_THAN:                           mv.visitJumpInsn(IF_ICMPLT, IS_TRUE);   break;
+          case LESS_THAN_EQUAL:                     mv.visitJumpInsn(IF_ICMPLE, IS_TRUE);   break;
+          case GREATER_THAN:                        mv.visitJumpInsn(IF_ICMPGT, IS_TRUE);   break;
+          case GREATER_THAN_EQUAL:                  mv.visitJumpInsn(IF_ICMPGE, IS_TRUE);   break;
           default:
             throw new IllegalStateException("Internal error: unexpected operator " + expr.operator);
         }
@@ -1640,51 +1622,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         mv.visitInsn(operandType.is(LONG) ? LCMP : expr.operator.is(LESS_THAN,LESS_THAN_EQUAL) ? DCMPG : DCMPL);
         switch (expr.operator.getType()) {
           // Turn -1, 0, 1 value into appropriate boolean of 0 or 1
-          case EQUAL_EQUAL:
-          case TRIPLE_EQUAL:
-            // (x*x) ^ 1
-            mv.visitInsn(DUP);
-            mv.visitInsn(IMUL);
-            mv.visitInsn(ICONST_1);
-            mv.visitInsn(IXOR);
-            break;
-          case BANG_EQUAL:
-          case BANG_EQUAL_EQUAL:
-            // x * x
-            mv.visitInsn(DUP);
-            mv.visitInsn(IMUL);
-            break;
-          case LESS_THAN:
-            // x >>> 31  (< 0 maps to 1, >= 0 maps to 0)
-            // note IUSHR only uses bottom 5 bits so push -1 and we will shift 31 bits 
-            mv.visitInsn(ICONST_M1);
-            mv.visitInsn(IUSHR);
-            break;
-          case LESS_THAN_EQUAL:
-            // (x - 1) >>> 31
-            mv.visitInsn(ICONST_1);
-            mv.visitInsn(ISUB);
-            mv.visitInsn(ICONST_M1);
-            mv.visitInsn(IUSHR);
-            break;
-          case GREATER_THAN:
-            // (x + 1) >> 1
-            mv.visitInsn(ICONST_1);
-            mv.visitInsn(IADD);
-            mv.visitInsn(ICONST_1);
-            mv.visitInsn(ISHR);
-            break;
-          case GREATER_THAN_EQUAL:
-            // (x >> 31) + 1
-            mv.visitInsn(ICONST_M1);
-            mv.visitInsn(ISHR);
-            mv.visitInsn(ICONST_1);
-            mv.visitInsn(IADD);
-            break;
+          case EQUAL_EQUAL: case TRIPLE_EQUAL:      mv.visitJumpInsn(IFEQ, IS_TRUE);   break;
+          case BANG_EQUAL:  case BANG_EQUAL_EQUAL:  mv.visitJumpInsn(IFNE, IS_TRUE);   break;
+          case LESS_THAN:                           mv.visitJumpInsn(IFLT, IS_TRUE);   break;
+          case LESS_THAN_EQUAL:                     mv.visitJumpInsn(IFLE, IS_TRUE);   break;
+          case GREATER_THAN:                        mv.visitJumpInsn(IFGT, IS_TRUE);   break;
+          case GREATER_THAN_EQUAL:                  mv.visitJumpInsn(IFGE, IS_TRUE);   break;
           default:
             throw new IllegalStateException("Internal error: unexpected operator " + expr.operator);
         }
       }
+      // False branch
+      mv.visitInsn(ICONST_0);
+      Label END = new Label();
+      mv.visitJumpInsn(GOTO, END);
+      mv.visitLabel(IS_TRUE);      // :IS_TRUE
+      mv.visitInsn(ICONST_1);
+      mv.visitLabel(END);          // :END
       popType(2);
       pushType(BOOLEAN);
       return null;
