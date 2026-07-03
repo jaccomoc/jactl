@@ -705,4 +705,11 @@ public class CompilerTest3 extends BaseTest {
     test("class X { static def f(int a ) { a }; }; [1, 1L, 1, 1, 1, 1L, 1L, 1L, 1D].map{ a -> X.f(a) }.sum()", 9);
     test("class X { static def f(a) { a }; }; [1, 1L, 1, 1, 1, 1L, 1L, 1L, 1D].map{ a -> X.f(a) }.sum()", 9D);
   }
+
+  @Test public void invokeDynamic2() {
+    test("def f(byte x) { x }; def g = f; g((byte)200) == 200", true);
+    test("class X { def f(byte x) { x } }; def x = new X(); x.f((byte)200) == 200", true);
+    test("class X { static def f(byte x) { x } }; def x = new X(); x.f((byte)200) == 200", true);
+    test("class X { static def f(byte x) { x } }; def g = X.f; g((byte)200) == 200", true);
+  }
 }

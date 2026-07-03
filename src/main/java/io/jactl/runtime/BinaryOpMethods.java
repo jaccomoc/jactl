@@ -145,7 +145,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return (long)lhs + (long)rhs;
     if (rhs instanceof Double)     return lhs + (double)rhs;
     if (rhs instanceof BigDecimal) return BigDecimal.valueOf(lhs).add((BigDecimal)rhs);
-    if (rhs instanceof Byte)       return lhs + ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs + ((short)rhs & 0xff);
     return RuntimeUtils.plus(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -154,7 +154,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return lhs + (long)rhs;
     if (rhs instanceof Double)     return lhs + (double)rhs;
     if (rhs instanceof BigDecimal) return BigDecimal.valueOf(lhs).add((BigDecimal)rhs);
-    if (rhs instanceof Byte)       return lhs + ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs + ((short)rhs & 0xff);
     return RuntimeUtils.plus(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -163,7 +163,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return lhs + (long)rhs;
     if (rhs instanceof Double)     return lhs + (double)rhs;
     if (rhs instanceof BigDecimal) return BigDecimal.valueOf(lhs).add((BigDecimal)rhs);
-    if (rhs instanceof Byte)       return lhs + ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs + ((short)rhs & 0xff);
     return RuntimeUtils.plus(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -172,7 +172,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return lhs.add(BigDecimal.valueOf((long)rhs));
     if (rhs instanceof Double)     return lhs.add(BigDecimal.valueOf((double)rhs));
     if (rhs instanceof BigDecimal) return lhs.add((BigDecimal)rhs);
-    if (rhs instanceof Byte)       return lhs.add(BigDecimal.valueOf((byte)rhs & 0xff));
+    if (rhs instanceof Short)      return lhs.add(BigDecimal.valueOf((short)rhs & 0xff));
     return RuntimeUtils.plus(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -181,7 +181,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return (long)lhs - (long)rhs;
     if (rhs instanceof Double)     return lhs - (double)rhs;
     if (rhs instanceof BigDecimal) return BigDecimal.valueOf(lhs).subtract((BigDecimal)rhs);
-    if (rhs instanceof Byte)       return lhs - ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs - ((short)rhs & 0xff);
     return RuntimeUtils.minus(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -190,7 +190,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return lhs - (long)rhs;
     if (rhs instanceof Double)     return lhs - (double)rhs;
     if (rhs instanceof BigDecimal) return BigDecimal.valueOf(lhs).subtract((BigDecimal)rhs);
-    if (rhs instanceof Byte)       return lhs - ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs - ((short)rhs & 0xff);
     return RuntimeUtils.minus(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -199,7 +199,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return lhs - (long)rhs;
     if (rhs instanceof Double)     return lhs - (double)rhs;
     if (rhs instanceof BigDecimal) return BigDecimal.valueOf(lhs).subtract((BigDecimal)rhs);
-    if (rhs instanceof Byte)       return lhs - ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs - ((short)rhs & 0xff);
     return RuntimeUtils.minus(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -208,7 +208,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return lhs.subtract(BigDecimal.valueOf((long)rhs));
     if (rhs instanceof Double)     return lhs.subtract(BigDecimal.valueOf((double)rhs));
     if (rhs instanceof BigDecimal) return lhs.subtract((BigDecimal)rhs);
-    if (rhs instanceof Byte)       return lhs.subtract(BigDecimal.valueOf((byte)rhs & 0xff));
+    if (rhs instanceof Short)      return lhs.subtract(BigDecimal.valueOf((short)rhs & 0xff));
     return RuntimeUtils.minus(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -217,7 +217,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return (long)lhs * (long)rhs;
     if (rhs instanceof Double)     return lhs * (double)rhs;
     if (rhs instanceof BigDecimal) return BigDecimal.valueOf(lhs).multiply((BigDecimal)rhs);
-    if (rhs instanceof Byte)       return lhs * ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs * ((short)rhs & 0xff);
     return RuntimeUtils.multiply(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -226,7 +226,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return lhs * (long)rhs;
     if (rhs instanceof Double)     return lhs * (double)rhs;
     if (rhs instanceof BigDecimal) return BigDecimal.valueOf(lhs).multiply((BigDecimal)rhs);
-    if (rhs instanceof Byte)       return lhs * ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs * ((short)rhs & 0xff);
     return RuntimeUtils.multiply(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -235,7 +235,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return lhs * (long)rhs;
     if (rhs instanceof Double)     return lhs * (double)rhs;
     if (rhs instanceof BigDecimal) return BigDecimal.valueOf(lhs).multiply((BigDecimal)rhs);
-    if (rhs instanceof Byte)       return lhs * ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs * ((short)rhs & 0xff);
     return RuntimeUtils.multiply(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -244,7 +244,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return lhs.multiply(BigDecimal.valueOf((long)rhs));
     if (rhs instanceof Double)     return lhs.multiply(BigDecimal.valueOf((double)rhs));
     if (rhs instanceof BigDecimal) return lhs.multiply((BigDecimal)rhs);
-    if (rhs instanceof Byte)       return lhs.multiply(BigDecimal.valueOf((byte)rhs & 0xff));
+    if (rhs instanceof Short)      return lhs.multiply(BigDecimal.valueOf((short)rhs & 0xff));
     return RuntimeUtils.multiply(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -253,7 +253,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return (long)lhs / (long)rhs;
     if (rhs instanceof Double)     return lhs / (double)rhs;
     if (rhs instanceof BigDecimal) return RuntimeUtils.decimalDivide(BigDecimal.valueOf(lhs), (BigDecimal)rhs, minScale, source, offset);
-    if (rhs instanceof Byte)       return lhs / ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs / ((short)rhs & 0xff);
     return RuntimeUtils.divide(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -262,7 +262,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return lhs / (long)rhs;
     if (rhs instanceof Double)     return lhs / (double)rhs;
     if (rhs instanceof BigDecimal) return RuntimeUtils.decimalDivide(BigDecimal.valueOf(lhs), (BigDecimal)rhs, minScale, source, offset);
-    if (rhs instanceof Byte)       return lhs / ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs / ((short)rhs & 0xff);
     return RuntimeUtils.divide(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -271,7 +271,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return lhs / (long)rhs;
     if (rhs instanceof Double)     return lhs / (double)rhs;
     if (rhs instanceof BigDecimal) return RuntimeUtils.decimalDivide(BigDecimal.valueOf(lhs), (BigDecimal)rhs, minScale, source, offset);
-    if (rhs instanceof Byte)       return lhs / ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs / ((short)rhs & 0xff);
     return RuntimeUtils.divide(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -280,7 +280,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       { long right = (long)rhs; return ((lhs % right) + right) % right; }
     if (rhs instanceof Double)     { double right = (double)rhs; return ((lhs % right) + right) % right; }
     if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
-    if (rhs instanceof Byte)       { int right = (byte)rhs & 0xff; return ((lhs % right) + right) % right; }  
+    if (rhs instanceof Short)      { int right = (short)rhs & 0xff; return ((lhs % right) + right) % right; }  
     return RuntimeUtils.modulo(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -289,7 +289,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       { long right = (long)rhs; return ((lhs % right) + right) % right; }
     if (rhs instanceof Double)     { double right = (double)rhs; return ((lhs % right) + right) % right; }
     if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
-    if (rhs instanceof Byte)       { int right = (byte)rhs & 0xff; return ((lhs % right) + right) % right; }  
+    if (rhs instanceof Short)      { int right = (short)rhs & 0xff; return ((lhs % right) + right) % right; }  
     return RuntimeUtils.modulo(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -298,7 +298,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       { long right = (long)rhs; return ((lhs % right) + right) % right; }
     if (rhs instanceof Double)     { double right = (double)rhs; return ((lhs % right) + right) % right; }
     if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
-    if (rhs instanceof Byte)       { int right = (byte)rhs & 0xff; return ((lhs % right) + right) % right; }  
+    if (rhs instanceof Short)      { int right = (short)rhs & 0xff; return ((lhs % right) + right) % right; }  
     return RuntimeUtils.modulo(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -307,7 +307,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return lhs % (long)rhs;
     if (rhs instanceof Double)     return lhs % (double)rhs;
     if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
-    if (rhs instanceof Byte)       return lhs % ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs % ((short)rhs & 0xff);
     return RuntimeUtils.remainder(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -316,7 +316,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return lhs % (long)rhs;
     if (rhs instanceof Double)     return lhs % (double)rhs;
     if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
-    if (rhs instanceof Byte)       return lhs % ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs % ((short)rhs & 0xff);
     return RuntimeUtils.remainder(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 
@@ -325,7 +325,7 @@ public class BinaryOpMethods {
     if (rhs instanceof Long)       return lhs % (long)rhs;
     if (rhs instanceof Double)     return lhs % (double)rhs;
     if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
-    if (rhs instanceof Byte)       return lhs % ((byte)rhs & 0xff);
+    if (rhs instanceof Short)      return lhs % ((short)rhs & 0xff);
     return RuntimeUtils.remainder(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
   }
 }

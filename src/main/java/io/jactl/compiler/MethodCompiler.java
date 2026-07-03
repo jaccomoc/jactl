@@ -3655,14 +3655,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return Type.getMethodDescriptor(returnType.descriptorType(), pTypes);
   }
 
-  public static MethodType getMethodType(Expr.FunDecl funDecl) {
-    return getMethodType(funDecl.returnType.classFromType(), methodParamTypes(funDecl));
-  }
-
   public static MethodType getMethodType(Class<?> returnType, List<JactlType> paramTypes) {
     Class[] paramClasses = new Class[paramTypes.size()];
     for (int i = 0; i < paramTypes.size(); i++) {
-      paramClasses[i] = paramTypes.get(i).classFromType();
+      JactlType type = paramTypes.get(i);
+      // Map byte to short to avoid issues with Jactl using unsigned bytes
+      paramClasses[i] = type.is(BYTE) ? short.class : type.classFromType();
     }
     return MethodType.methodType(returnType, paramClasses);
   }
@@ -3672,7 +3670,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     int idx = 0;
     paramClasses[idx++] = Object.class;        // the target object
     for (int i = 0; i < exprs.size(); i++) {
-      paramClasses[idx++] = exprs.get(i).type.classFromType();
+      JactlType type = exprs.get(i).type;
+      // Map byte to short to avoid issues with Jactl using unsigned bytes
+      paramClasses[idx++] = type.is(BYTE) ? short.class : type.classFromType();
     }
     return MethodType.methodType(returnType, paramClasses);
   }

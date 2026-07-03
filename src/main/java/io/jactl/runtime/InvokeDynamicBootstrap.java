@@ -60,6 +60,7 @@ public class InvokeDynamicBootstrap {
   private static final MethodHandle SAME_CLASS_ARGN;
 
   private static final MethodHandle BYTE_VALUE;
+  private static final MethodHandle SHORT_VALUE;
   private static final MethodHandle INT_VALUE;
   private static final MethodHandle LONG_VALUE;
   private static final MethodHandle DOUBLE_VALUE;
@@ -100,6 +101,7 @@ public class InvokeDynamicBootstrap {
       SAME_CLASS_ARGN         = lookup.findStatic(InvokeDynamicBootstrap.class, "sameClassArgN", MethodType.methodType(boolean.class, Class.class, Class[].class, Object.class, Object[].class));
       
       BYTE_VALUE              = lookup.findVirtual(Number.class, "byteValue", MethodType.methodType(byte.class));
+      SHORT_VALUE             = lookup.findVirtual(Number.class, "shortValue", MethodType.methodType(short.class));
       INT_VALUE               = lookup.findVirtual(Number.class, "intValue", MethodType.methodType(int.class));
       LONG_VALUE              = lookup.findVirtual(Number.class, "longValue", MethodType.methodType(long.class));
       DOUBLE_VALUE            = lookup.findVirtual(Number.class, "doubleValue", MethodType.methodType(double.class));
@@ -334,50 +336,54 @@ public class InvokeDynamicBootstrap {
     // If we have a JactlObject then we can look up method/field
     MethodHandle fallback = cs.getTarget();
     if (parent instanceof JactlObject) {
-      Object            fieldOrMethod = ((JactlObject) parent)._$j$getFieldsAndMethods().get(methodOrField);
-      JactlMethodHandle jmh;
-      if (fieldOrMethod instanceof JactlMethodHandle) {
-        jmh = (JactlMethodHandle) fieldOrMethod;
-        // Now find the actual method
-        Method method = Arrays.stream(parent.getClass().getMethods())
-                              .filter(m -> m.getName().equals(methodOrField))
-                              .findFirst()
-                              .orElseThrow(() -> new NoSuchMethodException("Internal error: could not find '" + methodOrField + "' in class '" + parent.getClass().getName() + "'"));
-
-        MethodHandle adapted = lookup.unreflect(method);
-
-        if (jmh.isAsync()) {
-          adapted = MethodHandles.insertArguments(adapted, 1, (Continuation)null);
-        }
-        if (jmh.needsLocation()) {
-          adapted = MethodHandles.insertArguments(adapted, 1, source, offset);
-        }
-
-        MethodHandle guard = createGuardForMethod(args[0].getClass(), siteType, adapted.type(), args);
-        
-        // Install call site that checks that the parent class is still the same and that the argument
-        // types haven't changed and then invokes the method. If there are conversion errors then we catch
-        // the exception and install the wrapper fallback instead.
-        try {
-          adapted = coerceArgumentsOrFail(siteType, adapted, args, 1);          
-          adapted = adapted.asType(siteType);
-          cs.setTarget(MethodHandles.guardWithTest(guard, adapted, fallback));
-        }
-        catch (WrongMethodTypeException e) {
-          // Argument types not directly compatible so fall back to invoking wrapper to let it do any
-          // coercion required and fill in missing arguments etc (or throw an error if needed).
-          cs.setTarget(MethodHandles.guardWithTest(guard, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset), fallback));
-        }
+      boolean isStatic = false;
+      Object fieldOrMethod = ((JactlObject) parent)._$j$getFieldsAndMethods().get(methodOrField);
+      if (fieldOrMethod == null) {
+        fieldOrMethod = ((JactlObject) parent)._$j$getStaticFieldsAndMethods().get(methodOrField);
+        isStatic = true;
       }
-      else {
-        // We have a field so we install something that checks parent class and invokes slow path through
-        // invokeMethodOrField() which loads field to get JactlMethodHandle and invokes it.
-        cs.setTarget(MethodHandles.guardWithTest(isSameClass, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset), fallback));
+      if (fieldOrMethod != null) {
+        JactlMethodHandle jmh;
+        if (fieldOrMethod instanceof JactlMethodHandle) {
+          jmh = (JactlMethodHandle) fieldOrMethod;
+          // Now get the actual method
+          MethodHandle adapted = jmh.handleToUnderlyingFunction();
+          if (isStatic) {
+            adapted = MethodHandles.dropArguments(adapted, 0, Object.class);
+          }
+          
+          if (jmh.isAsync()) {
+            adapted = MethodHandles.insertArguments(adapted, 1, (Continuation) null);
+          }
+          if (jmh.needsLocation()) {
+            adapted = MethodHandles.insertArguments(adapted, 1, source, offset);
+          }
 
+          MethodHandle guard = createGuardForMethod(args[0].getClass(), siteType, adapted.type(), args);
+
+          // Install call site that checks that the parent class is still the same and that the argument
+          // types haven't changed and then invokes the method. If there are conversion errors then we catch
+          // the exception and install the wrapper fallback instead.
+          try {
+            adapted = coerceArgumentsOrFail(siteType, adapted, args, 1);
+            adapted = adapted.asType(siteType);
+            cs.setTarget(MethodHandles.guardWithTest(guard, adapted, fallback));
+          }
+          catch (WrongMethodTypeException e) {
+            // Argument types not directly compatible so fall back to invoking wrapper to let it do any
+            // coercion required and fill in missing arguments etc (or throw an error if needed).
+            cs.setTarget(MethodHandles.guardWithTest(guard, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset), fallback));
+          }
+        }
+        else {
+          // We have a field so we install something that checks parent class and invokes slow path through
+          // invokeMethodOrField() which loads field to get JactlMethodHandle and invokes it.
+          cs.setTarget(MethodHandles.guardWithTest(isSameClass, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset), fallback));
+        }
+        MutableCallSite.syncAll(new MutableCallSite[]{cs});
+
+        return invokeMethodOrField(methodOrField, parent, null, source, offset, actualArgs);
       }
-      MutableCallSite.syncAll(new MutableCallSite[]{cs});
-
-      return invokeMethodOrField(methodOrField, parent, null, source, offset, actualArgs);
     }
 
     // See if there is a method of this name
@@ -457,15 +463,14 @@ public class InvokeDynamicBootstrap {
       adapted = MethodHandles.insertArguments(adapted, 1, source, offset);
     }
     
-    int argStart = func.isStaticMethod ? 0 : 1;
-    int argCount = args.length - argStart;  // adjust if this is a non-static method
+    int argCount = args.length - 1;
     
     // To start with we assume we can invoke directly if we don't have too many arguments
     boolean directInvoke = argCount <= func.paramCount;
     
     // We need to insert default values for missing arguments (if they are simple values)
     if (argCount < func.paramCount) {
-      for (int i = args.length - argStart; i < func.defaultVals.length; i++) {
+      for (int i = argCount; i < func.defaultVals.length; i++) {
         if (func.defaultVals[i] == FunctionDescriptor.NON_TRIVIAL) {
           directInvoke = false;
           break;
@@ -473,7 +478,7 @@ public class InvokeDynamicBootstrap {
       }
       if (directInvoke) {
         // Insert missing values after the parent object and the other args
-        adapted = MethodHandles.insertArguments(adapted, args.length, Arrays.copyOfRange(func.defaultVals, args.length - argStart, func.defaultVals.length));
+        adapted = MethodHandles.insertArguments(adapted, args.length, Arrays.copyOfRange(func.defaultVals, argCount, func.defaultVals.length));
       }
     }
 
@@ -482,7 +487,7 @@ public class InvokeDynamicBootstrap {
     try {
       // Insert argument coercion for numeric types or if incompatible types
       // we will throw WrongMethodTypeException and fall back to invoking wrapper
-      adapted = coerceArgumentsOrFail(siteType, adapted, args, argStart);
+      adapted = coerceArgumentsOrFail(siteType, adapted, args, 1);
       adapted = adapted.asType(siteType);
     }
     catch (WrongMethodTypeException e) {
@@ -535,19 +540,21 @@ public class InvokeDynamicBootstrap {
   private static final HashMap<Class<?>, MethodHandle> NUMERIC_FILTERS = new HashMap<>();
   private static final HashMap<Class<?>, Integer>      NUMERIC_RANK    = new HashMap<>();
   static {
-    NUMERIC_FILTERS.put(byte.class,       BYTE_VALUE);
-    NUMERIC_FILTERS.put(int.class,        INT_VALUE);
-    NUMERIC_FILTERS.put(long.class,       LONG_VALUE);
-    NUMERIC_FILTERS.put(double.class,     DOUBLE_VALUE);
+    NUMERIC_FILTERS.put(Byte.class,       BYTE_VALUE);
+    NUMERIC_FILTERS.put(Short.class,      SHORT_VALUE);
+    NUMERIC_FILTERS.put(Integer.class,    INT_VALUE);
+    NUMERIC_FILTERS.put(Long.class,       LONG_VALUE);
+    NUMERIC_FILTERS.put(Double.class,     DOUBLE_VALUE);
     NUMERIC_FILTERS.put(BigDecimal.class, DECIMAL_VALUE);
 
     // Special case for BigDecimal as we need can't rely on automatic coercion at all 
     NUMERIC_RANK.put(BigDecimal.class, -1);
     
     NUMERIC_RANK.put(Byte.class,       1);
-    NUMERIC_RANK.put(Integer.class,    2);
-    NUMERIC_RANK.put(Long.class,       3);
-    NUMERIC_RANK.put(Double.class,     4);
+    NUMERIC_RANK.put(Short.class,      2);
+    NUMERIC_RANK.put(Integer.class,    3);
+    NUMERIC_RANK.put(Long.class,       4);
+    NUMERIC_RANK.put(Double.class,     5);
   }
   
   // NOTE: adapted is the MethodHandle for the actual method with potentially some default values inserted
@@ -571,7 +578,8 @@ public class InvokeDynamicBootstrap {
           if (prank == null || arank == null) {
             throw new WrongMethodTypeException();
           }
-          if (prank > 0 && arank > 0 && prank > arank) {
+          // If automatic promotion will work
+          if (prank > 0 && arank > 0 && prank >= arank) {
             continue;
           }
           MethodHandle filter = NUMERIC_FILTERS.get(paramType);
