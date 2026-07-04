@@ -1284,6 +1284,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap().sum()", 6);
     test("var list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap().sum()", 6);
     test("5.map{ {it+1}(it) }.sum()", 15);
+    testError("5.map(null)", "null value for function");
   }
 
   @Test

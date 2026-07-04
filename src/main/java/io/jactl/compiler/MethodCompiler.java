@@ -2469,7 +2469,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       MethodType methodType = getTypeForMethodCall(Object.class, expr.args);
       int argCount          = expr.args.size() + 1;  // size + target
       Handle bsmHandle      = new Handle(H_INVOKESTATIC, Type.getInternalName(InvokeDynamicBootstrap.class), "bootstrapMethodOrField",
-                                         "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;I)Ljava/lang/invoke/CallSite;",
+                                         "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;II)Ljava/lang/invoke/CallSite;",
                                          false);
       
       Runnable emitInvokeDynamic = () -> invokeMaybeAsync(asyncEnabled(), ANY, 1, expr.location,
@@ -2478,7 +2478,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                                           },
                                                           () -> {
                                                             expect(argCount);
-                                                            mv.visitInvokeDynamicInsn(expr.methodName, methodType.toMethodDescriptorString(), bsmHandle, ((Token)expr.methodNameLocation).getSource(), ((Token)expr.methodNameLocation).getOffset());
+                                                            mv.visitInvokeDynamicInsn(expr.methodName, methodType.toMethodDescriptorString(), bsmHandle, ((Token)expr.methodNameLocation).getSource(), ((Token)expr.methodNameLocation).getOffset(), !insideTryCatchNullError() ? 1 : 0);
                                                             popType(argCount);
                                                             pushType(ANY);
                                                           });

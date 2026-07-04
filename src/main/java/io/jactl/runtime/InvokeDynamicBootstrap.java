@@ -24,6 +24,7 @@ import java.lang.invoke.*;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Bootstrap for InvokeDynamic sites
@@ -32,6 +33,7 @@ public class InvokeDynamicBootstrap {
 
   private static final MethodHandle ADAPTER;                  // Adapter for invoking MethodHandle
   private static final MethodHandle GET_CLASS_OR_NULL;
+  private static final MethodHandle GET_CLASS;
   private static final MethodHandle GET_BOUND_AT_LEVEL;       // Extracts bound object at a given nesting depth
   private static final MethodHandle INVOKE_WRAPPER_HANDLE;    // Invokes wrapper method handle as fallback
 
@@ -74,13 +76,14 @@ public class InvokeDynamicBootstrap {
     try {
       ADAPTER                 = lookup.findStatic(InvokeDynamicBootstrap.class, "adapter", MethodType.methodType(Object.class, MaxDepthCallSite.class, String.class, int.class, Object[].class));
       GET_CLASS_OR_NULL       = lookup.findStatic(InvokeDynamicBootstrap.class, "getClassOrNull", MethodType.methodType(Class.class, Object.class));
+      GET_CLASS               = lookup.findVirtual(Object.class, "getClass", MethodType.methodType(Class.class));
       GET_BOUND_AT_LEVEL      = lookup.findStatic(InvokeDynamicBootstrap.class, "getBoundAtLevel", MethodType.methodType(Object.class, int.class, JactlMethodHandle.class));
       INVOKE_WRAPPER_HANDLE   = lookup.findStatic(InvokeDynamicBootstrap.class, "invokeWrapper", MethodType.methodType(Object.class, JactlMethodHandle.class, Continuation.class, String.class, int.class, Object[].class));
        
-      METHOD_OR_FIELD_ADAPTER = lookup.findStatic(InvokeDynamicBootstrap.class, "methodOrFieldAdapter", MethodType.methodType(Object.class, MaxDepthCallSite.class, MethodHandles.Lookup.class, String.class, String.class, int.class, Object[].class));
+      METHOD_OR_FIELD_ADAPTER = lookup.findStatic(InvokeDynamicBootstrap.class, "methodOrFieldAdapter", MethodType.methodType(Object.class, MaxDepthCallSite.class, MethodHandles.Lookup.class, String.class, String.class, int.class, boolean.class, Object[].class));
       BINARY_OP_ADAPTER       = lookup.findStatic(InvokeDynamicBootstrap.class, "binaryOpAdapter", MethodType.methodType(Object.class, MaxDepthCallSite.class, MethodHandles.Lookup.class, String.class, MethodHandle.class, String.class, String.class, int.class, int.class, String.class, int.class, Object.class, Object.class));
       IS_SAME_CLASS           = lookup.findStatic(InvokeDynamicBootstrap.class, "isSameClass", MethodType.methodType(boolean.class, Class.class, Class.class));
-      METHOD_OR_FIELD_INVOKER = lookup.findStatic(InvokeDynamicBootstrap.class, "invokeMethodOrField", MethodType.methodType(Object.class, String.class, Object.class, Continuation.class, String.class, int.class, Object[].class));
+      METHOD_OR_FIELD_INVOKER = lookup.findStatic(InvokeDynamicBootstrap.class, "invokeMethodOrField", MethodType.methodType(Object.class, String.class, Object.class, Continuation.class, String.class, int.class, boolean.class, Object[].class));
       SAME_JMH                = lookup.findStatic(InvokeDynamicBootstrap.class, "sameJmh", MethodType.methodType(boolean.class, JactlMethodHandle.class, JactlMethodHandle.class));
       SAME_JMH_OBJECT1        = lookup.findStatic(InvokeDynamicBootstrap.class, "sameJmhObject1", MethodType.methodType(boolean.class, JactlMethodHandle.class, JactlMethodHandle.class, Object.class));
       SAME_JMH_OBJECT2        = lookup.findStatic(InvokeDynamicBootstrap.class, "sameJmhObject2", MethodType.methodType(boolean.class, JactlMethodHandle.class, JactlMethodHandle.class, Object.class, Object.class));
@@ -138,16 +141,17 @@ public class InvokeDynamicBootstrap {
   /**
    * Used for calls to x.y() where y may be a method or a field of the object/map
    * On stack: Object obj, String src, int offset, arg1, arg2, ...
-   * @param lookup         the lookup object
-   * @param methodOrField  the name of the field/method
-   * @param siteType       the call site argument types
-   * @param source         the source
-   * @param offset         offset into source for method call
+   * @param lookup             the lookup object
+   * @param methodOrField      the name of the field/method
+   * @param siteType           the call site argument types
+   * @param source             the source
+   * @param offset             offset into source for method call
+   * @param captureStackTraces 1 if stack traces should be captured for null errors, 0 otherwise
    * @return the call site
    */
-  public static CallSite bootstrapMethodOrField(MethodHandles.Lookup lookup, String methodOrField, MethodType siteType, String source, int offset) {
+  public static CallSite bootstrapMethodOrField(MethodHandles.Lookup lookup, String methodOrField, MethodType siteType, String source, int offset, int captureStackTraces) {
     MaxDepthCallSite cs = new MaxDepthCallSite(siteType);
-    cs.setTarget(makeMethodOrFieldAdapter(siteType, cs, methodOrField, lookup, source, offset));
+    cs.setTarget(makeMethodOrFieldAdapter(siteType, cs, methodOrField, lookup, source, offset, captureStackTraces == 1));
     return cs;
   }
   
@@ -170,16 +174,16 @@ public class InvokeDynamicBootstrap {
                         .asType(siteType);
   }
 
-  private static MethodHandle makeMethodOrFieldAdapter(MethodType siteType, MaxDepthCallSite cs, String methodOrFieldName, MethodHandles.Lookup lookup, String source, int offset) {
-    return MethodHandles.insertArguments(METHOD_OR_FIELD_ADAPTER, 0, cs, lookup, methodOrFieldName, source, offset)
+  private static MethodHandle makeMethodOrFieldAdapter(MethodType siteType, MaxDepthCallSite cs, String methodOrFieldName, MethodHandles.Lookup lookup, String source, int offset, boolean captureStackTraces) {
+    return MethodHandles.insertArguments(METHOD_OR_FIELD_ADAPTER, 0, cs, lookup, methodOrFieldName, source, offset, captureStackTraces)
                         .asCollector(Object[].class, siteType.parameterCount())
                         .asType(siteType);
   }
   
-  private static MethodHandle makeMethodOrFieldInvoker(MethodType siteType, String methodOrField, String source, int offset) {
+  private static MethodHandle makeMethodOrFieldInvoker(MethodType siteType, String methodOrField, String source, int offset, boolean captureStackTraces) {
     int extraArgCount = siteType.parameterCount() - 1;  // number of args after Object
     MethodHandle mh = MethodHandles.insertArguments(METHOD_OR_FIELD_INVOKER, 0, methodOrField);
-    return MethodHandles.insertArguments(mh, 1,  (Continuation)null, source, offset)
+    return MethodHandles.insertArguments(mh, 1,  (Continuation)null, source, offset, captureStackTraces)
                         .asCollector(Object[].class, extraArgCount)
                         .asType(siteType);
   }
@@ -197,15 +201,14 @@ public class InvokeDynamicBootstrap {
   public static Object adapter(MaxDepthCallSite cs, String source, int offset, Object[] args) throws Throwable {
     JactlMethodHandle jmh = (JactlMethodHandle) args[0];
     if (jmh == null) {
-      throw new RuntimeError("Cannot invoke null closure", source, offset);
+      throw new NullError("Null value for Function", source, offset);
     }
     MethodType siteType = cs.type();
     
     Object[] actualArgs = Arrays.copyOfRange(args, 1, args.length);
 
     // Guard against chain depth that becomes unwieldy
-    cs.depth++;
-    if (cs.depth > MaxDepthCallSite.MAX_DEPTH) {
+    if (cs.depth.incrementAndGet() > MaxDepthCallSite.MAX_DEPTH) {
       cs.setTarget(makeWrapperInvoker(siteType, source, offset));
       MutableCallSite.syncAll(new MutableCallSite[]{cs});
       return jmh.invoke((Continuation)null, source, offset, actualArgs);
@@ -313,24 +316,22 @@ public class InvokeDynamicBootstrap {
   }
 
   // args: args[0] = obj, args[1..] = typed call args.
-  public static Object methodOrFieldAdapter(MaxDepthCallSite cs, MethodHandles.Lookup lookup, String methodOrField, String source, int offset, Object[] args) throws Throwable {
+  public static Object methodOrFieldAdapter(MaxDepthCallSite cs, MethodHandles.Lookup lookup, String methodOrField, String source, int offset, boolean captureStackTraces, Object[] args) throws Throwable {
     Object     parent   = args[0];
     MethodType siteType = cs.type();
 
     Object[] actualArgs = Arrays.copyOfRange(args, 1, args.length);
 
     // Guard against chain depth that becomes unwieldy
-    cs.depth++;
-    if (cs.depth > MaxDepthCallSite.MAX_DEPTH) {
-      cs.setTarget(makeMethodOrFieldInvoker(siteType, methodOrField, source, offset));
+    if (cs.depth.incrementAndGet() > MaxDepthCallSite.MAX_DEPTH) {
+      cs.setTarget(makeMethodOrFieldInvoker(siteType, methodOrField, source, offset, captureStackTraces));
       MutableCallSite.syncAll(new MutableCallSite[]{cs});
-      return invokeMethodOrField(methodOrField, parent, null, source, offset, actualArgs);
+      return invokeMethodOrField(methodOrField, parent, null, source, offset, captureStackTraces, actualArgs);
     }
 
     JactlContext jactlContext = RuntimeState.getState().getContext();
 
-    MethodHandle getClassMH  = lookup.findVirtual(Object.class, "getClass", GET_CLASS_TYPE);
-    MethodHandle isSameClass = MethodHandles.filterArguments(IS_SAME_CLASS.bindTo(parent.getClass()), 0, getClassMH);
+    MethodHandle isSameClass = MethodHandles.filterArguments(IS_SAME_CLASS.bindTo(parent.getClass()), 0, GET_CLASS);
     isSameClass = MethodHandles.dropArguments(isSameClass, 1, siteType.parameterList().subList(1, siteType.parameterCount()));
 
     // If we have a JactlObject then we can look up method/field
@@ -372,17 +373,17 @@ public class InvokeDynamicBootstrap {
           catch (WrongMethodTypeException e) {
             // Argument types not directly compatible so fall back to invoking wrapper to let it do any
             // coercion required and fill in missing arguments etc (or throw an error if needed).
-            cs.setTarget(MethodHandles.guardWithTest(guard, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset), fallback));
+            cs.setTarget(MethodHandles.guardWithTest(guard, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset, captureStackTraces), fallback));
           }
         }
         else {
           // We have a field so we install something that checks parent class and invokes slow path through
           // invokeMethodOrField() which loads field to get JactlMethodHandle and invokes it.
-          cs.setTarget(MethodHandles.guardWithTest(isSameClass, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset), fallback));
+          cs.setTarget(MethodHandles.guardWithTest(isSameClass, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset, captureStackTraces), fallback));
         }
         MutableCallSite.syncAll(new MutableCallSite[]{cs});
 
-        return invokeMethodOrField(methodOrField, parent, null, source, offset, actualArgs);
+        return invokeMethodOrField(methodOrField, parent, null, source, offset, captureStackTraces, actualArgs);
       }
     }
 
@@ -393,7 +394,7 @@ public class InvokeDynamicBootstrap {
     if (func == null) {
       // If we have a map then we might have a field
       if (parent instanceof Map) {
-        cs.setTarget(MethodHandles.guardWithTest(isSameClass, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset), fallback));
+        cs.setTarget(MethodHandles.guardWithTest(isSameClass, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset, captureStackTraces), fallback));
       }
       else {
         // Check for host class
@@ -402,13 +403,8 @@ public class InvokeDynamicBootstrap {
           jmh = jactlContext.lookupWrapperForHostClass(parent, methodOrField, actualArgs, source, offset);
         }
         if (jmh == null) {
-          // No method for this class so install something that throws the appropriate RuntimeError.
-          // If a different class comes through the guard will fail and we will try again.
-          RuntimeError error = new RuntimeError("No such method '" + methodOrField + "' for class " + parent.getClass().getName(), source, offset);
-          MethodHandle throwErr        = MethodHandles.throwException(Object.class, RuntimeError.class);
-          MethodHandle throwErrWithArg = MethodHandles.insertArguments(throwErr, 0, error);
-          MethodHandle thrower         = MethodHandles.dropArguments(throwErrWithArg, 0, siteType.parameterList());
-          cs.setTarget(MethodHandles.guardWithTest(isSameClass, thrower, fallback));
+          // No method for this class so fallback to default mechanism that will throw appropriate error
+          cs.setTarget(MethodHandles.guardWithTest(isSameClass, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset, captureStackTraces), fallback));
         }
         else {
           int          pos     = jmh.isBoundHandle() ? 1 : 0;
@@ -427,14 +423,14 @@ public class InvokeDynamicBootstrap {
           }
           catch (WrongMethodTypeException e) {
             // Argument types not directly compatible so fall back to slow path to let it do any coercion required
-            cs.setTarget(MethodHandles.guardWithTest(guard, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset), fallback));
+            cs.setTarget(MethodHandles.guardWithTest(guard, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset, captureStackTraces), fallback));
           }
         }
       }
       MutableCallSite.syncAll(new MutableCallSite[]{cs});
 
       // First time we still invoke the wrapper after installing call site
-      return invokeMethodOrField(methodOrField, parent, null, source, offset, actualArgs);
+      return invokeMethodOrField(methodOrField, parent, null, source, offset, captureStackTraces, actualArgs);
     }
 
     MethodHandle adapted;
@@ -471,7 +467,7 @@ public class InvokeDynamicBootstrap {
     // We need to insert default values for missing arguments (if they are simple values)
     if (argCount < func.paramCount) {
       for (int i = argCount; i < func.defaultVals.length; i++) {
-        if (func.defaultVals[i] == FunctionDescriptor.NON_TRIVIAL) {
+        if (func.defaultVals[i] == FunctionDescriptor.NON_TRIVIAL || func.defaultVals[i] == JactlFunction.MANDATORY) {
           directInvoke = false;
           break;
         }
@@ -494,28 +490,27 @@ public class InvokeDynamicBootstrap {
       directInvoke = false;
     }
     
-    adapted = MethodHandles.guardWithTest(guard, directInvoke ? adapted : makeMethodOrFieldInvoker(siteType, methodOrField, source, offset), fallback);
+    adapted = MethodHandles.guardWithTest(guard, directInvoke ? adapted : makeMethodOrFieldInvoker(siteType, methodOrField, source, offset, captureStackTraces), fallback);
     cs.setTarget(adapted);
     MutableCallSite.syncAll(new MutableCallSite[]{cs});
 
     // First time we still invoke the wrapper after installing call site
-    return invokeMethodOrField(methodOrField, parent, null, source, offset, actualArgs);
+    return invokeMethodOrField(methodOrField, parent, null, source, offset, captureStackTraces, actualArgs);
   }
 
   public static Object binaryOpAdapter(MaxDepthCallSite cs, MethodHandles.Lookup lookup, String operatorName,
                                        MethodHandle methodHandle, String operator, String originalOp, int minScale,
                                        int captureStackTrace, String source, int offset, Object left, Object right) throws Throwable {
-    int idx = 0;
-    MethodType   siteType     = cs.type();
+    MethodType siteType = cs.type();
 
     if (left == null) {
       return methodHandle.invoke(left, right, operator, originalOp, minScale, captureStackTrace == 1, source, offset);
     }
     
     // Guard against chain depth that becomes unwieldy
-    cs.depth++;
-    if (cs.depth > MaxDepthCallSite.MAX_DEPTH) {
-      cs.setTarget(MethodHandles.insertArguments(methodHandle, 2, operator, originalOp, minScale, captureStackTrace == 1, source, offset));
+    if (cs.depth.incrementAndGet() > MaxDepthCallSite.MAX_DEPTH) {
+      cs.setTarget(MethodHandles.insertArguments(methodHandle, 2, operator, originalOp, minScale, captureStackTrace == 1, source, offset)
+                                .asType(siteType));
       MutableCallSite.syncAll(new MutableCallSite[]{cs});
       return methodHandle.invoke(left, right, operator, originalOp, minScale, captureStackTrace == 1, source, offset);
     }
@@ -561,7 +556,7 @@ public class InvokeDynamicBootstrap {
   private static MethodHandle coerceArgumentsOrFail(MethodType siteType, MethodHandle adapted, Object[] args, int argStart) {
     MethodType adaptedType = adapted.type();
     if (args.length > adaptedType.parameterCount()) {
-      throw new WrongMethodTypeException();
+      throw WRONG_METHOD_TYPE_EXCEPTION;
     }
     for (int i = argStart; i < args.length; i++) {
       Object   arg       = args[i];
@@ -570,13 +565,13 @@ public class InvokeDynamicBootstrap {
       if (argType == paramType || paramType.isAssignableFrom(argType)) {
         continue;
       }
-      if (Number.class.isAssignableFrom(paramType)) {
+      if (arg != null && Number.class.isAssignableFrom(paramType)) {
         if (Number.class.isAssignableFrom(argType)) {
           // If widening then no need to do anything since asType() takes care of this
           Integer prank = NUMERIC_RANK.get(paramType);
           Integer arank = NUMERIC_RANK.get(argType);
           if (prank == null || arank == null) {
-            throw new WrongMethodTypeException();
+            throw WRONG_METHOD_TYPE_EXCEPTION;
           }
           // If automatic promotion will work
           if (prank > 0 && arank > 0 && prank >= arank) {
@@ -585,26 +580,28 @@ public class InvokeDynamicBootstrap {
           MethodHandle filter = NUMERIC_FILTERS.get(paramType);
           if (filter == null) {
             // This shouldn't happen but just in case...
-            throw new WrongMethodTypeException();
+            throw WRONG_METHOD_TYPE_EXCEPTION;
           }
           adapted = MethodHandles.filterArguments(adapted, i, filter); 
         }
         else {
           // We don't have a compatible conversion
-          throw new WrongMethodTypeException();
+          throw WRONG_METHOD_TYPE_EXCEPTION;
         }
       }
       else if (paramType == Boolean.class) {
         adapted = MethodHandles.filterArguments(adapted, i, IS_TRUTH);
       }
-      else {
+      else if (arg != null || paramType == JactlMethodHandle.class) {
         // Arg type is not compatible or we don't have a coercion we can do
         // here so use wrapper function
-        throw new WrongMethodTypeException();
+        throw WRONG_METHOD_TYPE_EXCEPTION;
       }
     }
     return adapted;
   }
+  
+  private static final WrongMethodTypeException WRONG_METHOD_TYPE_EXCEPTION = new WrongMethodTypeException();
   
   public static Class<?> getClassOrNull(Object obj) {
     return obj == null ? null : obj.getClass();
@@ -626,8 +623,8 @@ public class InvokeDynamicBootstrap {
   }
 
   // Used as fall back when we can't invoke method/field directly
-  public static Object invokeMethodOrField(String methodOrField, Object parent, Continuation c, String source, int offset, Object[] args) {
-    return RuntimeUtils.invokeMethodOrField(parent, methodOrField, false, false, args, true, source, offset); 
+  public static Object invokeMethodOrField(String methodOrField, Object parent, Continuation c, String source, int offset, boolean captureStackTraces, Object[] args) {
+    return RuntimeUtils.invokeMethodOrField(parent, methodOrField, false, false, args, captureStackTraces, source, offset); 
   }
   
   public static boolean isSameClass(Class<?> clss1, Class<?> clss2) {
@@ -635,7 +632,7 @@ public class InvokeDynamicBootstrap {
   }
 
   public static class MaxDepthCallSite extends MutableCallSite {
-    int depth = 0;
+    AtomicInteger depth = new AtomicInteger(0);
     static final int MAX_DEPTH = Integer.getInteger("jactl.invokeDynamic.maxDepth", 8);
 
     MaxDepthCallSite(MethodType type) { super(type); }
@@ -662,15 +659,9 @@ public class InvokeDynamicBootstrap {
     // will always be passed in irrespective of their type.
     // NOTE: we start from argument position 1 to skip the always present JMH
     final int startPos = 1;
-    boolean allObjectParams = true;
-    for (int idx = startPos; idx < type.parameterCount(); idx++) {
-      if (type.parameterType(idx) != Object.class) {
-        allObjectParams = false;
-        break;
-      }
-    }
-    
-    Class[] argTypes = Arrays.stream(Arrays.copyOfRange(args, startPos, args.length)).map(a -> a == null ? null : a.getClass()).toArray(Class[]::new);
+    boolean allObjectParams = isAllObjectParams(type, startPos);
+
+    Class[] argTypes = getArgTypes(type, args);
 
     if (allObjectParams) {
       switch (args.length - startPos) {
@@ -699,15 +690,9 @@ public class InvokeDynamicBootstrap {
     // will always be passed in irrespective of their type.
     // NOTE: we start from argument position 1 to skip the always present Object target
     int startPos = 1;
-    boolean allObjectParams = true;
-    for (int idx = startPos; idx < type.parameterCount(); idx++) {
-      if (type.parameterType(idx) != Object.class) {
-        allObjectParams = false;
-        break;
-      }
-    }
-    
-    Class[] argTypes = Arrays.stream(Arrays.copyOfRange(args, 1, args.length)).map(a -> a == null ? null : a.getClass()).toArray(Class[]::new);
+    boolean allObjectParams = isAllObjectParams(type, startPos);
+
+    Class[] argTypes = getArgTypes(type, args);
 
     if (allObjectParams) {
       switch (argTypes.length) {
@@ -728,7 +713,39 @@ public class InvokeDynamicBootstrap {
       }
     }
   }
-  
+
+  private static Class[] getArgTypes(MethodType type, Object[] args) {
+    // Record the argument types so we can check if they change. If the parameter type is Object.class
+    // then we don't care if the argument type changes since we don't have to worry about implicit
+    // coercion problems. We record UNTYPED.class as the class type for these types of arguments.
+    Class[] argTypes = new Class[args.length - 1];
+    for (int i = 1; i < args.length; i++) {
+      Object arg = args[i];
+      Class<?> paramClass;
+      if (i >= type.parameterCount()) {
+        paramClass = type.parameterType(type.parameterCount() - 1) == Object[].class ? Object.class : null;
+      }
+      else {
+        paramClass = type.parameterType(i);
+      }
+      argTypes[i - 1] = paramClass == Object.class ? UNTYPED.class 
+                                                   : arg == null ? null : arg.getClass();
+    }
+    return argTypes;
+  }
+
+  private static boolean isAllObjectParams(MethodType type, int startPos) {
+    for (int idx = startPos; idx < type.parameterCount(); idx++) {
+      // Check for parameter type that is not Object.class and also check that we don't have a varargs Object[]
+      // which also counts as "all parameter are Object.class"
+      Class<?> paramType = type.parameterType(idx);
+      if (paramType != Object.class && !(idx == type.parameterCount() - 1 && paramType == Object[].class)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private static boolean sameJmh(JactlMethodHandle expected, JactlMethodHandle jmh) {
     return expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction(); 
   }
@@ -751,20 +768,20 @@ public class InvokeDynamicBootstrap {
 
   private static boolean sameJmhArg1(JactlMethodHandle expected, Class<?> c1, JactlMethodHandle jmh, Object arg1) {
     return ((expected == jmh) || (expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction())) &&
-           (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1));
+           (c1 == UNTYPED.class || (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1)));
   }
   
   private static boolean sameJmhArg2(JactlMethodHandle expected, Class<?> c1, Class<?> c2, JactlMethodHandle jmh, Object arg1, Object arg2) {
     return (expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction()) &&
-           (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1)) &&
-           (c2 == null ? arg2 == null : (arg2 != null && arg2.getClass() == c2));
+           (c1 == UNTYPED.class || (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1))) &&
+           (c2 == UNTYPED.class || (c2 == null ? arg2 == null : (arg2 != null && arg2.getClass() == c2)));
   }
 
   private static boolean sameJmhArg3(JactlMethodHandle expected, Class<?> c1, Class<?> c2, Class<?> c3, JactlMethodHandle jmh, Object arg1, Object arg2, Object arg3) {
     return (expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction()) &&
-           (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1)) &&
-           (c2 == null ? arg2 == null : (arg2 != null && arg2.getClass() == c2)) &&
-           (c3 == null ? arg3 == null : (arg3 != null && arg3.getClass() == c3));
+           (c1 == UNTYPED.class || (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1))) &&
+           (c2 == UNTYPED.class || (c2 == null ? arg2 == null : (arg2 != null && arg2.getClass() == c2))) &&
+           (c3 == UNTYPED.class || (c3 == null ? arg3 == null : (arg3 != null && arg3.getClass() == c3)));
   }
 
   private static boolean sameJmhArgN(JactlMethodHandle expected, Class<?>[] classes, JactlMethodHandle jmh, Object[] args) {
@@ -773,7 +790,10 @@ public class InvokeDynamicBootstrap {
         return false;
       }
       for (int i = 0; i < args.length; i++) {
-        if (classes[i] == null ? args[i] == null : (args[i] != null && args[i].getClass() == classes[i])) {
+        Class<?> clss = classes[i];
+        Object   arg  = args[i];
+        if (clss == UNTYPED.class ||
+            (clss == null ? arg == null : (arg != null && arg.getClass() == clss))) {
           continue;
         }
         return false;
@@ -795,7 +815,7 @@ public class InvokeDynamicBootstrap {
     return expected == target.getClass();
   }
   
-  private static boolean sameClassObject3(Class<?> expected, Object target, Object arg1,  Object arg2, Object arg3) {
+  private static boolean sameClassObject3(Class<?> expected, Object target, Object arg1, Object arg2, Object arg3) {
     return expected == target.getClass();
   }
   
@@ -805,20 +825,20 @@ public class InvokeDynamicBootstrap {
 
   private static boolean sameClassArg1(Class<?> expected, Class<?> c1, Object target, Object arg1) {
     return expected == target.getClass() &&
-           (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1));
+           (c1 == UNTYPED.class || (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1)));
   }
   
   private static boolean sameClassArg2(Class<?> expected, Class<?> c1, Class<?> c2, Object target, Object arg1, Object arg2) {
     return expected == target.getClass() &&
-           (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1)) &&
-           (c2 == null ? arg2 == null : (arg2 != null && arg2.getClass() == c2));
+           (c1 == UNTYPED.class || (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1))) &&
+           (c2 == UNTYPED.class || (c2 == null ? arg2 == null : (arg2 != null && arg2.getClass() == c2)));
   }
 
   private static boolean sameClassArg3(Class<?> expected, Class<?> c1, Class<?> c2, Class<?> c3, Object target, Object arg1, Object arg2, Object arg3) {
     return expected == target.getClass() &&
-           (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1)) &&
-           (c2 == null ? arg2 == null : (arg2 != null && arg2.getClass() == c2)) &&
-           (c3 == null ? arg3 == null : (arg3 != null && arg3.getClass() == c3));
+           (c1 == UNTYPED.class || (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1))) &&
+           (c2 == UNTYPED.class || (c2 == null ? arg2 == null : (arg2 != null && arg2.getClass() == c2))) &&
+           (c3 == UNTYPED.class || (c3 == null ? arg3 == null : (arg3 != null && arg3.getClass() == c3)));
   }
 
   private static boolean sameClassArgN(Class<?> expected, Class<?>[] classes, Object target, Object[] args) {
@@ -827,7 +847,10 @@ public class InvokeDynamicBootstrap {
         return false;
       }
       for (int i = 0; i < args.length; i++) {
-        if (classes[i] == null ? args[i] == null : (args[i] != null && args[i].getClass() == classes[i])) {
+        Class<?> clss = classes[i];
+        Object   arg  = args[i];
+        if (clss == UNTYPED.class ||
+            (clss == null ? arg == null : (arg != null && arg.getClass() == clss))) {
           continue;
         }
         return false;
@@ -837,4 +860,5 @@ public class InvokeDynamicBootstrap {
     return false;
   }
 
+  private static class UNTYPED {}
 }

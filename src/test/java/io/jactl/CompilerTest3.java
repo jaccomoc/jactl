@@ -18,6 +18,8 @@
 package io.jactl;
 
 import io.jactl.compiler.Compiler;
+import io.jactl.runtime.NullError;
+import io.jactl.runtime.RuntimeError;
 import io.jactl.runtime.TimeoutError;
 import org.junit.jupiter.api.Test;
 
@@ -711,5 +713,36 @@ public class CompilerTest3 extends BaseTest {
     test("class X { def f(byte x) { x } }; def x = new X(); x.f((byte)200) == 200", true);
     test("class X { static def f(byte x) { x } }; def x = new X(); x.f((byte)200) == 200", true);
     test("class X { static def f(byte x) { x } }; def g = X.f; g((byte)200) == 200", true);
+    JactlScript script = Jactl.compileScript("def list = [1,2,3]; list.add()", new HashMap<>());
+    try {
+      System.out.println("Result:" + script.eval(new HashMap<>()));
+      fail("Expected error");
+    }
+    catch (RuntimeError e) {}
+    try {
+      System.out.println("Result:" + script.eval(new HashMap<>()));
+      fail("Expected error");
+    }
+    catch (RuntimeError e) {}
+    testError("def list = [1,2,3]; list.remove()", "missing mandatory argument");
+    testError("def f = {x, int y -> y }; def g = f; def r = []; [2,3,[]].each{ r.add(g(1,it)) }; r", "cannot be cast to int");
+    testError("def f = {x, int y -> y }; def g = f; def r = []; [2,3,null].each{ r.add(g(1,it)) }; r", "cannot convert null value to int");
+    testError("def f = { x -> x }; def g = f; g(1,2,3)", "too many arguments");
+    testError("def f(g) { g(1) }; def ff = f; [{it+it}, null].each{ ff(it) }", "null value for function");
+    test("def f(Decimal dd) { dd }; Decimal d = null; def g = f; 2.filter{ g(d) == d }.size() == 2", true);
+    testError("def f = { double dd -> dd }; Decimal d = null; def g = f; 2.filter{ g(d) == d }.size() == 2", "cannot convert null value to double");
+    script = Jactl.compileScript("def f = { double dd -> dd }; Decimal d = null; def g = f; 2.filter{ g(d) == d }.size() == 2", new HashMap<>());
+    for (int i = 0; i < 3; i++) {
+      try {
+        System.out.println("Result:" + script.eval(new HashMap<>()));
+        fail("Expected error");
+      }
+      catch (NullError e) {
+        assertTrue(e.getMessage().contains("Cannot convert null value to double"));
+      }
+      catch (RuntimeException e) {
+        fail("Got unexpected error: "+ e);
+      }
+    }
   }
 }

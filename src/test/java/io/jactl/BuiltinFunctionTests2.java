@@ -107,7 +107,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
     testError("[a:1,b:2,c:3].flatMap(closurex:{ x,y -> x + y })", "no such parameter");
     testError("def f = [a:1,b:2,c:3]; f.flatMap(closurex:{ x,y -> x + y })", "no such parameter");
     test("[3,3,3,3,3].flatMap{ [it,it] }", Utils.listOf(3,3,3,3,3,3,3,3,3,3));
-    testError("[3,3,3,3,3].map(null).flatMap{ [it,it] }", "cannot invoke null closure");
+    testError("[3,3,3,3,3].map(null).flatMap{ [it,it] }", "null value for function");
   }
 
   @Test public void mapEntryAsList() {
