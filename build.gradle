@@ -177,6 +177,7 @@ tasks.register('jmh', Jar) {
     archiveClassifier = 'jmh'
     from sourceSets.jmh.output
     from sourceSets.main.output
+    from sourceSets.test.output
     from configurations.jmhRuntimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     manifest { attributes 'Main-Class': 'org.openjdk.jmh.Main' }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE

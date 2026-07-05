@@ -27,8 +27,6 @@ import io.jactl.compiler.Compiler;
 import org.apache.commons.jexl3.*;
 import org.codehaus.groovy.runtime.InvokerHelper;
 import org.mvel2.MVEL;
-import org.mvel2.integration.VariableResolverFactory;
-import org.mvel2.integration.impl.MapVariableResolverFactory;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
@@ -76,7 +74,7 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Thread)
 @Warmup(iterations = 4, time = 2)
 @Measurement(iterations = 3, time = 2)
-@Fork(value = 1)
+@Fork(value = 1, jvmArgs="-Xms1g")
 //@Fork(value = 0)
 public class ScriptingLanguageBenchmarks {
 
@@ -498,9 +496,8 @@ public class ScriptingLanguageBenchmarks {
     //jactlArithmeticScript = Compiler.compileScript("(a + b) * c - d / 2 + e % 3", jactlContext, untypedBindings);
     
     // Pre-compile all Jactl scripts
-    jactlArithmeticScript = Compiler.compileScript("(a + b) * c - d / 2 + e % 3", jactlContext, jactlArithBindings);
+    jactlArithmeticScript = Compiler.compileScript("(a + b) * c - d / 2 + e %% 3", jactlContext, jactlArithBindings);
     jactlComplexArithScript = Compiler.compileScript("a * (a + b) - b * (b - c) + d * (d - e) + c * (a + e)", jactlContext, jactlArithBindings);
-    jactlContext.debugLevel = 0;
 
     jactlScriptWithVars = Compiler.compileScript(
         "var result = x * x + y * y; result + z",

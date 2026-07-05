@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Thread)
 @Warmup(iterations = 3, time = 2)
 @Measurement(iterations = 5, time = 2)
-@Fork(value = 1, jvmArgs = "-ea")
+@Fork(value = 1)
 public class GenerateClassesBenchmark extends BaseExecutionBenchmark {
 
   public GenerateClassesBenchmark() {
