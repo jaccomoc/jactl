@@ -330,6 +330,13 @@ public class ClassCompiler {
 
   void compileMethod(Expr.FunDecl method) {
     String methodName =  method.functionDescriptor.implementingMethod;
+    
+    // For script classes we haven't yet added the function descriptor to the class descriptor so
+    // do it here so that InvokeDynamicBootstrap can find it when looking for whether default values
+    // are needed for missing parameters
+    if (classDescriptor.isScriptClass() || method.isClosure()) {
+      classDescriptor.addMethod(methodName, method.functionDescriptor);
+    }
 
     // We compile the method and create a static method handle field that points to the method
     // so that we can pass the method by value (by passing the method handle).

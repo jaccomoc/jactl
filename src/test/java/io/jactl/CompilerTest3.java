@@ -689,6 +689,19 @@ public class CompilerTest3 extends BaseTest {
     test("class X { def f(a) { a }; }; def x = new X(); [1, 1L, 1, 1, 1, 1L, 1L, 1L, 1D].map{ a -> x.f(a) }.sum()", 9D);
     test("class X { def f(boolean a) { a ? 1D : 0 }; }; def x = new X(); [1, 1L, 1, 1, 1, 1L, 1L, 1L, 1D].map{ a -> x.f(a) }.sum()", 9D);
 
+    test("class X { def f = { int a, long b, double c, int d, long e = 3 -> a+b+c+d+e }; }; def x = new X(); [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> x.f(a,b,c,d) }.sum()", 90D + 27);
+    test("class X { def f = { a, b, c, d, e = 3 -> a+b+c+d+e }; }; def x = new X(); [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> x.f(a,b,c,d) }.sum()", 90D + 27);
+    test("class X { def f(int a, long b, double c, int d, long e = 3 ) { a+b+c+d+e }; }; def x = new X(); [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> x.f(a,b,c,d) }.sum()", 90D + 27);
+    test("class X { def f(a, b, c, d, e = 3) { a+b+c+d+e }; }; def x = new X(); [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> x.f(a,b,c,d) }.sum()", 90D + 27);
+    test("class X { def f(int a, long b, double c, int d, long e = 3 ) { a+b+c+d+e }; }; def x = new X(); [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> x.f(a,b,c,d) }.sum()", 90D + 27);
+    test("class X { def f(a, b, c, d, e = 3) { a+b+c+d+e }; }; def x = new X(); [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> x.f(a,b,c,d) }.sum()", 90D + 27);
+    test("class X { def f = { int a, long b, double c, int d, long e = 2 + a -> a+b+c+d+e }; }; def x = new X(); [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> x.f(a,b,c,d) }.sum()", 90D + 27);
+    test("class X { def f = { a, b, c, d, e = 2 + a -> a+b+c+d+e }; }; def x = new X(); [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> x.f(a,b,c,d) }.sum()", 90D + 27);
+    test("class X { def f(int a, long b, double c, int d, long e = 2 + a ) { a+b+c+d+e }; }; def x = new X(); [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> x.f(a,b,c,d) }.sum()", 90D + 27);
+    test("class X { def f(a, b, c, d, e = 2 + a) { a+b+c+d+e }; }; def x = new X(); [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> x.f(a,b,c,d) }.sum()", 90D + 27);
+    test("class X { def f(int a, long b, double c, int d, long e = 2 + a ) { a+b+c+d+e }; }; def x = new X(); [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> x.f(a,b,c,d) }.sum()", 90D + 27);
+    test("class X { def f(a, b, c, d, e = 2 + a) { a+b+c+d+e }; }; def x = new X(); [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> x.f(a,b,c,d) }.sum()", 90D + 27);
+
     test("class X { static def f(int a, long b, double c, int d ) { a+b+c+d }; }; def g = X.f; [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> g(a,b,c,d) }.sum()", 90D);
     test("class X { static def f(a, b, c, d) { a+b+c+d }; }; def g = X.f; [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> g(a,b,c,d) }.sum()", 90D);
     test("class X { static def f(int a, long b, double c ) { a+b+c }; }; def g = X.f; [[1,2,3], [1L,2,3], [1,2L,3], [1,2,3L], [1,2,3L], [1L,2L,3], [1L,2L,3L], [1L,2L,3L], [1D,2,3]].map{ a,b,c -> g(a,b,c) }.sum()", 54D);
@@ -744,5 +757,8 @@ public class CompilerTest3 extends BaseTest {
         fail("Got unexpected error: "+ e);
       }
     }
+    test("class X { Decimal f(Decimal d = 3) { d + 1 } }; def x = new X(); x.f()", "#4");
+    test("class X { Decimal f(Decimal d = 3) { d + 1 } }; def x = new X(); def g = x.f; g()", "#4");
+    test("class X { def f = { Decimal d = 3 -> d + 1 } }; def x = new X(); def g = x.f; g()", "#4");
   }
 }

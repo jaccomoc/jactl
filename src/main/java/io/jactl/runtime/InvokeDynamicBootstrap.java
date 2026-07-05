@@ -18,6 +18,7 @@
 package io.jactl.runtime;
 
 import io.jactl.JactlContext;
+import io.jactl.Pair;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.*;
@@ -74,7 +75,7 @@ public class InvokeDynamicBootstrap {
   static {
     MethodHandles.Lookup lookup = MethodHandles.lookup();
     try {
-      ADAPTER                 = lookup.findStatic(InvokeDynamicBootstrap.class, "adapter", MethodType.methodType(Object.class, MaxDepthCallSite.class, String.class, int.class, Object[].class));
+      ADAPTER                 = lookup.findStatic(InvokeDynamicBootstrap.class, "adapter", MethodType.methodType(Object.class, MethodHandles.Lookup.class, MaxDepthCallSite.class, String.class, int.class, Object[].class));
       GET_CLASS_OR_NULL       = lookup.findStatic(InvokeDynamicBootstrap.class, "getClassOrNull", MethodType.methodType(Class.class, Object.class));
       GET_CLASS               = lookup.findVirtual(Object.class, "getClass", MethodType.methodType(Class.class));
       GET_BOUND_AT_LEVEL      = lookup.findStatic(InvokeDynamicBootstrap.class, "getBoundAtLevel", MethodType.methodType(Object.class, int.class, JactlMethodHandle.class));
@@ -128,12 +129,12 @@ public class InvokeDynamicBootstrap {
    */
   public static CallSite bootstrap(MethodHandles.Lookup lookup, String name, MethodType siteType, String source, int offset) {
     MaxDepthCallSite cs = new MaxDepthCallSite(siteType);
-    cs.setTarget(makeAdapter(siteType, cs, source, offset));
+    cs.setTarget(makeAdapter(lookup, siteType, cs, source, offset));
     return cs;
   }
 
-  private static MethodHandle makeAdapter(MethodType siteType, MutableCallSite cs, String source, int offset) {
-    return MethodHandles.insertArguments(ADAPTER, 0, cs, source, offset)
+  private static MethodHandle makeAdapter(MethodHandles.Lookup lookup, MethodType siteType, MutableCallSite cs, String source, int offset) {
+    return MethodHandles.insertArguments(ADAPTER, 0, lookup, cs, source, offset)
                         .asCollector(Object[].class, siteType.parameterCount())
                         .asType(siteType);
   }
@@ -198,7 +199,7 @@ public class InvokeDynamicBootstrap {
   }
 
   // args: args[0] = JMH, args[1..] = typed call args.
-  public static Object adapter(MaxDepthCallSite cs, String source, int offset, Object[] args) throws Throwable {
+  public static Object adapter(MethodHandles.Lookup lookup, MaxDepthCallSite cs, String source, int offset, Object[] args) throws Throwable {
     JactlMethodHandle jmh = (JactlMethodHandle) args[0];
     if (jmh == null) {
       throw new NullError("Null value for Function", source, offset);
@@ -293,6 +294,26 @@ public class InvokeDynamicBootstrap {
     // parameters that are of type Object.class since no coercion is done so argument type changing has no effect.
     MethodHandle guard = createGuard(jmh, siteType, adapted.type(), args);
 
+    // We need to fill in default values for optional parameters that haven't been supplied so look for
+    // FunctionDescriptor for the closure/function/method being invoked.
+    MethodHandleInfo info         = lookup.revealDirect(underlying); 
+    Class<?>         clss         = info.getDeclaringClass();
+    String           methodName   = info.getName();
+    JactlContext     jactlContext = RuntimeState.getState().getContext();
+    // Search for:
+    // 1. method/closure in user class/script class
+    JactlClassDescriptor desc = jactlContext.getClassDescriptor(Type.getInternalName(clss));
+    // 2. built-in function in registered class
+    if (desc == null) { desc = jactlContext.getRegisteredClasses().getClassDescriptor(clss); }
+    FunctionDescriptor func = desc == null ? null : desc.getMethod(methodName);
+    boolean directInvoke = true;
+    if (func != null) {
+      // Check for default values
+      Pair<MethodHandle,Boolean> result = fillInDefaultValues(adapted, func, args);
+      adapted      = result.first;
+      directInvoke = result.second;
+    }
+    
     try {
       // Check that args are compatible
       adapted = coerceArgumentsOrFail(siteType, adapted, args, 1);
@@ -300,13 +321,11 @@ public class InvokeDynamicBootstrap {
     }
     catch (WrongMethodTypeException e) {
       // Type coercion failed (e.g. param count mismatch). Install a stable wrapper-path guard.
-      cs.setTarget(MethodHandles.guardWithTest(guard, makeWrapperInvoker(siteType, source, offset), cs.getTarget()));
-      MutableCallSite.syncAll(new MutableCallSite[]{cs});
-      return jmh.invoke(null, source, offset, actualArgs);
+      directInvoke = false;
     }
 
-    // Install the direct-call guard.
-    cs.setTarget(MethodHandles.guardWithTest(guard, adapted, cs.getTarget()));
+    // Install the guard and direct call or call via wrapper as needed
+    cs.setTarget(MethodHandles.guardWithTest(guard, directInvoke ? adapted : makeWrapperInvoker(siteType, source, offset), cs.getTarget()));
     MutableCallSite.syncAll(new MutableCallSite[]{cs});
 
     // For the first call, use the wrapper rather than invokeWithArguments(args).
@@ -336,59 +355,34 @@ public class InvokeDynamicBootstrap {
 
     // If we have a JactlObject then we can look up method/field
     MethodHandle fallback = cs.getTarget();
+    FunctionDescriptor func = null;
+    JactlMethodHandle  jmh  = null;
     if (parent instanceof JactlObject) {
-      boolean isStatic = false;
       Object fieldOrMethod = ((JactlObject) parent)._$j$getFieldsAndMethods().get(methodOrField);
       if (fieldOrMethod == null) {
         fieldOrMethod = ((JactlObject) parent)._$j$getStaticFieldsAndMethods().get(methodOrField);
-        isStatic = true;
       }
       if (fieldOrMethod != null) {
-        JactlMethodHandle jmh;
         if (fieldOrMethod instanceof JactlMethodHandle) {
-          jmh = (JactlMethodHandle) fieldOrMethod;
-          // Now get the actual method
-          MethodHandle adapted = jmh.handleToUnderlyingFunction();
-          if (isStatic) {
-            adapted = MethodHandles.dropArguments(adapted, 0, Object.class);
-          }
-          
-          if (jmh.isAsync()) {
-            adapted = MethodHandles.insertArguments(adapted, 1, (Continuation) null);
-          }
-          if (jmh.needsLocation()) {
-            adapted = MethodHandles.insertArguments(adapted, 1, source, offset);
-          }
-
-          MethodHandle guard = createGuardForMethod(args[0].getClass(), siteType, adapted.type(), args);
-
-          // Install call site that checks that the parent class is still the same and that the argument
-          // types haven't changed and then invokes the method. If there are conversion errors then we catch
-          // the exception and install the wrapper fallback instead.
-          try {
-            adapted = coerceArgumentsOrFail(siteType, adapted, args, 1);
-            adapted = adapted.asType(siteType);
-            cs.setTarget(MethodHandles.guardWithTest(guard, adapted, fallback));
-          }
-          catch (WrongMethodTypeException e) {
-            // Argument types not directly compatible so fall back to invoking wrapper to let it do any
-            // coercion required and fill in missing arguments etc (or throw an error if needed).
-            cs.setTarget(MethodHandles.guardWithTest(guard, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset, captureStackTraces), fallback));
-          }
+          JactlClassDescriptor desc = jactlContext.getClassDescriptor(Type.getInternalName(parent.getClass()));
+          assert desc != null;
+          func = desc.getMethod(methodOrField);
+          jmh  = (JactlMethodHandle)fieldOrMethod;
         }
         else {
           // We have a field so we install something that checks parent class and invokes slow path through
           // invokeMethodOrField() which loads field to get JactlMethodHandle and invokes it.
           cs.setTarget(MethodHandles.guardWithTest(isSameClass, makeMethodOrFieldInvoker(siteType, methodOrField, source, offset, captureStackTraces), fallback));
+          MutableCallSite.syncAll(new MutableCallSite[]{cs});
+          return invokeMethodOrField(methodOrField, parent, null, source, offset, captureStackTraces, actualArgs);
         }
-        MutableCallSite.syncAll(new MutableCallSite[]{cs});
-
-        return invokeMethodOrField(methodOrField, parent, null, source, offset, captureStackTraces, actualArgs);
       }
     }
 
     // See if there is a method of this name
-    FunctionDescriptor func = jactlContext.getFunctions().lookupFunction(parent, methodOrField);
+    if (func == null) {
+      func = jactlContext.getFunctions().lookupFunction(parent, methodOrField);
+    }
 
     // If no method then check for a field and invoke method handle contained in the field
     if (func == null) {
@@ -398,7 +392,6 @@ public class InvokeDynamicBootstrap {
       }
       else {
         // Check for host class
-        JactlMethodHandle jmh = null;
         if (jactlContext.allowHostAccess) {
           jmh = jactlContext.lookupWrapperForHostClass(parent, methodOrField, actualArgs, source, offset);
         }
@@ -434,18 +427,24 @@ public class InvokeDynamicBootstrap {
     }
 
     MethodHandle adapted;
-    String       className = func.implementingClassName.replace('/', '.');
-    try {
-      Class<?> clss = lookup.lookupClass().getClassLoader().loadClass(className);
-      Method method = Arrays.stream(clss.getMethods())
-                            .filter(m -> m.getName().equals(func.implementingMethod))
-                            .filter(m -> Type.getMethodDescriptor(m).equals(func.getImplementingMethodDescriptor()))
-                            .findFirst()
-                            .orElseThrow(() -> new NoSuchMethodException("Internal error: could not find '" + methodOrField + "' in class '" + className + "'"));
-      adapted = lookup.unreflect(method);
+    if (jmh == null) {
+      String className = func.implementingClassName.replace('/', '.');
+      try {
+        Class<?>           clss      = lookup.lookupClass().getClassLoader().loadClass(className);
+        FunctionDescriptor finalFunc = func;
+        Method method = Arrays.stream(clss.getMethods())
+                              .filter(m -> m.getName().equals(finalFunc.implementingMethod))
+                              .filter(m -> Type.getMethodDescriptor(m).equals(finalFunc.getImplementingMethodDescriptor()))
+                              .findFirst()
+                              .orElseThrow(() -> new NoSuchMethodException("Internal error: could not find '" + methodOrField + "' in class '" + className + "'"));
+        adapted = lookup.unreflect(method);
+      }
+      catch (ClassNotFoundException e) {
+        throw new IllegalStateException("Internal error: could not find class '" + className + "'", e);
+      }
     }
-    catch (ClassNotFoundException e) {
-      throw new IllegalStateException("Internal error: could not find class '" + className + "'", e);
+    else {
+      adapted = jmh.handleToUnderlyingFunction();
     }
 
     if (func.isStaticMethod) {
@@ -459,25 +458,10 @@ public class InvokeDynamicBootstrap {
       adapted = MethodHandles.insertArguments(adapted, 1, source, offset);
     }
     
-    int argCount = args.length - 1;
+    Pair<MethodHandle,Boolean> result = fillInDefaultValues(adapted, func, args);
+    adapted = result.first;
+    boolean directInvoke = result.second;
     
-    // To start with we assume we can invoke directly if we don't have too many arguments
-    boolean directInvoke = argCount <= func.paramCount;
-    
-    // We need to insert default values for missing arguments (if they are simple values)
-    if (argCount < func.paramCount) {
-      for (int i = argCount; i < func.defaultVals.length; i++) {
-        if (func.defaultVals[i] == FunctionDescriptor.NON_TRIVIAL || func.defaultVals[i] == JactlFunction.MANDATORY) {
-          directInvoke = false;
-          break;
-        }
-      }
-      if (directInvoke) {
-        // Insert missing values after the parent object and the other args
-        adapted = MethodHandles.insertArguments(adapted, args.length, Arrays.copyOfRange(func.defaultVals, argCount, func.defaultVals.length));
-      }
-    }
-
     MethodHandle guard = createGuardForMethod(args[0].getClass(), siteType, adapted.type(), args);
 
     try {
@@ -497,7 +481,44 @@ public class InvokeDynamicBootstrap {
     // First time we still invoke the wrapper after installing call site
     return invokeMethodOrField(methodOrField, parent, null, source, offset, captureStackTraces, actualArgs);
   }
+  
+  private static Pair<MethodHandle,Boolean> fillInDefaultValues(MethodHandle adapted, FunctionDescriptor func, Object[] args) throws Throwable {
+    int argCount = args.length - 1;
+    
+    // To start with we assume we can invoke directly if we don't have too many arguments
+    boolean directInvoke = argCount <= func.paramCount;
 
+    // We need to insert default values for missing arguments (if they are simple values)
+    if (argCount < func.paramCount) {
+      // Check that we have values for all mandatory parameters and for simple default values work
+      // out whether a conversion is needed. If conversion is needed and we have a conversion, then
+      // apply conversion, or if no conversion possible fall back to using wrapper.
+      Object[] defaultValues = new Object[func.defaultVals.length - argCount];
+      for (int i = argCount, idx = 0; i < func.defaultVals.length; i++, idx++) {
+        Object defaultVal = func.defaultVals[i];
+        if (defaultVal == FunctionDescriptor.NON_TRIVIAL || defaultVal == JactlFunction.MANDATORY) {
+          directInvoke = false;
+          break;
+        }
+        Class<?> paramType = func.paramTypes.get(i).classFromType();
+        MethodHandle filter = getFilter(defaultVal,
+                                        boxedType(defaultVal == null ? paramType : defaultVal.getClass()),
+                                        boxedType(paramType));
+        if (filter == null) {
+          // No trivial conversion possible
+          directInvoke = false;
+          break;
+        }
+        defaultValues[idx] = filter.invoke(defaultVal);   // convert to appropriate type
+      }
+      if (directInvoke) {
+        // Insert missing values after the parent object and the other args
+        adapted = MethodHandles.insertArguments(adapted, args.length, defaultValues);
+      }
+    }
+    return Pair.of(adapted, directInvoke);
+  }
+  
   public static Object binaryOpAdapter(MaxDepthCallSite cs, MethodHandles.Lookup lookup, String operatorName,
                                        MethodHandle methodHandle, String operator, String originalOp, int minScale,
                                        int captureStackTrace, String source, int offset, Object left, Object right) throws Throwable {
@@ -542,7 +563,7 @@ public class InvokeDynamicBootstrap {
     NUMERIC_FILTERS.put(Double.class,     DOUBLE_VALUE);
     NUMERIC_FILTERS.put(BigDecimal.class, DECIMAL_VALUE);
 
-    // Special case for BigDecimal as we need can't rely on automatic coercion at all 
+    // Special case for BigDecimal as we can't rely on automatic coercion at all 
     NUMERIC_RANK.put(BigDecimal.class, -1);
     
     NUMERIC_RANK.put(Byte.class,       1);
@@ -559,46 +580,54 @@ public class InvokeDynamicBootstrap {
       throw WRONG_METHOD_TYPE_EXCEPTION;
     }
     for (int i = argStart; i < args.length; i++) {
-      Object   arg       = args[i];
-      Class<?> argType   = boxedType(arg == null ? siteType.parameterType(i) : arg.getClass());
-      Class<?> paramType = boxedType(adaptedType.parameterType(i));
-      if (argType == paramType || paramType.isAssignableFrom(argType)) {
-        continue;
-      }
-      if (arg != null && Number.class.isAssignableFrom(paramType)) {
-        if (Number.class.isAssignableFrom(argType)) {
-          // If widening then no need to do anything since asType() takes care of this
-          Integer prank = NUMERIC_RANK.get(paramType);
-          Integer arank = NUMERIC_RANK.get(argType);
-          if (prank == null || arank == null) {
-            throw WRONG_METHOD_TYPE_EXCEPTION;
-          }
-          // If automatic promotion will work
-          if (prank > 0 && arank > 0 && prank >= arank) {
-            continue;
-          }
-          MethodHandle filter = NUMERIC_FILTERS.get(paramType);
-          if (filter == null) {
-            // This shouldn't happen but just in case...
-            throw WRONG_METHOD_TYPE_EXCEPTION;
-          }
-          adapted = MethodHandles.filterArguments(adapted, i, filter); 
-        }
-        else {
-          // We don't have a compatible conversion
-          throw WRONG_METHOD_TYPE_EXCEPTION;
-        }
-      }
-      else if (paramType == Boolean.class) {
-        adapted = MethodHandles.filterArguments(adapted, i, IS_TRUTH);
-      }
-      else if (arg != null || paramType == JactlMethodHandle.class) {
-        // Arg type is not compatible or we don't have a coercion we can do
-        // here so use wrapper function
+      Object       arg       = args[i];
+      Class<?>     argType   = boxedType(arg == null ? siteType.parameterType(i) : arg.getClass());
+      Class<?>     paramType = boxedType(adaptedType.parameterType(i));
+      MethodHandle filter    = getFilter(arg, argType, paramType);
+      if (filter == null) {
         throw WRONG_METHOD_TYPE_EXCEPTION;
+      }
+      if (filter != IDENTITY) {
+        adapted = MethodHandles.filterArguments(adapted, i, filter);
       }
     }
     return adapted;
+  }
+
+  private static final MethodHandle IDENTITY = MethodHandles.identity(Object.class);
+  
+  private static MethodHandle getFilter(Object arg, Class<?> argType, Class<?> paramType) {
+    if (argType == paramType || paramType.isAssignableFrom(argType)) {
+      return IDENTITY;
+    }
+    if (arg != null && Number.class.isAssignableFrom(paramType)) {
+      if (Number.class.isAssignableFrom(argType)) {
+        // If widening then no need to do anything since asType() takes care of this
+        Integer prank = NUMERIC_RANK.get(paramType);
+        Integer arank = NUMERIC_RANK.get(argType);
+        if (prank == null || arank == null) {
+          return null;
+        }
+        // If automatic promotion will work
+        if (prank > 0 && arank > 0 && prank >= arank) {
+          return IDENTITY;
+        }
+        return NUMERIC_FILTERS.get(paramType);
+      }
+      else {
+        // We don't have a compatible conversion
+        return null;
+      }
+    }
+    else if (paramType == Boolean.class) {
+      return IS_TRUTH;
+    }
+    else if (arg != null || paramType == JactlMethodHandle.class) {
+      // Arg type is not compatible or we don't have a coercion we can do
+      // here so use wrapper function
+      return null;
+    }
+    return IDENTITY;
   }
   
   private static final WrongMethodTypeException WRONG_METHOD_TYPE_EXCEPTION = new WrongMethodTypeException();
