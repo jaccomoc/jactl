@@ -142,7 +142,7 @@ public class PipelineCompiler {
     // Normally, if a method call is on a type that is unknown we assume the worst and mark it as async.
     // Given that we have already done a runtime check for iterable, we only flag functions as async
     // if they invoke an async closure.
-    boolean isAsync = parent.isAsync || exprs.stream().anyMatch(e -> e.args.stream().anyMatch(a -> a.isAsync));
+    boolean isAsync = methodCompiler.asyncEnabled() && (parent.isAsync || fns.stream().anyMatch(InlineFn::couldBeAsync));
 
     // If last function returns an Iterator or needs a list to post process then we need to convert back to a list
     InlineFn lastFn        = fns.get(fns.size() - 1);
@@ -160,6 +160,12 @@ public class PipelineCompiler {
     // Allocate variable for our iterator
     int iteratorSlot = methodCompiler.stack.allocateSlot(ITERATOR);
     methodCompiler.storeLocal(iteratorSlot);
+
+    // If we are in an expression we need to empty stack so that hotspot compiler can
+    // optimise loop. It will not optimise if the stack is not empty at the start of
+    // the loop.
+    int stackSize = methodCompiler.stack.nonLocalStackDepth();
+    methodCompiler.stack.convertStackToLocals(stackSize);
     
     int resultListSlot = -1;
     if (convertToList) {
@@ -216,6 +222,9 @@ public class PipelineCompiler {
     
     fns.forEach(InlineFn::cleanUp);
     methodCompiler.stack.freeSlot(iteratorSlot);
+    
+    // Restore stack (including new result)
+    methodCompiler.stack.expect(stackSize + 1);
   }
 
   private static Pair<Label,Label> initLabels(List<InlineFn> fns, Label LOOP, Label END) {
@@ -387,7 +396,7 @@ public class PipelineCompiler {
   private static List<JactlType> CLOSURE_STACK_TYPES = Utils.listOf(FUNCTION, ANY);
   
   // Expect on stack: Object arg, MethodHandle closure
-  private static void invokeClosure(MethodCompiler methodCompiler, Token location) {
+  private static void invokeClosure(MethodCompiler methodCompiler, Location location) {
     Utils.checkCast(methodCompiler.mv, FUNCTION);
     methodCompiler.swap();
     methodCompiler.invokeMethodHandle(CLOSURE_STACK_TYPES, location);
@@ -404,6 +413,7 @@ public class PipelineCompiler {
       this.expr = expr;
       this.methodCompiler = methodCompiler;
     }
+    boolean couldBeAsync()  { return false; }
     boolean isTerminating() { return false; }   // True for functions like sum that collapse pipeline into a single value
     boolean canBeDirect()   { return false; }   // True for functions like size() that can have a direct, more efficient, implementation
     void initialise() {}
@@ -446,7 +456,6 @@ public class PipelineCompiler {
 
   private static abstract class InlineClosureInvoker extends InlineFn {
     int closureSlot = -1;
-    boolean isAsyncClosure = false;
     List<Expr> args;
     int argNum;
     InlineClosureInvoker(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) {
@@ -457,30 +466,33 @@ public class PipelineCompiler {
       this.args = args;
       this.argNum = closureArg;
     }
+    @Override boolean couldBeAsync() {
+      return argNum < args.size() && Analyser.isAsyncArg(args.get(argNum));
+    }
     @Override void initialise() {
       if (Utils.isNamedArgs(args)) {
         throw new IllegalStateException("Not expecting named args");
       }
       Expr arg = argNum < args.size() ? args.get(argNum) : null;
       if (arg != null) {
-        isAsyncClosure = arg.isAsync;
         methodCompiler.compile(arg);
-        methodCompiler.dupVal();
+        JactlType argType = methodCompiler.peek();
+        methodCompiler.box();
         closureSlot = methodCompiler.stack.allocateSlot(FUNCTION);
-        if (!methodCompiler.peek().is(FUNCTION)) {
+        methodCompiler.storeLocal(closureSlot);
+        if (!argType.is(FUNCTION)) {
           methodCompiler.tryCatch(ClassCastException.class, false,
                    () -> {
+                     methodCompiler.loadLocal(closureSlot);
                      Utils.checkCast(methodCompiler.mv, FUNCTION);
                      methodCompiler.storeLocal(closureSlot);
                    },
                    () -> {
+                     methodCompiler.mv.visitInsn(POP);
+                     methodCompiler._loadLocal(closureSlot);
                      methodCompiler._throwWithClassName(" cannot be cast to function", arg.location);
                    });
         }
-        else {
-          methodCompiler.storeLocal(closureSlot);
-        }
-        methodCompiler.popVal();
       }
     }
     @Override void cleanUp() {
@@ -493,7 +505,7 @@ public class PipelineCompiler {
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       if (closureSlot >= 0) {
         methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, expr.location);
+        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
       }
     }
     @Override void asyncResumed(int contResultSlot, int valueSlot) {
@@ -507,7 +519,7 @@ public class PipelineCompiler {
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       if (closureSlot >= 0) {
         methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, expr.location);
+        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
       }
       methodCompiler.popVal();
     }
@@ -544,7 +556,7 @@ public class PipelineCompiler {
       methodCompiler.pushType(ANY);
       if (closureSlot >= 0) {
         methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, expr.location);
+        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
       }
       methodCompiler.mv.visitIincInsn(indexSlot, 1);
     }
@@ -573,7 +585,7 @@ public class PipelineCompiler {
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       if (closureSlot >= 0) {
         methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, expr.location);
+        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
       }
       methodCompiler.mv.visitLabel(asyncCont);    // :ASYNC CONT
       methodCompiler.invokeMethod(RuntimeUtils.CREATE_ITERATOR_FLATMAP_METHOD);
@@ -629,7 +641,7 @@ public class PipelineCompiler {
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       if (closureSlot >= 0) {
         methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, expr.location);
+        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
       }
       addToResult();
     }
@@ -637,7 +649,7 @@ public class PipelineCompiler {
       methodCompiler.loadLocal(resultSlot);
       methodCompiler.swap();
       if (isCollectEntries) {
-        methodCompiler.loadLocation(expr.location);
+        methodCompiler.loadLocation(expr.methodNameLocation);
       }
       methodCompiler.invokeMethod(isCollectEntries ? RuntimeUtils.ADD_MAP_ENTRY : MethodCompiler.LIST_ADD_METHOD);
       if (!isCollectEntries) {
@@ -696,7 +708,7 @@ public class PipelineCompiler {
     @Override void finish() {
       super.finish();
       methodCompiler.loadLocal(resultSlot);
-      methodCompiler.loadLocation(expr.location);
+      methodCompiler.loadLocation(expr.methodNameLocation);
       methodCompiler.loadLocal(startIdxSlot);
       if (endIdxSlot == -1) {
         methodCompiler.loadConst(Integer.MAX_VALUE);
@@ -786,7 +798,7 @@ public class PipelineCompiler {
       if (closureSlot >= 0) {
         // Invoke closure and check truthiness of its result
         methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, expr.location);
+        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
       }
       doFilter();
     }
@@ -828,7 +840,7 @@ public class PipelineCompiler {
       methodCompiler.mv.visitJumpInsn(IFNE, FIRST_TIME);
       methodCompiler.dupVal();
       methodCompiler.loadLocal(previousValueSlot);
-      methodCompiler.loadLocation(expr.location);
+      methodCompiler.loadLocation(expr.methodNameLocation);
       methodCompiler.invokeMethod(RuntimeUtils.IS_EQUALS_METHOD);
       methodCompiler.popType();
       methodCompiler.mv.visitJumpInsn(IFEQ, NOT_EQUAL);
@@ -863,7 +875,7 @@ public class PipelineCompiler {
       if (closureSlot != -1) {
         // Invoke closure and check truthiness of its result
         methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, expr.location);
+        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
       }
       checkResult();
     }
@@ -935,7 +947,7 @@ public class PipelineCompiler {
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       methodCompiler.loadLocal(sumSlot);
       methodCompiler.swap();
-      methodCompiler.loadLocation(expr.location);
+      methodCompiler.loadLocation(expr.methodNameLocation);
       methodCompiler.invokeMethod(Reducer.ADD_NUMBERS_METHOD);
       methodCompiler.storeLocal(sumSlot);
       if (isAvg) {
@@ -949,7 +961,7 @@ public class PipelineCompiler {
       if (isAvg) {
         methodCompiler.loadLocal(sumSlot);
         methodCompiler.loadLocal(countSlot);
-        methodCompiler.loadLocation(expr.location);
+        methodCompiler.loadLocation(expr.methodNameLocation);
         methodCompiler.invokeMethod(RuntimeUtils.CALCULATE_AVERAGE);
         methodCompiler.popType();
       }
@@ -965,11 +977,12 @@ public class PipelineCompiler {
 
   private static class InlineSort extends InlineClosureInvoker {
     InlineSort(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler, 0); }
+    @Override boolean couldBeAsync()     { return false; }  // Not needed for sort because it runs in post processing and already deals with async
     @Override boolean isPostProcessing() { return true; }
     @Override void postProcess() {
       if (closureSlot == -1) {
         methodCompiler.loadNullContinuation();
-        methodCompiler.loadLocation(expr.location);
+        methodCompiler.loadLocation(expr.methodNameLocation);
         methodCompiler.loadConst(null);
         methodCompiler.invokeMethod(BuiltinFunctions.LIST_SORT);
       }
@@ -977,7 +990,7 @@ public class PipelineCompiler {
         methodCompiler.invokeMaybeAsync(expr.isAsync, LIST, 1, expr.location,
                                         () -> {
                                           methodCompiler.loadNullContinuation();
-                                          methodCompiler.loadLocation(expr.location);
+                                          methodCompiler.loadLocation(expr.methodNameLocation);
                                           methodCompiler.loadLocal(closureSlot);
                                         },
                                         () -> methodCompiler.invokeMethod(BuiltinFunctions.LIST_SORT));
@@ -1066,7 +1079,7 @@ public class PipelineCompiler {
       }
       if (closureSlot != -1) {
         methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, expr.location);
+        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
       }
       methodCompiler.mv.visitLabel(asyncCont);
       if (locationSlot != -1) {
@@ -1082,7 +1095,7 @@ public class PipelineCompiler {
       methodCompiler.mv.visitJumpInsn(IFNULL, STORE_NEW_OBJ_VALUE);
       methodCompiler.dupVal();
       methodCompiler.loadLocal(minMaxValueSlot);
-      methodCompiler.loadLocation(expr.location);
+      methodCompiler.loadLocation(expr.methodNameLocation);
       methodCompiler.invokeMethod(RuntimeUtils.COMPARE_TO_METHOD);
       methodCompiler.popType();
       Label END = new Label();
@@ -1129,7 +1142,7 @@ public class PipelineCompiler {
         methodCompiler.dupVal();
       }
       methodCompiler.loadLocal(closureSlot);
-      invokeClosure(methodCompiler, expr.location);
+      invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
       if (valueSlot == -1) {
         methodCompiler.swap();
       }
@@ -1193,7 +1206,7 @@ public class PipelineCompiler {
       methodCompiler.pushType(ANY);
       
       methodCompiler.loadLocal(closureSlot);
-      invokeClosure(methodCompiler, expr.location);
+      invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
       methodCompiler.storeLocal(resultSlot);
     }
     @Override void asyncResumed(int contResultSlot, int valueSlot) {

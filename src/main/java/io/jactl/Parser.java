@@ -1188,7 +1188,7 @@ public class Parser {
   
   private Expr[] forInInitialisations(List<Stmt> initStmts, Expr collectionExpr) {
     Token token = collectionExpr.location;
-    Expr  iterableExpr = new Expr.ForLoopIterableInit(peek(), collectionExpr);
+    Expr  iterableExpr = new Expr.ForLoopIterableInit(collectionExpr.location, collectionExpr);
     Token        iterableName = iterableExpr.location.newIdent(Utils.JACTL_PREFIX + "iterable" + uniqueVarCnt);
     JactlType    iterableType = createUnknown();
     iterableType.typeDependsOn(iterableExpr);

@@ -58,6 +58,27 @@ public class LocalTypes {
     return stack.size();
   }
 
+  /**
+   * How many entries on the "stack" are really on the stack.
+   * Since we simulate the stack and allow some entries to be stored in local slots
+   * and restored later, we sometimes want to know how many entries are actually still
+   * on the stack.
+   * We only count until end of stack or until we find an entry that is already in a local slot.
+   * @return number of entries on the real stack
+   */
+  public int nonLocalStackDepth() {
+    int count = 0;
+    for (StackEntry e : stack) {
+      if (!e.isLocal()) {
+        count++;
+      }
+      else {
+        break;
+      }
+    }
+    return count;
+  }
+
   public int getMaxLocals() {
     return maxIndex + 1;
   }

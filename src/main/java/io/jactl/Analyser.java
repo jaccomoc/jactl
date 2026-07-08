@@ -116,7 +116,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     //   int line() { NEWLINE }
     //   move()
     // A single pass would not add heapLocals to the move() function.
-    if (heapLocals) {
+    if (heapLocals || asyncEnabled) {
       isFirstPass = false;
       analyse(classDecl);
     }
@@ -806,7 +806,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                                           : namedArgs.get(func.paramNames.get(i));
       for (Integer asyncArg : func.asyncArgs) {
         Expr expr = getrArg.apply(asyncArg);
-        if (isAsyncArg(expr)) {
+        if (_isAsyncArg(expr)) {
           return true;
         }
       }
@@ -826,7 +826,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       for (Integer asyncArg : func.asyncArgs) {
         Expr expr = getArg.apply(asyncArg);
-        if (isAsyncArg(expr)) {
+        if (_isAsyncArg(expr)) {
           return true;
         }
       }
@@ -834,7 +834,15 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
-  private boolean isAsyncArg(Expr arg) {
+  private boolean _isAsyncArg(Expr arg) {
+    return _isAsyncArg(arg, isFirstPass);
+  }
+  
+  public static boolean isAsyncArg(Expr arg) {
+    return _isAsyncArg(arg, false);
+  }
+  
+  private static boolean _isAsyncArg(Expr arg, boolean isFirstPass) {
     if (arg == null || arg instanceof Expr.Noop) {
       return false;
     }
@@ -843,27 +851,29 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (decl == null) {
         throw new IllegalStateException("Internal error: Expr.Identifier with null varDecl");
       }
-      return isAsyncArg(decl);
+      return _isAsyncArg(decl, isFirstPass);
     }
 
     if (arg instanceof Expr.VarDecl) {
       Expr.VarDecl decl = (Expr.VarDecl)arg;
 
-      // If not final then we can't assume anything about it
-      if (!decl.isEffectivelyFinal) {
+      // If type supports being a function and decl is a parameter or not final
+      // then we can't assume anything about it
+      if (decl.type.is(ANY,FUNCTION) &&
+          (decl.isParam || !decl.isEffectivelyFinal)) {
         return true;
       }
 
       if (decl.funDecl != null) {
-        return isAsyncArg(decl.funDecl);
+        return _isAsyncArg(decl.funDecl, isFirstPass);
       }
 
       if (decl.initialiser != null) {
-        return isAsyncArg(decl.initialiser);
+        return _isAsyncArg(decl.initialiser, isFirstPass);
       }
 
       if (decl.originalVarDecl != null) {
-        return isAsyncArg(decl.originalVarDecl);
+        return _isAsyncArg(decl.originalVarDecl, isFirstPass);
       }
 
       // If we have a type that can't be async then return false, otherwise return true

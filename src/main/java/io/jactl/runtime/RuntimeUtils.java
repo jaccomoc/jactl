@@ -2100,7 +2100,12 @@ public class RuntimeUtils {
   }
   public static final MethodRef CREATE_ITERATOR_FLATMAP_METHOD = Utils.getMethod(RuntimeUtils.class, "createIteratorFlatMap", Object.class);
 
-  public static final MethodRef CREATE_ITERATOR_METHOD = Utils.getMethod(RuntimeUtils.class, "createIterator", Object.class);
+  public static final MethodRef CREATE_ITERATOR_METHOD = Utils.getMethod(RuntimeUtils.class, "createIterator", Object.class, String.class, int.class);
+  public static JactlIterator createIterator(Object obj, String source, int offset) {
+    if (obj == null) { throw new NullError("Cannot iterate over null object", source, offset); }
+    return createIterator(obj);
+  }
+  
   public static JactlIterator createIterator(Object obj) {
     JactlIterator iter = createCollectionIteratorOrNull(obj);
     if (iter != null) {

@@ -2403,15 +2403,26 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         // check.
         compile(parent);
         if (peek().is(ANY)) {
-          invokeMethod(RuntimeUtils.CREATE_ITERATOR_OR_NULL_METHOD);
           Expr finalParent = parent;
-          emitIf(classCompiler.context.isAsync, false, IfTest.IS_NULL,
-                 () -> dupVal(),
-                 () -> pipeline.forEach(this::_visitMethodCall),
-                 () -> PipelineCompiler.compilePipeline(finalParent, this, pipeline, pipelineFns));
+          emitIf(asyncEnabled(), true, IfTest.IS_NULL,
+                 () -> {
+                   dupVal();
+                   invokeMethod(RuntimeUtils.CREATE_ITERATOR_OR_NULL_METHOD);
+                   dupVal();
+                 },
+                 () -> {
+                   popVal();
+                   pipeline.forEach(this::_visitMethodCall);
+                 },
+                 () -> {
+                   swap();
+                   popVal();
+                   PipelineCompiler.compilePipeline(finalParent, this, pipeline, pipelineFns);
+                 });
         }
         else {
           box();
+          loadLocation(parent.location);
           invokeMethod(RuntimeUtils.CREATE_ITERATOR_METHOD);
           PipelineCompiler.compilePipeline(parent, this, pipeline, pipelineFns);
         }
@@ -2744,6 +2755,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       loadLocal(expr.iterableVarDecl.slot);
       box();
+      loadLocation(expr.location);
       invokeMethod(RuntimeUtils.CREATE_ITERATOR_METHOD);
     }
     return null;

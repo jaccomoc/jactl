@@ -1250,6 +1250,7 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void pipeline() {
+    test("[].sum()", 0);
     test("List list = [1,2,3,4]; list.sum()", 10);
     test("List list = [1,2,3,4]; list.filter{ it % 2 == 0 }", Utils.listOf(2, 4));
     test("List list = [[1,2],[3,4]]; list.filter{ x,y -> x != y }", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3, 4)));
@@ -1285,10 +1286,17 @@ public class BuiltinFunctionTests extends BaseTest {
     test("var list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap().sum()", 6);
     test("5.map{ {it+1}(it) }.sum()", 15);
     testError("5.map(null)", "null value for function");
+    test("def f = { sleep(0,it) * 2 }; [1,2,3].map(f).sum()", 12);
+    test("def list = [1,2,3]; def run(f) { list.map(f).sum() }; run{ sleep(0,it) * 2 }", 12);
+    testError("def x = 1; [1,2,3].map(x)", "int cannot be cast to function");
+    testError("[].avg()", "empty list");
+    testError("[1,2,3].windowed(-1)", "window size must be >= 0");
+    testError("def x = -1; [1,2,3].windowed(x)", "window size must be >= 0");
+    testError("def list = null; list.map{ it + it }.sum()", "tried to invoke method on null value");
+    testError("List list = null; list.map{ it + it }.sum()", "cannot iterate over null object");
   }
 
-  @Test
-  public void pipelineNegativeSkipLimit() {
+  @Test public void pipelineNegativeSkipLimit() {
     test("List list = [1,2,3,4]; list.skip(-3)", Utils.listOf(2, 3, 4));
     test("List list = [1,2,3,4]; list.skip(-3).limit(2).skip(-1)", Utils.listOf(3));
     test("def x = -3; def y = -1; List list = [1,2,3,4]; list.skip(x).limit(2).skip(y)", Utils.listOf(3));
@@ -1344,6 +1352,10 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def x = [1,2,3,4]; x.flatMap{ x.size().filter{ it % 2 == 0 } }.sum()", 8);
   }
 
+  @Test public void pipelineOverloadedMethods() {
+    test("class X { def map(f) { f(3) } }; def x = new X(); x.map{ it + 7 }", 10);
+  }
+  
   @Test public void pipelineEach() {
     test("def sum = 0; [1,2,3].each{ sum += it }; sum", 6);
     test("def sum = 0; def x = [1,2,3]; x.each{ sum += it }; sum", 6);
@@ -1413,5 +1425,10 @@ public class BuiltinFunctionTests extends BaseTest {
          "Map vars = monkeys.map{ s/=.*// }.collectEntries{ [it,null] }\n" +
          "while (monkeys.filter{ eval(it, vars) == null }) {}\n" +
          "vars.b", input, output, 2L);
+  }
+  
+  @Test public void pipelineAsExpression() {
+    doTest("List list = 1000000.map(); def total = 0; total += list.map{ it + it + 0L }.sum()", 999999000000L);
+    doTest("def list = 1000000.map(); def total = 0; total += list.map{ it + it + 0L }.sum()", 999999000000L);
   }
 }
