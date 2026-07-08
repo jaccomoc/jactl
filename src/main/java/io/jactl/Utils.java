@@ -719,7 +719,11 @@ public class Utils {
   }
 
   public static <T> List<T> listOf(T... elems) {
-    return Arrays.asList(elems);
+    List<T> list= new ArrayList<T>();
+    for (T e : elems) {
+      list.add(e);
+    }
+    return list;
   }
 
   public static Map mapOf(Object... elems) {

@@ -136,6 +136,8 @@ public class SwitchTests extends BaseTest {
     test("def x = 'abc'; switch (x) { 1,2,3,4 -> 1; long -> 2; 'a','b','abc' -> 3}", 3);
     testError("switch ('abc') { \"a${'b'}c\" -> true; _ -> false }", "embedded expressions not supported");
     test("switch ('abc') { \"abc\" -> true; _ -> false }", true);
+    test("switch ('BB') { 'Aa','BB','xxx' -> 2 }", 2);
+    test("switch ('BB') { 'Aa','xxx' -> 2; 'BB' -> 1 }", 1);
   }
 
   @Test public void switchWithRecursion() {
