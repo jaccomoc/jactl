@@ -1319,13 +1319,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
               mv.visitTypeInsn(NEW, "java/lang/StringBuilder");
               mv.visitInsn(DUP);
               mv.visitMethodInsn(INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false);
+              pushType(STRING_BUILDER);
               for (Expr part : parts) {
                 compile(part);
+                expect(2);
                 convertToString();
                 mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
+                popType();
               }
               mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
-              popType(parts.size());
+              popType();
               pushType(STRING);
               return null;
             }

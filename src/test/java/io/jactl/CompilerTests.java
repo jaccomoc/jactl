@@ -1229,6 +1229,8 @@ class CompilerTests extends BaseTest {
     test("def x = -8D; def y = 5.0; x % y", "#2.0");
     test("double x = -8D; def y = 5.0; x % y", "#2.0");
     test("def x = -8D; Decimal y = 5.0; x % y", "#2.0");
+    test("'a' + 'b' + 'c'", "abc");
+    test("'a' + sleep(0,'b') + 'c'", "abc");
   }
 
   @Test public void byteType() {

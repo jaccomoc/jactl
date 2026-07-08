@@ -99,19 +99,20 @@ public class JactlType extends JactlUserDataHolder {
   public static JactlType ANY           = createRefType(TypeEnum.ANY);
   public static JactlType FUNCTION      = createRefType(TypeEnum.FUNCTION);
 
-  public static JactlType HEAPLOCAL    = createRefType(TypeEnum.HEAPLOCAL);
-  public static JactlType OBJECT_ARR   = JactlType.arrayOf(ANY);
-  public static JactlType LONG_ARR     = JactlType.arrayOf(LONG);
-  public static JactlType STRING_ARR   = JactlType.arrayOf(STRING);
-  public static JactlType ITERATOR     = createRefType(TypeEnum.ITERATOR);
-  public static JactlType NUMBER       = createRefType(TypeEnum.NUMBER);
-  public static JactlType MATCHER      = createRefType(TypeEnum.MATCHER);
-  public static JactlType CONTINUATION = createRefType(TypeEnum.CONTINUATION);
-  public static JactlType INSTANCE     = createInstanceType(JactlClassDescriptor.getJactlObjectDescriptor());
-  public static JactlType CLASS        = createRefType(TypeEnum.CLASS);
-  public static JactlType UNKNOWN      = createRefType(TypeEnum.UNKNOWN);
-  public static JactlType OPTIONAL     = createRefType(TypeEnum.OPTIONAL);
-  public static JactlType VOID         = createRefType(TypeEnum.VOID);
+  public static JactlType HEAPLOCAL      = createRefType(TypeEnum.HEAPLOCAL);
+  public static JactlType OBJECT_ARR     = JactlType.arrayOf(ANY);
+  public static JactlType LONG_ARR       = JactlType.arrayOf(LONG);
+  public static JactlType STRING_ARR     = JactlType.arrayOf(STRING);
+  public static JactlType ITERATOR       = createRefType(TypeEnum.ITERATOR);
+  public static JactlType NUMBER         = createRefType(TypeEnum.NUMBER);
+  public static JactlType MATCHER        = createRefType(TypeEnum.MATCHER);
+  public static JactlType CONTINUATION   = createRefType(TypeEnum.CONTINUATION);
+  public static JactlType INSTANCE       = createInstanceType(JactlClassDescriptor.getJactlObjectDescriptor());
+  public static JactlType CLASS          = createRefType(TypeEnum.CLASS);
+  public static JactlType UNKNOWN        = createRefType(TypeEnum.UNKNOWN);
+  public static JactlType OPTIONAL       = createRefType(TypeEnum.OPTIONAL);
+  public static JactlType VOID           = createRefType(TypeEnum.VOID);
+  public static JactlType STRING_BUILDER = createRefType(TypeEnum.STRING_BUILDER);
   static final HashMap<Class<?>, JactlType> typeCache = new HashMap() {{
     put(boolean.class, BOOLEAN);
     put(Boolean.class, BOXED_BOOLEAN);
@@ -907,22 +908,23 @@ public class JactlType extends JactlUserDataHolder {
 
   public String getInternalName() {
     switch (this.type) {
-      case BOOLEAN:      return isBoxed() ? Utils.BOOLEAN_BOXED_INTERNAL : Utils.BOOLEAN_INTERNAL;
-      case BYTE:         return isBoxed() ? Utils.BYTE_BOXED_INTERNAL : Utils.BYTE_INTERNAL;
-      case INT:          return isBoxed() ? Utils.INT_BOXED_INTERNAL : Utils.INT_INTERNAL;
-      case LONG:         return isBoxed() ? Utils.LONG_BOXED_INTERNAL : Utils.LONG_INTERNAL;
-      case DOUBLE:       return isBoxed() ? Utils.DOUBLE_BOXED_INTERNAL : Utils.DOUBLE_INTERNAL;
-      case DECIMAL:      return Utils.DECIMAL_INTERNAL;
-      case STRING:       return Utils.STRING_INTERNAL;
-      case MAP:          return Utils.MAP_INTERNAL;
-      case LIST:         return Utils.LIST_INTERNAL;
-      case ANY:          return Utils.OBJECT_INTERNAL;
-      case FUNCTION:     return Utils.JACTL_METHOD_HANDLE_INTERNAL;
-      case HEAPLOCAL:    return Utils.HEAP_LOCAL_INTERNAL;
-      case ITERATOR:     return Utils.JACTL_ITERATOR_INTERNAL;
-      case NUMBER:       return Utils.NUMBER_INTERNAL;
-      case MATCHER:      return Utils.REGEX_MATCHER_INTERNAL;
-      case CONTINUATION: return Utils.CONTINUATION_INTERNAL;
+      case BOOLEAN:        return isBoxed() ? Utils.BOOLEAN_BOXED_INTERNAL : Utils.BOOLEAN_INTERNAL;
+      case BYTE:           return isBoxed() ? Utils.BYTE_BOXED_INTERNAL : Utils.BYTE_INTERNAL;
+      case INT:            return isBoxed() ? Utils.INT_BOXED_INTERNAL : Utils.INT_INTERNAL;
+      case LONG:           return isBoxed() ? Utils.LONG_BOXED_INTERNAL : Utils.LONG_INTERNAL;
+      case DOUBLE:         return isBoxed() ? Utils.DOUBLE_BOXED_INTERNAL : Utils.DOUBLE_INTERNAL;
+      case DECIMAL:        return Utils.DECIMAL_INTERNAL;
+      case STRING:         return Utils.STRING_INTERNAL;
+      case MAP:            return Utils.MAP_INTERNAL;
+      case LIST:           return Utils.LIST_INTERNAL;
+      case ANY:            return Utils.OBJECT_INTERNAL;
+      case FUNCTION:       return Utils.JACTL_METHOD_HANDLE_INTERNAL;
+      case HEAPLOCAL:      return Utils.HEAP_LOCAL_INTERNAL;
+      case ITERATOR:       return Utils.JACTL_ITERATOR_INTERNAL;
+      case NUMBER:         return Utils.NUMBER_INTERNAL;
+      case MATCHER:        return Utils.REGEX_MATCHER_INTERNAL;
+      case CONTINUATION:   return Utils.CONTINUATION_INTERNAL;
+      case STRING_BUILDER: return Utils.STRING_BUILDER_INTERNAL;
       case ARRAY: {
         if (arrayType.is(ARRAY)) {
           return "[" + arrayType.getInternalName();
@@ -984,27 +986,28 @@ public class JactlType extends JactlUserDataHolder {
 
   public String typeName() {
     switch (type) {
-      case BOOLEAN:      return isBoxed() ? "Boolean" : "boolean";
-      case BYTE:         return isBoxed() ? "Byte"    : "byte";
-      case INT:          return isBoxed() ? "Integer" : "int";
-      case LONG:         return isBoxed() ? "Long"    : "long";
-      case DOUBLE:       return isBoxed() ? "Double"  : "double";
-      case DECIMAL:      return "Decimal";
-      case STRING:       return "String";
-      case MAP:          return "Map";
-      case LIST:         return "List";
-      case ANY:          return "Object";
-      case FUNCTION:     return "Function";
-      case HEAPLOCAL:    return "HeapLocal";
-      case MATCHER:      return "Matcher";
-      case ITERATOR:     return "Iterator";
-      case NUMBER:       return "Number";
-      case CONTINUATION: return "Continuation";
-      case INSTANCE:     return "Instance<" + getPackagedName() + ">";
-      case CLASS:        return "Class<" + getPackagedName() + ">";
-      case ARRAY:        return getArrayElemType().toString() + "[]";
-      case OPTIONAL:     return "OPTIONAL";
-      case UNKNOWN:      return "UNKNOWN";
+      case BOOLEAN:        return isBoxed() ? "Boolean" : "boolean";
+      case BYTE:           return isBoxed() ? "Byte"    : "byte";
+      case INT:            return isBoxed() ? "Integer" : "int";
+      case LONG:           return isBoxed() ? "Long"    : "long";
+      case DOUBLE:         return isBoxed() ? "Double"  : "double";
+      case DECIMAL:        return "Decimal";
+      case STRING:         return "String";
+      case MAP:            return "Map";
+      case LIST:           return "List";
+      case ANY:            return "Object";
+      case FUNCTION:       return "Function";
+      case HEAPLOCAL:      return "HeapLocal";
+      case MATCHER:        return "Matcher";
+      case ITERATOR:       return "Iterator";
+      case NUMBER:         return "Number";
+      case CONTINUATION:   return "Continuation";
+      case INSTANCE:       return "Instance<" + getPackagedName() + ">";
+      case CLASS:          return "Class<" + getPackagedName() + ">";
+      case ARRAY:          return getArrayElemType().toString() + "[]";
+      case OPTIONAL:       return "OPTIONAL";
+      case UNKNOWN:        return "UNKNOWN";
+      case STRING_BUILDER: return "StringBuilder";
     }
     throw new IllegalStateException("Internal error: unexpected type " + type);
   }
