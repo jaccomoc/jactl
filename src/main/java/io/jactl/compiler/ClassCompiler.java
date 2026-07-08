@@ -874,7 +874,7 @@ NEXT:   mv.visitLabel(NEXT);
     final int TMP_LONG       = 4;  // two slots
     final int DUP_FLAGS      = 6;  // two slots per flag
     // Need for array and array index. If multi-dimensions we use extra two slots for each dimension
-    final int ARR_SLOTS      = DUP_FLAGS + 2 + classDecl.fields.size() / 64;
+    final int ARR_SLOTS      = DUP_FLAGS + 2 + 2 * classDecl.fields.size() / 64;
 
     MethodVisitor mv = cv.visitMethod(ACC_PUBLIC, Utils.JACTL_READ_JSON, Type.getMethodDescriptor(Utils.LONG_ARR_TYPE, Utils.JSON_DECODER_TYPE),
                                       null, null);

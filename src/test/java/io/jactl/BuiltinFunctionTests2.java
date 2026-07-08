@@ -992,6 +992,9 @@ public class BuiltinFunctionTests2 extends BaseTest {
     // Test with fields that map to same hashCode:
     test("class X { int Aa; String BB }; X.fromJson('{\"Aa\":3,\"BB\":null}').Aa", 3);
     test("class X { int Aa; String BB }; def x = X.fromJson('{\"Aa\":3,\"BB\":\"xxx\"}'); x.BB + x.Aa", "xxx3");
+    test("class X { int i1=1,i2=1,i3=1,i4=1,i5=1,i6=1,i7=1,i8=1,i9=1,i10=1,i11=1,i12=1,i13=1,i14=1,i15=1,i16=1,i17=1,i18=1,i19=1,i20=1,i21=1,i22=1,i23=1,i24=1,i25=1,i26=1,i27=1,i28=1,i29=1,i30=1,i31=1,i32=1,i33=1,i34=1,i35=1,i36=1,i37=1,i38=1,i39=1,i40=1,\n" +
+         "i41=1,i42=1,i43=1,i44=1,i45=1,i46=1,i47=1,i48=1,i49=1,i50=1,i51=1,i52=1,i53=1,i54=1,i55=1,i56=1,i57=1,i58=1,i59=1,i60=1,i61=1,i62=1,i63=1,i64=1; int[] arr = [1,2,3] }\n" +
+         "def x = new X(); def json = x.toJson(); def y = X.fromJson(json); x.arr", new int[]{1,2,3});
   }
 
   @Test public void fromJsonMissingFields() {
