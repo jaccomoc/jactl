@@ -676,6 +676,7 @@ public class PipelineCompiler {
     int endIdxSlot = -1;
     List<Expr> args;
     InlineSubList(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, methodCompiler); this.args = args; }
+    @Override boolean canBeDirect() { return true; }
     @Override boolean isTerminating() { return true; }
     @Override void initialise() {
       super.initialise();
