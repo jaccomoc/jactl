@@ -103,6 +103,10 @@ public class JsonEncoder {
       return;
     }
     if (obj instanceof Double) {
+      double d = (double)obj;
+      if (Double.isInfinite(d) || Double.isNaN(d)) {
+        throw new RuntimeError("Cannot encode double value '" + d + "'", source, offset);
+      }
       writeString(Double.toString((double)obj), false);
       return;
     }
@@ -212,21 +216,13 @@ public class JsonEncoder {
                 bytes[offset++] = 't';
                 break;
               default:
-                if (c <= 0x9f) {
-                  bytes[offset++] = '\\';
-                  bytes[offset++] = 'u';
-                  bytes[offset++] = '0'; // hex[(c >>> 12) & 0xf];
-                  bytes[offset++] = '0'; // hex[(c >>> 8) & 0x0f];
-                  bytes[offset++] = hex[(c >>> 4) & 0x0f];
-                  bytes[offset++] = hex[c & 0x0f];
-                  extra += 4;
-                }
-                else {
-                  bytes[offset++] = (byte)(c & 0xff);
-                  if (c > 0xff) {
-                    bytes[offset++] = (byte)((c >> 8) & 0xff);
-                  }
-                }
+                bytes[offset++] = '\\';
+                bytes[offset++] = 'u';
+                bytes[offset++] = hex[(c >>> 12) & 0xf];
+                bytes[offset++] = hex[(c >>> 8) & 0x0f];
+                bytes[offset++] = hex[(c >>> 4) & 0x0f];
+                bytes[offset++] = hex[c & 0x0f];
+                extra += 4;
                 break;
             }
           }

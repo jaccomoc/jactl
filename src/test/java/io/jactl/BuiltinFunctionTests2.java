@@ -880,6 +880,10 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("[a:null,b:123].toJson()", "{\"a\":null,\"b\":123}");
     test("class X { int i = 3; X x = null }; new X().toJson()", "{\"i\":3,\"x\":null}");
     test("class X { int i = 3; Y y = new Y() }; class Y { X x = null }; new X().toJson()", "{\"i\":3,\"y\":{\"x\":null}}");
+    test("def x = 'café'; x.toJson().fromJson() == x", true);
+    testError("def nan = 0.0D/0.0D; nan.toJson()", "cannot encode double value");
+    testError("def infinity = 1.0D/0.0D; infinity.toJson()", "cannot encode double value");
+    testError("def infinity = -1.0D/0.0D; infinity.toJson()", "cannot encode double value");
   }
 
   @Test public void fromJson() {
