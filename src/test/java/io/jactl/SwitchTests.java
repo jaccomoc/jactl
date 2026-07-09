@@ -652,6 +652,8 @@ public class SwitchTests extends BaseTest {
 
   @Test public void switchOnClassTypes() {
     test("class X{}; X x = new X(); switch(x) { X -> 1 }", 1);
+    test("class X{}; def x = 123; switch(x) { X -> 1; _ -> 2 }", 2);
+    test("class X{}; def x = [a:123]; switch(x) { X -> 1; _ -> 2 }", 2);
     testError("class X{}; X x = new X(); switch(x) { X -> 1; int -> 2 }", "can never match pattern type int");
     testError("class X{}; X x = new X(); switch(x) { X -> 1; def -> 2 }", "unreachable switch case");
     testError("class X{}; X x = new X(); switch(x) { def -> 2; X -> 1 }",  "unreachable switch case");

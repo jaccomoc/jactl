@@ -146,10 +146,10 @@ public class SwitchResolver {
       if (pat.isStar() && parentType != null && parentType.is(ARRAY,JactlType.LIST,ANY)) {
         return true;
       }
-      if ((!subjectType.is(INSTANCE) || !patType.is(INSTANCE)) && !subjectType.equals(patType)) {
-        return false;
+      if (subjectType.is(INSTANCE) && patType.is(INSTANCE)) {
+        return subjectType.isConvertibleTo(patType, true);
       }
-      return subjectType.isConvertibleTo(patType, true);
+      return subjectType.equals(patType);
     }
     if (subjectType.isNumeric() && !patType.isNumeric() || patType.isNumeric() && !subjectType.isNumeric()) {
       return false;

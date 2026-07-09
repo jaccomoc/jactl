@@ -120,7 +120,7 @@ public class SwitchCompiler {
                 Consumer<JactlType> loadValue = type -> {
                   mc.loadVar(expr.itVar);
                   if (type != null && !type.is(ANY,LIST)) {
-                    mc.convertTo(type, expr.subject, true, expr.subject.location);
+                    mc.castTo(type, expr.subject, true, expr.subject.location);
                   }
                 };
                 compileMatchCaseTest(mc, loadValue, expr.subject.type, patternPair, expr.subject.location, endCheck);
@@ -191,7 +191,7 @@ public class SwitchCompiler {
       }
       if (pattern instanceof Expr.VarDecl || (pattern instanceof Expr.Identifier && ((Expr.Identifier) pattern).firstTimeInPattern)) {
         loadValue.accept(pattern.type);
-        mc.convertTo(pattern.type, pattern, true, pattern.location);
+        mc.castTo(pattern.type, pattern, true, pattern.location);
         mc.storeVar(pattern);
         mc.loadConst(true);   // Binding variable on its own always matches
       }

@@ -1915,8 +1915,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       error("Non-numeric value for index for " + (parent.type.is(LIST) ? "List" : "Array") + " access", field.location);
     }
 
-    // Map, List, or we don't know...
-    return expr.type = valueExpr.type.boxed();
+    expr.type = valueExpr.type.boxed();
+    
+    // If array then return the array element type but set the expr.type to be value of rhs since
+    // the type of the assignment is always the type of the rhs
+    if (parent.type.is(ARRAY)) {
+      return parent.type.getArrayElemType();
+    }
+    
+    return expr.type;
   }
 
   @Override public JactlType visitExprString(Expr.ExprString expr) {

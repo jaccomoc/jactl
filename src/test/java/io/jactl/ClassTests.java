@@ -59,6 +59,14 @@ public class ClassTests extends BaseTest {
     test("class X { int i = sleep(0,1) }; new X().i", 1);
     test("class X { int i = sleep(0,1); String s }; new X('abc').i", 1);
     test("class X { int i }; new X(2).i", 2);
+    test("class X { int i = 1; String s = sleep(0,'abc')}; X f() { return [i:2] }; f().s", "abc");
+    test("class X { int i = 1; String s = sleep(0,'abc')}; X x; x = [i:2]; x.s", "abc");
+    test("class X { int i = 1; String s = sleep(0,'abc')}; X[] x = new X[1]; x[0] = [i:2]; x[0].s", "abc");
+    test("class X { int i = 1; String s = sleep(0,'abc')}; def x = (X)[i:2]; x.s", "abc");
+    testError("class X { int i = 1; String s = sleep(0,'abc')}; Map m = [i:2]; switch(m) { X x -> x.s }", "map can never match");
+    test("class X { int i = 1; String s = sleep(0,'abc')}; def m = [i:2]; switch(m) { X x -> x.s; _ -> 'xyz' }", "xyz");
+    testError("class X { int i = 1; String s = sleep(0,'abc')}; for (X x: [[i:2]]) { x.s }", "map can never match");
+    testError("class X { int i = 1; String s = sleep(0,'abc')}; def list = [[i:2]]; for (X x: list) { x.s }", "did not match");
   }
   
   @Test public void unknownClass() {

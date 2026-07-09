@@ -3960,6 +3960,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   Void convertTo(JactlType type, Expr expr, boolean couldBeNull, Location location) {
+    return convertOrCastTo(type, expr, couldBeNull, false, location);
+  }
+
+  Void castTo(JactlType type, Expr expr, boolean couldBeNull, Location location) {
+    return convertOrCastTo(type, expr, couldBeNull, true, location);
+  }
+  
+  Void convertOrCastTo(JactlType type, Expr expr, boolean couldBeNull, boolean castOnly, Location location) {
     if (type.isBoxedOrUnboxed(BOOLEAN)) { return convertToBoolean(); }   // null is valid for boolean conversion
     if (type.isPrimitive() && !peek().isPrimitive() && couldBeNull && couldBeNull(expr)) {
       if (expr.isNull()) {
@@ -3980,20 +3988,25 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       case FUNCTION:   return castToFunction(location);
       case ITERATOR:   return null;  // noop
       case NUMBER:     return castToNumber(location);
-      case INSTANCE:   return castToInstance(type, expr, location);
+      case INSTANCE:   return castToInstance(type, expr, castOnly, location);
       case ARRAY:      return convertToArray(type, location);
       default:         throw new IllegalStateException("Internal error: Unknown type " + type);
     }
   }
 
-  private Void castToInstance(JactlType type, Expr expr, Location location) {
+  private Void castToInstance(JactlType type, Expr expr, boolean castOnly, Location location) {
     expect(1);
     JactlType peek = peek();
     if (peek.is(INSTANCE) && peek.getInternalName().equals(type.getInternalName())) {
       return null;
     }
     if (peek.is(ANY, LIST, MAP)) {
-      convertToInstance(type, expr, location, location);
+      if (castOnly) {
+        Utils.checkCast(mv, type);
+      }
+      else {
+        convertToInstance(type, expr, location, location);
+      }
       return null;
     }
     if (peek.is(INSTANCE)) {

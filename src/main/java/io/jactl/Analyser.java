@@ -324,6 +324,9 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitCast(Expr.Cast expr) {
     analyse(expr.expr);
+    if (expr.type.is(INSTANCE)) {
+      asyncIfTypeIsAsync(expr);
+    }
     return null;
   }
 
@@ -403,8 +406,8 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitVarAssign(Expr.VarAssign expr) {
     analyse(expr.identifierExpr);
     analyse(expr.expr);
-    if (!expr.expr.isNull() && expr.type.is(INSTANCE)) {
-      asyncIfTypeIsAsync(expr);
+    if (!expr.expr.isNull() && expr.identifierExpr.type.is(INSTANCE)) {
+      asyncIfTypeIsAsync(expr.identifierExpr);
     }
     return null;
   }
@@ -446,9 +449,9 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If return type not same as expression type then we might need to cast and if instance
     // type has async initialisers then we are therefore potentially async...
     if (expr.expr != null && !expr.expr.isNull() && !expr.expr.type.is(expr.returnType)) {
-      if (expr.returnType.is(INSTANCE) && !expr.expr.type.isCastableTo(expr.returnType)) {
+      if (expr.returnType.is(INSTANCE) && expr.expr.type.isCastableTo(expr.returnType)) {
         FunctionDescriptor initMethod = expr.returnType.getJactlClassDescriptor().getMethod(Utils.JACTL_INIT);
-        if (initMethod.isAsync) {
+        if (initMethod.isAsync()) {
           async(expr);
         }
       }
