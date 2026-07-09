@@ -1008,6 +1008,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     if (arrayElem) {
       expect(3);
+      convertTo(parentType.getArrayElemType(), expr.expr, false, expr.location);
       Utils.storeArrayElement(mv, parentType.getArrayElemType());
       popType(3);
     }
@@ -4570,6 +4571,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           swap();
         }
         incOrDecValue(isInc, amount, operator);
+        convertTo(varDecl.type, identifierExpr, false, operator);
         if (isResultUsed && !isPostfix) {
           dupVal();
         }

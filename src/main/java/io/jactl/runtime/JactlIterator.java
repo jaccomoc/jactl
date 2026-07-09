@@ -18,7 +18,6 @@
 package io.jactl.runtime;
 
 import io.jactl.JactlType;
-import sun.rmi.transport.Transport;
 
 import java.util.Arrays;
 import java.util.Iterator;

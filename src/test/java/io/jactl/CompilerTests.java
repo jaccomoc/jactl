@@ -1690,6 +1690,11 @@ class CompilerTests extends BaseTest {
     test("Map x; x.a += (x.a += 3)", 3);
     test("def x = [:]; x.a += 'xxx'", "xxx");
     test("Map x; x.a += 'xxx'", "xxx");
+    test("int[] a = [1,2,3]; a[1] += 2.5; a[1]", 4);
+    test("String s = 'a'; s += 1; println s; s", "a1");
+    test("def s = 'a'; s += 1; println s; s", "a1");
+    test("List x = [1,2,3]; x += [4]; println x; x", Utils.listOf(1,2,3,4));
+    test("def x = [1,2,3]; x += [4]; println x; x", Utils.listOf(1,2,3,4));
   }
 
   @Test public void minusEquals() {
@@ -1744,6 +1749,7 @@ class CompilerTests extends BaseTest {
     test("def x = 1.0D; int y = (byte)3; y -= x", 2.0D);
     test("def x = 1.0D; int y = 3; y -= x", 2.0D);
     test("def x = 1.0D; int y = 3; x -= y", -2.0D);
+    test("int[] a = [1,2,3]; a[1] -= 3.5; a[1]", -1);
   }
 
   @Test public void starEquals(){

@@ -46,7 +46,7 @@ public class RegisteredClasses {
   RegisteredClasses() {}
   
   public RegisteredClasses(RegisteredClasses other) {
-    this.parent = other.parent;
+    this.parent = other;
   }
   
   public Map<String, JactlClassDescriptor> getAutoImportedClasses() {
