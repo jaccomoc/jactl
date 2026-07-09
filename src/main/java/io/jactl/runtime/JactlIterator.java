@@ -18,6 +18,7 @@
 package io.jactl.runtime;
 
 import io.jactl.JactlType;
+import sun.rmi.transport.Transport;
 
 import java.util.Arrays;
 import java.util.Iterator;
@@ -51,6 +52,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
     NUMBER,
     STRING,
     STRING_SPLIT,
+    TRANSPOSE,
   }
 
   public static JactlIterator create(int ordinal) {
@@ -65,6 +67,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
       case MAP:            return new MapEntryIterator();
       case FILTER:         return new FilterIterator();
       case FLATMAP:        return new FlatMapIterator();
+      case TRANSPOSE:      return new TransposeIterator();
       case MAPPER:         return new MapIterator();
       case STREAM:         return new StreamIterator();
       case UNIQUE:         return new UniqueIterator();
@@ -90,6 +93,7 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
       case MAP:            return MapEntryIterator.class;
       case FILTER:         return FilterIterator.class;
       case FLATMAP:        return FlatMapIterator.class;
+      case TRANSPOSE:      return TransposeIterator.class;
       case MAPPER:         return MapIterator.class;
       case STREAM:         return StreamIterator.class;
       case UNIQUE:         return UniqueIterator.class;

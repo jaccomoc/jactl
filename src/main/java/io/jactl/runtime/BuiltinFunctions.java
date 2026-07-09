@@ -1492,7 +1492,7 @@ public class BuiltinFunctions {
   // = transpose
 
   public static JactlIterator listTranspose(List inputs, Continuation c, String source, int offset) {
-    return new TranposeIterator(inputs, source, offset);
+    return new TransposeIterator(inputs, source, offset);
   }
 
   // = transpose

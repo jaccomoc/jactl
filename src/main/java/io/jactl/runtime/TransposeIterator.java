@@ -36,7 +36,7 @@ import static io.jactl.JactlType.ITERATOR;
  *   [ [1,4], [2,5], [3,6] ]
  * </pre>
  */
-public class TranposeIterator extends JactlIterator {
+public class TransposeIterator extends JactlIterator {
   private static int VERSION = 1;
   String              source;
   int                 offset;
@@ -46,7 +46,7 @@ public class TranposeIterator extends JactlIterator {
 
   @Override public void _$j$checkpoint(Checkpointer checkpointer) {
     checkpointer.writeType(ITERATOR);
-    checkpointer.writeCInt(IteratorType.FLATMAP.ordinal());
+    checkpointer.writeCInt(IteratorType.TRANSPOSE.ordinal());
     checkpointer.writeCInt(VERSION);
     checkpointer.writeObject(source);
     checkpointer.writeCInt(offset);
@@ -57,7 +57,7 @@ public class TranposeIterator extends JactlIterator {
 
   @Override public void _$j$restore(Restorer restorer) {
     restorer.expectTypeEnum(JactlType.TypeEnum.ITERATOR);
-    restorer.expectCInt(IteratorType.FLATMAP.ordinal(), "Expected FLATMAP");
+    restorer.expectCInt(IteratorType.TRANSPOSE.ordinal(), "Expected TRANSPOSE");
     restorer.expectCInt(VERSION, "Bad version");
     source   = (String)restorer.readObject();
     offset   = restorer.readCInt();
@@ -66,9 +66,9 @@ public class TranposeIterator extends JactlIterator {
     nonEmptySeen = restorer.readBoolean();
   }
 
-  TranposeIterator() {}
+  TransposeIterator() {}
 
-  TranposeIterator(List inputs, String source, int offset) {
+  TransposeIterator(List inputs, String source, int offset) {
     this.source = source;
     this.offset = offset;
     this.inputIters = new ArrayList();
@@ -89,9 +89,9 @@ public class TranposeIterator extends JactlIterator {
     nonEmptySeen = false;
   }
 
-  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(TranposeIterator.class, IteratorType.FLATMAP, "hasNext$c", Object.class, Continuation.class);
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(TransposeIterator.class, IteratorType.FLATMAP, "hasNext$c", Object.class, Continuation.class);
   public static Object hasNext$c(Continuation c) {
-    return ((TranposeIterator)c.localObjects[0]).doHasNext(c);
+    return ((TransposeIterator)c.localObjects[0]).doHasNext(c);
   }
 
   @Override
@@ -169,9 +169,9 @@ public class TranposeIterator extends JactlIterator {
     }
   }
 
-  private static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(TranposeIterator.class, IteratorType.FLATMAP, "next$c", Object.class, Continuation.class);
+  private static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(TransposeIterator.class, IteratorType.FLATMAP, "next$c", Object.class, Continuation.class);
   public static Object next$c(Continuation c) {
-    return ((TranposeIterator)c.localObjects[0]).doNext(c);
+    return ((TransposeIterator)c.localObjects[0]).doNext(c);
   }
 
   @Override

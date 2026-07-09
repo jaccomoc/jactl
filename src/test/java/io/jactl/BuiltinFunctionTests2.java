@@ -1280,6 +1280,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
     checkpointTest("def x = checkpoint{ [1,2,3] }{ 'abc' }; checkpoint{ [1,2,3] }{ 'abc' }", Utils.listOf(1,2,3), "abc");
     checkpointTest("def x = checkpoint{ [1,2,3] }{ 'abc' }; checkpoint{ sleep(0,[1,2,3]) }{ sleep(0,'abc') }", Utils.listOf(1,2,3), "abc");
     checkpointTest("def x = checkpoint{ [1,2,3].map{ sleep(0,it) } }{ 'abc'.map{ sleep(0,it) }.join() }; checkpoint{ sleep(0,[1,2,3]) }{ sleep(0,'abc') }", Utils.listOf(1,2,3), "abc");
+    checkpointTest("[[1,2,3],[4,5,6]].transpose().map{ _checkpoint(it) }.size()", 3L, 3L);
   }
   
   @Test public void checkpointWithInvocationContext() throws ExecutionException, InterruptedException {
