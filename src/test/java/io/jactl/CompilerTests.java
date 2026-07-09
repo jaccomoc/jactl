@@ -3056,4 +3056,11 @@ class CompilerTests extends BaseTest {
     test("def f() { x += 1 }; f(); x", 4);
     test("def f() { x = 4 }; f(); x", 4);
   }
+  
+  @Test public void functionNamedArgs() {
+    test("def f(a,b,c) { [a,b,c] }; f(a:1,b:2,c:3)", Utils.listOf(1,2,3));
+    test("def f(a,b=2,c=3) { [a,b,c] }; f(a:4,b:5,c:6)", Utils.listOf(4,5,6));
+    test("def f(a,b=2,c=3) { [a,b,c] }; f(a:4,b:5)", Utils.listOf(4,5,3));
+    test("def f(a,b=2,c=3) { [a,b,c] }; f(a:4,c:5)", Utils.listOf(4,2,5));
+  }
 }

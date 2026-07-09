@@ -1513,7 +1513,7 @@ public class BuiltinFunctions {
   // = collectEntries
 
   public static Object iteratorCollectEntries(Object iterable, Continuation c, String source, int offset, JactlMethodHandle closure) {
-    return doIteratorCollect(RuntimeUtils.createIterator(iterable), new HashMap(), true, source, offset, closure, null);
+    return doIteratorCollect(RuntimeUtils.createIterator(iterable), new LinkedHashMap(), true, source, offset, closure, null);
   }
 
   /////////////////////////////

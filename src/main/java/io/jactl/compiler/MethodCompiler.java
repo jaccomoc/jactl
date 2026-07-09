@@ -54,6 +54,7 @@ import static io.jactl.JactlType.VOID;
 import static io.jactl.TokenType.*;
 import static io.jactl.Utils.JACTL_JAVA_INIT;
 import static io.jactl.Utils.isNamedArgs;
+import static io.jactl.runtime.FunctionDescriptor.NON_TRIVIAL;
 import static org.objectweb.asm.Opcodes.NEW;
 import static org.objectweb.asm.Opcodes.*;
 
@@ -2625,7 +2626,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            else {
                              // Must have simple constant for default value (built-in function or simple default value for user method)
                              Object        defaultValue  = method.defaultVals[i];
-                             assert defaultValue != FunctionDescriptor.NON_TRIVIAL;
+                             assert defaultValue != NON_TRIVIAL;
                              loadConst(defaultValue);
                              if (defaultValue != null) {
                                convertTo(paramType, null, !peek().isPrimitive(), expr.leftParen);
@@ -3305,6 +3306,20 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         if (func.mandatoryParams.contains(paramName)) {
           missingArgs.add(paramName);
         }
+        else if (orderedArgs != null && func.defaultVals[i] != NON_TRIVIAL) {
+          // If default value is a trivial const we can insert it
+          Expr.Literal literal = createLiteral(location, func.defaultVals[i]);
+          if (literal == null) {
+            orderedArgs = null;
+          }
+          else {
+            orderedArgs.add(literal);
+          }
+        }
+        else {
+          // Can't use default value so must use wrapper
+          orderedArgs = null;
+        }
       }
       else {
         validateArg(argExpr, paramType, namedArgMap.get(paramName).location);
@@ -3349,6 +3364,45 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     return hasError || isInitMethod || orderedArgs == null ? args : orderedArgs;
   }
 
+  private static Expr.Literal createLiteral(Token location, Object value) {
+    Token token = null;
+    JactlType type = null;
+    if (value == null) {
+      token = new Token(TokenType.NULL, location);
+      type = ANY;
+    }
+    else if (value instanceof String) {
+      token = location.newLiteral((String) value);
+      type = STRING;
+    }
+    else if (value instanceof Integer) {
+      token = new Token(INTEGER_CONST, location).setValue(value);
+      type = INT;
+    }
+    else if (value instanceof Long) {
+      token = new Token(LONG_CONST, location).setValue(value);
+      type = LONG;
+    }
+    else if (value instanceof Double) {
+      token = new Token(DOUBLE_CONST, location).setValue(value);
+      type = DOUBLE;
+    }
+    else if (value instanceof BigDecimal) {
+      token = new Token(DECIMAL_CONST, location).setValue(value);
+      type = DECIMAL;
+    }
+    else if (value instanceof Byte) {
+      token = new Token(BYTE_CONST, location).setValue(value);
+      type = BYTE;
+    }
+    else {
+      return null;
+    }
+    Expr.Literal expr = new Expr.Literal(token);
+    expr.type = type;
+    return expr;
+  }
+  
   private void validateArg(Expr argExpr, JactlType paramType, Token location) {
     if (argExpr.type.is(MAP) && paramType.is(INSTANCE) && !paramType.isHostClass()) {
       FunctionDescriptor initMethod = paramType.getJactlClassDescriptor().getInitMethod();
@@ -5151,7 +5205,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                            for (int i = expr.args.size(); i < func.defaultVals.length; i++) {
                              Expr.VarDecl paramDecl  = funDecl.parameters.get(i).declExpr;
                              Object       defaultVal = func.defaultVals[i];
-                             assert defaultVal != FunctionDescriptor.NON_TRIVIAL;
+                             assert defaultVal != NON_TRIVIAL;
                              loadConst(defaultVal);
                              if (defaultVal != null) {
                                convertTo(paramDecl.type, null, !peek().isPrimitive(), expr.location);
