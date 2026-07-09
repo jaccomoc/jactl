@@ -2083,6 +2083,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (couldBeNull(key)) {
         throwIfNull("Map key must not be null", key.location);
       }
+      box();
       compile(entry.second);
       box();
       invokeMethod(MAP_PUT_METHOD);

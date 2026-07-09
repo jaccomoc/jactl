@@ -2541,12 +2541,11 @@ public class Parser {
         if (key instanceof Expr.Literal) {
           Expr.Literal literal = (Expr.Literal) key;
           Object       value   = literal.value.getValue();
-          if (!(value instanceof String)) {
-            error(paramOrKey + " must be String not " + RuntimeUtils.className(value), key.location, false);
-          }
-          keyString = literal.value.getStringValue();
-          if (literalKeyMap.containsKey(keyString)) {
-            error(paramOrKey + " '" + keyString + "' occurs multiple times", key.location, false);
+          if (value instanceof String) {
+            keyString = literal.value.getStringValue();
+            if (literalKeyMap.containsKey(keyString)) {
+              error(paramOrKey + " '" + keyString + "' occurs multiple times", key.location, false);
+            }
           }
         }
         else {

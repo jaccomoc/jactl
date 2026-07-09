@@ -160,7 +160,6 @@ public class ListMapArrayTests extends BaseTest {
     test("[true:[false:[null:[if:[z:3],for:3]]]].true.false.null.if.z", 3);
     test("[true:[false:[null:[if:[z:3],for:3]]]]?.true?.false?.null?.if?.z", 3);
     test("[a:1]['a']", 1);
-    testError("[(1):2]", "map key must be string");
     testError("[a:2,b:3,a:4]", "key 'a' occurs multiple times");
     test("{a:1}.a", 1);
     test("{a:{b:2}}.a.b", 2);
@@ -187,11 +186,19 @@ public class ListMapArrayTests extends BaseTest {
     test("{true:{false:{null:{if:{z:3},for:3}}}}.true.false.null.if.z", 3);
     test("{true:{false:{null:{if:{z:3},for:3}}}}?.true?.false?.null?.if?.z", 3);
     test("{a:1}['a']", 1);
-    testError("{(1):2}", "map key must be string");
     testError("{a:2,b:3,a:4}", "key 'a' occurs multiple times");
     test("[('a' if true):2 if true, b:1]", Utils.mapOf("a", 2,"b", 1));
     test("[('a' unless false):2 unless false, b:1]", Utils.mapOf("a", 2,"b", 1));
     testError("[('a' if false):2 if true, b:1]", "map key must not be null");
+    test("[(1):'a']", Utils.mapOf(1,"a"));
+    test("def x = 1; [(x):'a']", Utils.mapOf(1,"a"));
+    test("[(1L):'a']", Utils.mapOf(1L,"a"));
+    test("def x = 1L; [(x):'a']", Utils.mapOf(1L,"a"));
+    test("[(1D):'a']", Utils.mapOf(1D,"a"));
+    test("def x = 1D; [(x):'a']", Utils.mapOf(1D,"a"));
+    test("[(1.0):'a']", Utils.mapOf(BigDecimal.valueOf(1.0),"a"));
+    test("def x = 1.0; [(x):'a']", Utils.mapOf(BigDecimal.valueOf(1.0),"a"));
+    test("[(1 + 2):'a']", Utils.mapOf(3,"a"));
   }
 
   @Test public void nonStringMapKeys() {
