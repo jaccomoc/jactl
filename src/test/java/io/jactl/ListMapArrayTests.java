@@ -199,6 +199,10 @@ public class ListMapArrayTests extends BaseTest {
     test("[(1.0):'a']", Utils.mapOf(BigDecimal.valueOf(1.0),"a"));
     test("def x = 1.0; [(x):'a']", Utils.mapOf(BigDecimal.valueOf(1.0),"a"));
     test("[(1 + 2):'a']", Utils.mapOf(3,"a"));
+    test("[a:2,/abc/:1].abc", 1);
+    test("[a:2,b:3,/=abc/:1].'=abc'", 1);
+    test("[/abc/:1].abc", 1);
+    test("[/=abc/:1].'=abc'", 1);
   }
 
   @Test public void nonStringMapKeys() {

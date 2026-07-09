@@ -383,7 +383,10 @@ public class SwitchTests extends BaseTest {
     test("def x = [[[i:3,j:7]],[[i:4,j:9]]]; switch (x) { [[_],[[i:3,j:7]]] -> 3; [[[i:3,j:7]],_] -> 4; _ -> null }", 4);
     test("def x = [[[i:3,j:7]],[[i:4,j:9]]]; switch (x) { [[_],[[i:3,j:7]]] -> 3; [_,[a]] -> a; _ -> null } == [i:4,j:9]", true);
     test("def x = [[[i:3,j:7]],[[i:4,j:9]]]; switch (x) { [[_],[[i:3,j:7]]] -> 3; [_,[Map a]] -> a; _ -> null } == [i:4,j:9]", true);
-    testError("def val =['a a':1,b:[z:4],c:3]; def x = 'b'; switch(val) { [\"${'abc'[0]} a\":1,\"$x\":x,*] -> x; default -> 2 }", "unexpected token");
+    testError("def val =['a a':1,b:[z:4],c:3]; def x = 'b'; switch(val) { [\"${'abc'[0]} a\":1,\"$x\":x,*] -> x; default -> 2 }", "expected string constant");
+    test("switch (['abc':1]) { [\"abc\":_] -> 3 }", 3);
+    test("switch (['abc':1]) { [/abc/:_] -> 3 }", 3);
+    testError("def x = 1; switch (['abc':1]) { [\"ab${x}c\":_] -> 3 }", "expected string constant");
   }
 
   @Test public void switchOnList() {

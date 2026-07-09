@@ -2590,8 +2590,10 @@ public class Parser {
     skipNewLines();
     Token token = peek();
     switch (token.getType()) {
-      case STRING_CONST: case IDENTIFIER:    return new Expr.Literal(advance());
-      case EXPR_STRING_START:                return exprString();
+      case STRING_CONST: case IDENTIFIER:
+        return new Expr.Literal(advance());
+      case SLASH: case SLASH_EQUAL: case EXPR_STRING_START:
+        return exprString();
       case LEFT_PAREN:  {
         advance();
         Expr expr = ifUnlessExpr(true);
@@ -3176,7 +3178,7 @@ public class Parser {
   }
 
   private boolean isExprString() {
-    return peek().is(DOUBLE_QUOTE,SLASH,SLASH_EQUAL);
+    return peek().is(EXPR_STRING_START,SLASH,SLASH_EQUAL);
   }
 
   /**
@@ -3184,7 +3186,19 @@ public class Parser {
    */
   private Expr patternMapKey(boolean starAllowed) {
     if (isExprString()) {
-      return exprString();
+      Expr expr = exprString();
+      // See if we can convert to a const string literal
+      if (expr instanceof Expr.RegexMatch && ((Expr.RegexMatch) expr).modifiers.isEmpty()) {
+        expr = ((Expr.RegexMatch) expr).pattern;
+      }
+      if (expr instanceof Expr.ExprString) {
+        Expr.ExprString exprString = (Expr.ExprString) expr;
+        if (exprString.exprList.size() == 1 && exprString.exprList.get(0) instanceof Expr.Literal) {
+          return exprString.exprList.get(0);
+        }
+      }
+      // No conversion possible
+      return expr;
     }
     return new Expr.Literal(starAllowed ? expect(STRING_CONST, IDENTIFIER, STAR)
                                         : expect(STRING_CONST, IDENTIFIER));
@@ -3208,7 +3222,7 @@ public class Parser {
           error("Key '" + keyString + "' occurs multiple times", key.location);
         }
         Expr value = null;
-        if (!keyString.equals(STAR.asString)) {
+        if (keyString == null || !keyString.equals(STAR.asString)) {
           expect(COLON);
           value = switchPattern();
         }
@@ -3495,7 +3509,7 @@ public class Parser {
         return true;
       }
 
-      if (!next.is(EXPR_STRING_START, LEFT_PAREN, LEFT_SQUARE)) {
+      if (!next.is(EXPR_STRING_START, SLASH, SLASH_EQUAL, LEFT_PAREN, LEFT_SQUARE)) {
         return false;
       }
     }
