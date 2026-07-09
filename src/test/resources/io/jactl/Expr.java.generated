@@ -126,8 +126,16 @@ public abstract class Expr extends JactlUserDataHolder {
   }
 
   public boolean isTypePattern() {
-    return this instanceof Expr.TypeExpr || this instanceof Expr.ConstructorPattern || this instanceof Expr.VarDecl ||
-           this instanceof Expr.Identifier && (((Expr.Identifier)this).identifier.is(UNDERSCORE) || ((Expr.Identifier)this).varDecl.isBindingVar);
+    if (this instanceof Expr.TypeExpr || this instanceof Expr.ConstructorPattern || this instanceof Expr.VarDecl) {
+      return true;
+    }
+    if (this instanceof Expr.Identifier) {
+      Identifier identifier = (Identifier) this;
+      if (identifier.identifier.is(UNDERSCORE) || (identifier.varDecl != null && identifier.varDecl.isBindingVar)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   public JactlType patternType() {

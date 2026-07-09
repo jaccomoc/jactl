@@ -243,6 +243,19 @@ public class SwitchTests extends BaseTest {
     testError("def a; switch(a) { [_,i,'cc'] -> i; [_,[x:i],'cc'] -> 7 }", "covered by a previous");
     test("def a=[1,[x:3]]; switch(a) { [_,i,'cc'] -> i; [_,[x:i]] -> i }", 3);
     test("def a=[1,[x:3]]; switch(a) { [_,int i] -> i; [_,[x:i]] -> i }", 3);
+    test("switch ([1,2,3]) { [1,2,3] -> 2; [*] -> 3 }", 2);
+    test("switch ([1,2,3]) { [1,2,4] -> 2; [*t] -> t.size() }", 3L);
+    test("switch ([1,2,3]) { [1,2,4] -> 2; [1,*t] -> t.size() }", 2L);
+    test("switch ([1,2,[3,4,5]]) { [1,2,4] -> 2; [1,*t] -> t.size() }", 2L);
+    testError("switch ([1,2,3]) { [*] -> 1; [1,2,3] -> 2 }", "covered by a previous");
+    testError("switch ([1,2,3]) { [*t] -> 1; [1,2,3] -> 2 }", "covered by a previous");
+    testError("switch ([1,2,3]) { [1,*] -> 1; [1,2,3] -> 2 }", "covered by a previous");
+    testError("switch ([1,2,3]) { [1,*t] -> 1; [1,2,3] -> 2 }", "covered by a previous");
+    testError("switch ([1,2,3]) { [1,2,*] -> 1; [1,2,3] -> 2 }", "covered by a previous");
+    testError("switch ([1,2,3]) { [1,2,*t] -> 1; [1,2,3] -> 2 }", "covered by a previous");
+    testError("switch ([1,2,3]) { [1,2,*t] -> 1; [1,2,[3,4,5]] -> 2 }", "covered by a previous");
+    testError("switch ([1,2,3]) { [1,2,_] -> 1; [1,2,3] -> 2 }", "covered by a previous");
+    testError("switch ([1,2,3]) { [1,2,_t] -> 1; [1,2,3] -> 2 }", "covered by a previous");
   }
 
   @Test public void switchOnMap() {

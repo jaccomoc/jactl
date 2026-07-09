@@ -198,7 +198,10 @@ public class SwitchResolver {
   }
 
   private static boolean covers(Expr pattern1, Expr pattern2, Map<String,Expr> bindings) {
-    if (pattern1 instanceof Expr.TypeExpr || pattern1 instanceof Expr.VarDecl || isUnderscore(pattern1)) {
+    if (isUnderscore(pattern1) || pattern1.isStar()) {
+      return true;
+    }
+    if (pattern1 instanceof Expr.TypeExpr || pattern1 instanceof Expr.VarDecl) {
       JactlType t1 = pattern1 instanceof Expr.TypeExpr ? ((Expr.TypeExpr) pattern1).typeVal : pattern1.type;
       JactlType t2 = pattern2.patternType();
       if (pattern1 instanceof Expr.VarDecl) {
