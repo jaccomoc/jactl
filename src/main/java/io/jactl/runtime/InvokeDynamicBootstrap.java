@@ -674,6 +674,9 @@ public class InvokeDynamicBootstrap {
     if (n instanceof Double) {
       return BigDecimal.valueOf((Double) n);
     }
+    if (n instanceof Byte) {
+      return BigDecimal.valueOf((byte)n & 0xff);
+    }
     return BigDecimal.valueOf(n.longValue());
   }
   

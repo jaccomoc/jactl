@@ -760,5 +760,6 @@ public class CompilerTest3 extends BaseTest {
     test("class X { Decimal f(Decimal d = 3) { d + 1 } }; def x = new X(); x.f()", "#4");
     test("class X { Decimal f(Decimal d = 3) { d + 1 } }; def x = new X(); def g = x.f; g()", "#4");
     test("class X { def f = { Decimal d = 3 -> d + 1 } }; def x = new X(); def g = x.f; g()", "#4");
+    test("def f(Decimal dd) { dd }; def g = f; def b = (byte)200; 3.map{ g(b) }.sum()", BigDecimal.valueOf(600));
   }
 }
