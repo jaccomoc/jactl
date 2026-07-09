@@ -697,6 +697,7 @@ public class SwitchTests extends BaseTest {
   }
 
   @Test public void switchWithClassConstructor() {
+    testError("class X { int i = 1 }; def x = new X(); switch (x) { X(2) -> true }", "does not match mandatory field count");
     test("class X{ int i }; def x = new X(3); switch (x) { X(3) -> true; _ -> false }", true);
     test("class X{ int i }; X x = new X(3); switch (x) { X(3) -> true; _ -> false }", true);
     test("class X{ long j }; def x = new X(3); switch (x) { X(3) -> true; _ -> false }", true);

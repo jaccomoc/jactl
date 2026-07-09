@@ -314,7 +314,7 @@ public class SwitchResolver {
         if (exprs.size() != constructorArgs.size()) {
           resolver.error("Argument count for constructor pattern does not match mandatory field count of " + constructorArgs.size(), expr.args.location);
         }
-        for (int i = 0; i < exprs.size(); i++) {
+        for (int i = 0; i < Math.min(exprs.size(), constructorArgs.size()); i++) {
           Expr                         arg              = exprs.get(i);
           Map.Entry<String, JactlType> constructorParam = constructorArgs.get(i);
           if (!arg.type.isConvertibleTo(constructorParam.getValue())) {
