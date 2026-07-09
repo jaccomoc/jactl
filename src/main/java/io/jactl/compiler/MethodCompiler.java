@@ -608,6 +608,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (val == null) {
       return null;
     }
+    if (val instanceof Byte && type.isNumeric()) {
+      if (type.is(BYTE)) {
+        return val;
+      }
+      val = (int)((byte)val & 0xff);
+    }
     switch (type.getType()) {
       case BOOLEAN: return RuntimeUtils.isTruth(val, false);
       case STRING:  return RuntimeUtils._toString(val);

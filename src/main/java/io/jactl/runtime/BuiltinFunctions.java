@@ -666,6 +666,13 @@ public class BuiltinFunctions {
 
   // = sprintf
   public static String sprintf(String source, int offset, String format, Object... args) {
+    // We check for byte values and convert to unsigned
+    for (int i = 0; i < args.length; i++) {
+      Object arg = args[i];
+      if (arg instanceof Byte) {
+        args[i] = (byte)arg & 0xff;
+      }
+    }
     try {
       return String.format(format, args);
     }

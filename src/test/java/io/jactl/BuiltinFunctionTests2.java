@@ -453,6 +453,8 @@ public class BuiltinFunctionTests2 extends BaseTest {
     testError("[1,2,3,4,5].subList(-2,1)", "IllegalArgument");
     testError("[1,2,3,4,5].map().subList(-2,0)", "IllegalArgument");
     testError("[1,2,3,4,5].map().subList(-2,1)", "IllegalArgument");
+    testError("[1,2,3,4,5].subList(1,(byte)254)",  "IndexOutOfBounds");
+    testError("[1,2,3,4,5].subList((byte)254)",  "IllegalArgument");
   }
 
   @Test public void mapRemove() {
@@ -549,6 +551,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
     testError("sprintf()", "missing mandatory argument");
     testError("def f = sprintf; f()", "missing mandatory argument");
     testError("sprintf(format:'%s%d',args:['x','a'])", "bad format string");
+    test("def b = (byte)200; sprintf('%d', b)", "200");
   }
 
   @Test public void asNum() {
