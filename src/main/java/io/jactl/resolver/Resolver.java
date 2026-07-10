@@ -101,7 +101,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private final JactlContext             jactlContext;
   private final Map<String,Object>       globals;
-  private final Deque<Stmt.ClassDecl>    classStack       = new ArrayDeque<>();
+  private final Map<String,Expr.VarDecl> globalVarDecls;
+  private final Deque<Stmt.ClassDecl>    classStack = new ArrayDeque<>();
 
   private String packageName = null;
   private String scriptName  = null;  // If this is a script
@@ -134,10 +135,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
    * @param location location for error
    */
   public Resolver(JactlContext jactlContext, Map<String, Object> globals, Token location) {
-    this.jactlContext = jactlContext;
-    this.globals      = globals == null ? Utils.mapOf() : globals;
+    this.jactlContext   = jactlContext;
+    this.globals        = globals == null ? Utils.mapOf() : globals;
+    this.globalVarDecls = jactlContext.replMode ? jactlContext.replVarDecls : new HashMap<>();
     this.globals.keySet().forEach(name -> {
-      if (!jactlContext.globalVars.containsKey(name)) {
+      if (!globalVarDecls.containsKey(name)) {
         Expr.VarDecl varDecl = createGlobalVarDecl(name, JactlContext.typeOf(globals.get(name), jactlContext).boxed());
         if (varDecl.type.is(INSTANCE)) {
           ClassDescriptor classDescriptor = jactlContext.getClassDescriptor(varDecl.type.getInternalName());
@@ -149,7 +151,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           }
           varDecl.type.setClassDescriptor(classDescriptor);
         }
-        jactlContext.globalVars.put(name, varDecl);
+        globalVarDecls.put(name, varDecl);
       }
     });
     if (jactlContext.replMode) {
@@ -1689,7 +1691,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       String name       = identifier.getStringValue();
       if (lookup(name, identifier, false, true) == null) {
         Expr.VarDecl varDecl = createGlobalVarDecl(name, ANY);
-        jactlContext.globalVars.put(name, varDecl);
+        jactlContext.replVarDecls.put(name, varDecl);
       }
     }
     JactlType varType = resolve(identifierExpr);
@@ -2654,7 +2656,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
     }
 
-
     // If we have a field then get class block variables, otherwise get vars for current block
     Map<String, Expr.VarDecl> vars = decl.isField ? currentClass().classBlock.variables : getVars(decl.isParam);
     if (!(jactlContext.replMode && isAtTopLevel())) {
@@ -2711,7 +2712,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   private Map<String,Expr.VarDecl> getVars(boolean isParam) {
     // Special case for repl mode where we ignore top level block
     if (!isParam && jactlContext.replMode && isAtTopLevel()) {
-      return jactlContext.globalVars;
+      return globalVarDecls;
     }
     return getBlock().variables;
   }
@@ -3144,7 +3145,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private Expr.VarDecl lookupGlobals(String name, Token location) {
     // Access to globals not allowed in classes unless flag set in jactlContext.
-    Expr.VarDecl global = jactlContext.globalVars.get(name);
+    Expr.VarDecl global = globalVarDecls.get(name);
     if (isScriptScope() || jactlContext.classAccessToGlobals) {
       if (global == null) {
         Object globalVar = globals.get(name);
@@ -3153,7 +3154,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         }
         if (globalVar != null) {
           global = createGlobalVarDecl(name, JactlContext.typeOf(globalVar, jactlContext).boxed());
-          jactlContext.globalVars.put(name, global);
+          globalVarDecls.put(name, global);
         }
       }
       return global;

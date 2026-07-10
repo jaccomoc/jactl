@@ -98,14 +98,15 @@ public class JactlContext {
   public int     minScale           = Utils.DEFAULT_MIN_SCALE;
 
   // In repl mode top level vars are stored in the globals map and their type
-  // is tracked here. We also allow redefinitions of existing vars. We don't
-  // allow shadowing of actual global vars that already exist in the globals map.
+  // is tracked here. We also allow redefinitions of existing vars.
   public boolean replMode           = false;
 
   // In repl mode we keep track of the type of the top level vars here
   // and store their actual values in the globals map that is passed in
-  // at run time.
-  public final Map<String,Expr.VarDecl> globalVars = new HashMap<>();
+  // at run time. This is because we need the declared type, not just
+  // the runtime type. 
+  // E.g.: X x = null -> runtime type is Object but declared type is X
+  public final Map<String,Expr.VarDecl> replVarDecls = new HashMap<>();
 
   // For repl mode keep track of imported classes
   private Imports imports = null;

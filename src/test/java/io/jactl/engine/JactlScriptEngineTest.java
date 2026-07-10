@@ -114,7 +114,7 @@ class JactlScriptEngineTest {
     assertEquals(66, engine.eval("println x.toString() + x + nextLine() + nextLine(); x + x", ctx2));
     assertEquals("3333123456\n", baos2.toString());
     engineBindings.put("x", null);
-    assertEquals(true, engine.eval("x == null"));
+    assertEquals(true, engine.eval("x == null", ctx));
   }
 
   @Test void evalWithBindings() throws ScriptException {

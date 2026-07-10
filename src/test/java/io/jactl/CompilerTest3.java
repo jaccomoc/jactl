@@ -440,6 +440,22 @@ public class CompilerTest3 extends BaseTest {
     catch (JactlError e) {
       assertTrue(e.getMessage().contains("Null operand"));
     }
+    try {
+      runtest.accept("Map mmm = [abc:123]; xyz", "xxx");
+      fail("Expected error");
+    }
+    catch (CompileError e) {
+      assertFalse(globals.containsKey("mmm"));
+    }
+    try {
+      jactlContext.replMode = false;
+      globals.put("abc", "string value");
+      runtest.accept("def m = [abc:123]; eval('abc + abc', m)", 246);
+    }
+    catch (RuntimeException e) {
+      fail(e.getMessage());
+    }
+    jactlContext.replMode = true;
   }
 
   @Test public void inifiniteLoopDetection() {
