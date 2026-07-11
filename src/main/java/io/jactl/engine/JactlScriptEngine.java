@@ -90,11 +90,14 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
     return evalScript(script, ctxGlobals, scriptContext.getReader(), scriptContext.getWriter());
   }
 
-  private synchronized Object evalScript(String script, Map ctxGlobals, Reader reader, Writer writer) throws ScriptException {
-    JactlScript jactlScript = scriptCache.get(script);
-    if (jactlScript == null) {
-      jactlScript = compileScript(script, ctxGlobals);
-      scriptCache.put(script, jactlScript);
+  private Object evalScript(String script, Map ctxGlobals, Reader reader, Writer writer) throws ScriptException {
+    JactlScript jactlScript;
+    synchronized (scriptCache) {
+      jactlScript = scriptCache.get(script);
+      if (jactlScript == null) {
+        jactlScript = compileScript(script, ctxGlobals);
+        scriptCache.put(script, jactlScript);
+      }
     }
     this.jactlScript = jactlScript;
     try {

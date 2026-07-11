@@ -90,6 +90,36 @@ Object result = script.eval();
 `CompiledScript` instances also support the variants of `eval()` where you can pass either a `Bindings` object or
 a `ScriptContext` object.
 
+## Thread Safety
+
+The Java Scripting API provides a way to ask about thread-safety:
+
+```java
+import javax.script.ScriptEngineFactory;
+
+ScriptEngineFactory factory = new ScriptEngineManager().getEngineByExtension("jactl").getFactory();
+assert "MULTITHREADED".equals(factory.getParameter("THREADING"));
+```
+
+The thread-safety relates to how a single `ScriptEngine` instance used by multiple threads will behave.
+The legal values that can be returned are:
+
+| THREADING value | Description                                                                                           |
+|-----------------|-------------------------------------------------------------------------------------------------------|
+| null            | Not thread safe                                                                                       |
+| MULTITHREADED   | Thread safe but effects of script evaluation on one thread may be visible on other threads            |
+| THREAD-ISOLATED | Engine has independent values for symbols for different threads                                       |
+| STATELESS       | Same as THREAD-ISOLATED but in addition the per-engine bindings are not modified by script executions |
+
+Jactl returns `MULTITHREADED` rather than `THREAD-ISOLATED` because the use of
+[`invokeFunction()`](https://docs.oracle.com/javase/8/docs/api/javax/script/Invocable.html#invokeFunction-java.lang.String-java.lang.Object...-)
+or [`invokeMethod()`](https://docs.oracle.com/javase/8/docs/api/javax/script/Invocable.html#invokeMethod-java.lang.Object-java.lang.String-java.lang.Object...-)
+relies on the most recent `eval()` call to have installed the appropriate function/method that the `invokeFunction()/invokeMethod()` refers to.
+Different threads running different scripts with `eval()` could install different versions of the same function/method name or install
+scripts that don't have the function/method needed by other threads.
+If using this part of the API and different `eval()` calls are being done across multiple threads, a separate
+`JactlScriptEngine` instance should be used per thread.
+
 ## Java Interoperability and Host Class Access
 
 By default, Jactl provides a secure sandbox in which scripts can run.

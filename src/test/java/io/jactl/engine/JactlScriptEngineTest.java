@@ -23,14 +23,13 @@ import org.junit.jupiter.api.function.Executable;
 
 import javax.script.*;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-import java.io.PrintWriter;
-import java.io.StringReader;
+import java.io.*;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -604,5 +603,32 @@ class JactlScriptEngineTest {
     engine.put("m", new HashMap<>());
     engine.eval("x.voidMethod(m)");
     assertEquals("xyz", ((Map)engine.get("m")).get("x"));
+  }
+  
+  @Test void multiThreadEval() throws InterruptedException {
+    final int THREADS = 10;
+    ExecutorService            executor = Executors.newFixedThreadPool(THREADS);
+    AtomicReference<Throwable> error    = new AtomicReference<>();
+    for (int i = 0; i < 500; i++) {
+      CyclicBarrier  barrier = new CyclicBarrier(THREADS);
+      CountDownLatch latch   = new CountDownLatch(THREADS);
+      for (int j = 0; j < THREADS; j++) {
+        String script = "def x = " + i;
+        int    finalI = i;
+        executor.submit(() -> {
+          try {
+            barrier.await();
+            assertEquals(finalI, engine.eval(script));
+          }
+          catch (Throwable e) {
+            error.set(e);
+          }
+          latch.countDown();
+        });
+      }
+      latch.await();
+      assertNull(error.get());
+    }
+    executor.shutdown();
   }
 }

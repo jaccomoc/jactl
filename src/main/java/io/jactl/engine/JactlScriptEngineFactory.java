@@ -47,7 +47,13 @@ public class JactlScriptEngineFactory implements ScriptEngineFactory {
       case ScriptEngine.LANGUAGE:         return getLanguageName();
       case ScriptEngine.LANGUAGE_VERSION: return getLanguageVersion();
       case ScriptEngine.NAME:             return "jactl";
-      case "THREADING":                   return "THREAD-ISOLATED";
+      
+      // Jactl is THREAD-ISOLATED for standard eval() invocations but if using invokeFunction()/invokeMethod(),
+      // since these rely on the last eval() to install the appropriate function/method, Jactl does not 
+      // provide thread-isolation in this case. Two threads doing eval() + invokeFunction()/invokeMethod()
+      // using the same JactlScriptEngine instance will potentially have the wrong function/method invoked or
+      // will result in errors about missing function/method.
+      case "THREADING":                   return "MULTITHREADED";
       default:                            return null;
     }
   }

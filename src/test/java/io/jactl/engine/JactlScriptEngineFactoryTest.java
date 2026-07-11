@@ -77,7 +77,7 @@ class JactlScriptEngineFactoryTest {
     assertEquals("Jactl", factory.getParameter(ScriptEngine.LANGUAGE));
     assertEquals(Utils.JACTL_LANGUAGE_VERSION, factory.getParameter(ScriptEngine.LANGUAGE_VERSION));
     assertEquals("jactl", factory.getParameter(ScriptEngine.NAME));
-    assertEquals("THREAD-ISOLATED", factory.getParameter("THREADING"));
+    assertEquals("MULTITHREADED", factory.getParameter("THREADING"));
   }
 
   @Test
