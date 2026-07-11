@@ -138,22 +138,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     this.jactlContext   = jactlContext;
     this.globals        = globals == null ? Utils.mapOf() : globals;
     this.globalVarDecls = jactlContext.replMode ? jactlContext.replVarDecls : new HashMap<>();
-    this.globals.keySet().forEach(name -> {
-      if (!globalVarDecls.containsKey(name)) {
-        Expr.VarDecl varDecl = createGlobalVarDecl(name, JactlContext.typeOf(globals.get(name), jactlContext).boxed());
-        if (varDecl.type.is(INSTANCE)) {
-          ClassDescriptor classDescriptor = jactlContext.getClassDescriptor(varDecl.type.getInternalName());
-          if (classDescriptor == null) {
-            classDescriptor = varDecl.type.getClassDescriptor();
-          }
-          if (classDescriptor == null) {
-            error("Unknown class " + varDecl.type.getInternalName() + " for global var " + name, location);
-          }
-          varDecl.type.setClassDescriptor(classDescriptor);
+    if (jactlContext.replMode) {
+      this.globals.keySet().forEach(name -> {
+        if (!globalVarDecls.containsKey(name)) {
+          createGlobalVarDecl(name, JactlContext.typeOf(globals.get(name), jactlContext).boxed(), location);
         }
-        globalVarDecls.put(name, varDecl);
-      }
-    });
+      });
+    }
     if (jactlContext.replMode) {
       imports = jactlContext.getImports();
     }
@@ -1690,7 +1681,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       Token  identifier = identifierExpr.identifier;
       String name       = identifier.getStringValue();
       if (lookup(name, identifier, false, true) == null) {
-        Expr.VarDecl varDecl = createGlobalVarDecl(name, ANY);
+        Expr.VarDecl varDecl = createGlobalVarDecl(name, ANY, expr.location);
         jactlContext.replVarDecls.put(name, varDecl);
       }
     }
@@ -3145,21 +3136,21 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   private Expr.VarDecl lookupGlobals(String name, Token location) {
     // Access to globals not allowed in classes unless flag set in jactlContext.
-    Expr.VarDecl global = globalVarDecls.get(name);
+    Expr.VarDecl varDecl = globalVarDecls.get(name);
     if (isScriptScope() || jactlContext.classAccessToGlobals) {
-      if (global == null) {
-        Object globalVar = globals.get(name);
-        if (globalVar == null && jactlContext.allowUndeclaredGlobals) {
-          globalVar = new Object();       // Create value of type ANY for references to unknown globals
+      if (varDecl == null) {
+        Object globalVar = null;
+        if (globals.containsKey(name)) {
+          globalVar = globals.get(name);
+          varDecl = createGlobalVarDecl(name, globalVar == null ? ANY : JactlContext.typeOf(globalVar, jactlContext).boxed(), location);
         }
-        if (globalVar != null) {
-          global = createGlobalVarDecl(name, JactlContext.typeOf(globalVar, jactlContext).boxed());
-          globalVarDecls.put(name, global);
+        else if (jactlContext.allowUndeclaredGlobals) {
+          varDecl = createGlobalVarDecl(name, ANY, location);
         }
       }
-      return global;
+      return varDecl;
     }
-    if (global != null) {
+    if (globals.containsKey(name)) {
       error("Illegal access to global '" + name + "': access to globals not permitted within class scope", location);
     }
     return null;
@@ -3832,11 +3823,22 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return functions.peek();
   }
 
-  private static Expr.VarDecl createGlobalVarDecl(String name, JactlType type) {
+  private Expr.VarDecl createGlobalVarDecl(String name, JactlType type, Token location) {
     Expr.VarDecl varDecl = new Expr.VarDecl(new Token("",0).setType(IDENTIFIER).setValue(name),
                                             null, null);
     varDecl.type = type;
     varDecl.isGlobal = true;
+    if (varDecl.type.is(INSTANCE)) {
+      ClassDescriptor classDescriptor = jactlContext.getClassDescriptor(varDecl.type.getInternalName());
+      if (classDescriptor == null) {
+        classDescriptor = varDecl.type.getClassDescriptor();
+      }
+      if (classDescriptor == null) {
+        error("Unknown class " + varDecl.type.getInternalName() + " for global var " + name, location);
+      }
+      varDecl.type.setClassDescriptor(classDescriptor);
+    }
+    globalVarDecls.put(name, varDecl);
     return varDecl;
   }
 
