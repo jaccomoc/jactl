@@ -1681,8 +1681,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       Token  identifier = identifierExpr.identifier;
       String name       = identifier.getStringValue();
       if (lookup(name, identifier, false, true) == null) {
-        Expr.VarDecl varDecl = createGlobalVarDecl(name, ANY, expr.location);
-        jactlContext.replVarDecls.put(name, varDecl);
+        createGlobalVarDecl(name, ANY, expr.location);
       }
     }
     JactlType varType = resolve(identifierExpr);
