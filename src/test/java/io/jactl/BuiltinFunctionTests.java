@@ -733,35 +733,35 @@ public class BuiltinFunctionTests extends BaseTest {
     test("2.size()", 2L);
     test("def x = 2; x.size()", 2L);
     test("def x = 2; def f = x.size; f()", 2L);
-    test("List x; x.size()", 0L);
-    test("List x = []; x.size()", 0L);
-    test("List x = [1,2,3]; x.size()", 3L);
-    test("def x = []; x.size()", 0L);
-    test("def x = []; x?.size()", 0L);
+    test("List x; x.size()", 0);
+    test("List x = []; x.size()", 0);
+    test("List x = [1,2,3]; x.size()", 3);
+    test("def x = []; x.size()", 0);
+    test("def x = []; x?.size()", 0);
     test("def x; x?.size()", null);
-    test("def x = [1,2,3]; x.size()", 3L);
-    test("Map x; x.size()", 0L);
-    test("Map x = [:]; x.size()", 0L);
-    test("Map x = [a:1,b:2]; x.size()", 2L);
-    test("Map x = [a:1,b:[c:3]]; x.b.size()", 1L);
+    test("def x = [1,2,3]; x.size()", 3);
+    test("Map x; x.size()", 0);
+    test("Map x = [:]; x.size()", 0);
+    test("Map x = [a:1,b:2]; x.size()", 2);
+    test("Map x = [a:1,b:[c:3]]; x.b.size()", 1);
     testError("def x; x.size()", "null value");
     test("def x; def y; y ?= x.size(); y", null);
-    test("def x = [:]; x.size()", 0L);
-    test("def x = [a:1,b:2]; x.size()", 2L);
-    test("def x = [a:1,b:2]; x?.size()", 2L);
-    test("def x = [a:1,b:[c:3]]; x.b.size()", 1L);
-    test("def x = [a:1,b:[1,2,3]]; x.b.size()", 3L);
+    test("def x = [:]; x.size()", 0);
+    test("def x = [a:1,b:2]; x.size()", 2);
+    test("def x = [a:1,b:2]; x?.size()", 2);
+    test("def x = [a:1,b:[c:3]]; x.b.size()", 1);
+    test("def x = [a:1,b:[1,2,3]]; x.b.size()", 3);
     test("def x = [a:1,b:[c:3]]; x.b.c.size()", 3L);
-    test("def x = [1,2,3]; def f = x.size; f()", 3L);
-    test("List x = [1,2,3]; def f = x.size; f()", 3L);
-    test("def x = [a:1,b:2,c:3]; def f = x.size; f()", 3L);
-    test("Map x = [a:1,b:2,c:3]; def f = x.size; f()", 3L);
-    test("Map x = [a:1,b:2,c:3]; def f = x.\"${'size'}\"; f()", 3L);
-    test("List x = [1,2,3]; x.'size'()", 3L);
+    test("def x = [1,2,3]; def f = x.size; f()", 3);
+    test("List x = [1,2,3]; def f = x.size; f()", 3);
+    test("def x = [a:1,b:2,c:3]; def f = x.size; f()", 3);
+    test("Map x = [a:1,b:2,c:3]; def f = x.size; f()", 3);
+    test("Map x = [a:1,b:2,c:3]; def f = x.\"${'size'}\"; f()", 3);
+    test("List x = [1,2,3]; x.'size'()", 3);
     testError("def x = [1]; x.sizeXXX()", "no such method");
     test("def x; def y; y = x?.size()?.size(); y", null);
-    test("def x = 'size'; [1,2,3].\"$x\"()", 3L);
-    test("def x = 'size'; def y = [1,2,3]; y.\"$x\"()", 3L);
+    test("def x = 'size'; [1,2,3].\"$x\"()", 3);
+    test("def x = 'size'; def y = [1,2,3]; y.\"$x\"()", 3);
   }
 
   @Test
@@ -980,7 +980,7 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("int sum = 0; def x = 3; def f = x.each; f(action:{ x=7,y=2 -> sum += x+y },xxx:1); sum", "no such parameter");
     test("int sum = 0; def x = 3; def f = x.each; f{ x=7,y=2 -> sum += x+y }; sum", 9);
     test("int sum = 0; def x = 3.4; def f = x.each; f{ x=7,y=2 -> sum += x+y }; sum", 9);
-    test("def x = 3\n[[1],[2]].size()", 2L);
+    test("def x = 3\n[[1],[2]].size()", 2);
   }
 
   @Test
@@ -991,7 +991,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def result = ''; [a:1,b:2].each{ x,y -> result += \"[$x,$y]\" }; result", "[a,1][b,2]");
     test("def result = ''; [a:1,b:2].each{ result += \"[${it[0]},${it[1]}]\" }; result", "[a,1][b,2]");
     test("def result = ''; [a:1,b:2].each{ x -> result += \"[${x[0]},${x[1]}]\" }; result", "[a,1][b,2]");
-    test("def result = 0; [a:1,b:2].each{ x -> result += x.size() }; result", 4L);
+    test("def result = 0; [a:1,b:2].each{ x -> result += x.size() }; result", 4);
     test("def result = ''; [a:1,b:2].each{ x -> result += x }; result", "['a', 1]['b', 2]");
     test("def result = 0; [a:1,b:2].each{ x -> x.each{ result++ } }; result", 4);
     test("def result = 0; [a:1,b:2].each(action:{ x -> def f = x.each; f(action:{ result++ }) }); result", 4);
@@ -1150,14 +1150,14 @@ public class BuiltinFunctionTests extends BaseTest {
     test("[a:1,b:2,c:3].map(mapper:{ x,y -> sleep(0,x) + sleep(0,y) })", Utils.listOf("a1", "b2", "c3"));
     testError("[a:1,b:2,c:3].map(closurex:{ x,y -> x + y })", "no such parameter");
     testError("def f = [a:1,b:2,c:3]; f.map(closurex:{ x,y -> x + y })", "no such parameter");
-    test("def x = [1,2,3]; def y = x.map{}; y.size()", 3L);
-    test("var x = [1,2,3]; def y = x.map{}; y.size()", 3L);
-    test("var x = [a:1,b:2]; def y = x.map{ def z = it.map(); z.size() }; y", Utils.listOf(2L, 2L));
-    test("def x = [a:1,b:2]; def y = x.map{ def z = it.map(); z.size() }; y", Utils.listOf(2L, 2L));
-    test("def x = [1,2,3]; x.map{}.size()", 3L);
-    test("def x = [1,2,3]; x.map().size()", 3L);
-    test("var x = [1,2,3]; x.map().size()", 3L);
-    test("def x = [1,2,3]; x.map{it+it}.size()", 3L);
+    test("def x = [1,2,3]; def y = x.map{}; y.size()", 3);
+    test("var x = [1,2,3]; def y = x.map{}; y.size()", 3);
+    test("var x = [a:1,b:2]; def y = x.map{ def z = it.map(); z.size() }; y", Utils.listOf(2, 2));
+    test("def x = [a:1,b:2]; def y = x.map{ def z = it.map(); z.size() }; y", Utils.listOf(2, 2));
+    test("def x = [1,2,3]; x.map{}.size() == 3", true);
+    test("def x = [1,2,3]; x.map().size() == 3", true);
+    test("var x = [1,2,3]; x.map().size() == 3", true);
+    test("def x = [1,2,3]; x.map{it+it}.size() == 3", true);
     test("var x = [1,2,3]; def i = 0; def y = x.map{it+it+i++}; i", 3);
     test("def x = [1,2,3]; def i = 0; def y = x.map{it+it+i++}; i", 3);
     test("def x = [1,2,3]; def i = 0; def y = x.\"${'map'}\"{it+it+i++}; i", 3);
@@ -1340,15 +1340,16 @@ public class BuiltinFunctionTests extends BaseTest {
 
   @Test public void pipelineSize() {
     test("sleep(0,[1,2,3].map()).sum()", 6);
-    doTest("sleep(0,[1,2,3].map()).size()", 3L);
-    test("List list = [1,2,3]; list.map().size()", 3L);
-    test("def list = [1,2,3]; list.map().size()", 3L);
-    test("def x = [a:1,b:2]; x.map().size()", 2L);
-    test("Map x = [a:1,b:2]; x.map().size()", 2L);
-    test("def list = [1,2,3]; list.size()", 3L);
-    test("List list = [1,2,3]; list.size()", 3L);
-    test("Map x = [a:1,b:2]; x.size()", 2L);
-    test("def x = [a:1,b:2]; x.size()", 2L);
+    doTest("sleep(0,[1,2,3].map()).size()", 3);
+    doTest("List list = [1,2,3]; list.map().size()", 3L);
+    test("List list = [1,2,3]; list.map().size() == 3", true);
+    test("def list = [1,2,3]; list.map().size() == 3", true);
+    test("def x = [a:1,b:2]; x.map().size() == 2", true);
+    test("Map x = [a:1,b:2]; x.map().size() == 2", true);
+    test("def list = [1,2,3]; list.size() == 3", true);
+    test("List list = [1,2,3]; list.size() == 3", true);
+    test("Map x = [a:1,b:2]; x.size() == 2", true);
+    test("def x = [a:1,b:2]; x.size() == 2", true);
     test("def x = [1,2,3,4]; x.flatMap{ x.size().filter{ it % 2 == 0 } }.sum()", 8);
   }
 

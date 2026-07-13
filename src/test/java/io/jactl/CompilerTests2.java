@@ -477,8 +477,8 @@ public class CompilerTests2 extends BaseTest {
     test("Map m = [a:[b:1]]; String x = 'b'; m.a.(x)", 1);
     test("Map m = [a:[b:1]]; def x = 'b'; m.a.(x)", 1);
     test("Map m = [a:[b:1]]; def x = \"${'b'}\"; m.a.(x)", 1);
-    test("def it = 'itx'; Map m = [a:[b:1],c:2]; def x = \"${'size'}\"; m.(x)()", 2L);
-    test("def it = 'itx'; Map m = [a:[b:1],c:2]; def x = /${'size'}/; m.(x)()", 2L);
+    test("def it = 'itx'; Map m = [a:[b:1],c:2]; def x = \"${'size'}\"; m.(x)()", 2);
+    test("def it = 'itx'; Map m = [a:[b:1],c:2]; def x = /${'size'}/; m.(x)()", 2);
     test("def it = 'itx'; Map m = [a:[b:1]]; def x = /${'b'}/; m.a.(x)", 1);
     test("def it = 'itx'; Map m = [a:[b:1]]; def x = /${'b'}/; m.a[x]", 1);
     test("def it = 'itx'; def x = /${'abcde'}/; x[2]", "c");

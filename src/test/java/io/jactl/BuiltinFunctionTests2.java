@@ -81,9 +81,9 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("[:].flatMap{}", Utils.listOf());
     test("[:].flatMap()", Utils.listOf());
     test("[a:1,b:2,c:3].flatMap{ [it[0]+it[0],it[1]+it[1]] }", Utils.listOf("aa", 2, "bb", 4, "cc", 6));
-    test("def x = [1,2,3]; def y = x.flatMap{}; y.size()", 0L);
-    test("var x = [1,2,3]; def y = x.flatMap{}; y.size()", 0L);
-    test("def x = [1,2,3]; def y = x.flatMap{[it]}; y.size()", 3L);
+    test("def x = [1,2,3]; def y = x.flatMap{}; y.size()", 0);
+    test("var x = [1,2,3]; def y = x.flatMap{}; y.size()", 0);
+    test("def x = [1,2,3]; def y = x.flatMap{[it]}; y.size()", 3);
     test("'abcde'.flatMap{it+it}.join()", "aabbccddee");
     test("def x = 'abcde'; x.flatMap{it+it}.join()", "aabbccddee");
     test("def x = 'abcde'; def f = x.flatMap; f{it+it}.join()", "aabbccddee");
@@ -112,7 +112,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
 
   @Test public void mapEntryAsList() {
     test("def x; [a:1].each{ x = it }; x", Utils.listOf("a",1));
-    test("def x; [a:1].each{ x = it }; x; x.size()", 2L);
+    test("def x; [a:1].each{ x = it }; x; x.size()", 2);
   }
 
   @Test public void reduce() {
@@ -516,7 +516,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("def x = [1,null,2]; x.remove(1)", null);
     test("def x = [1,null,2]; x.remove(1); x", Utils.listOf(1,2));
     test("def x = [1,null,2]; x.remove(2)", 2);
-    test("def x = [1,null,2]; x.remove(2); x.size()", 2L);
+    test("def x = [1,null,2]; x.remove(2); x.size()", 2);
     test("def x = [1,null,2]; x.remove(2); x[1]", null);
   }
 
@@ -773,9 +773,9 @@ public class BuiltinFunctionTests2 extends BaseTest {
   }
 
   @Test public void asyncCollectionClosures() {
-    test("def x = [1,2,3].map{ sleep(1,it) * sleep(1,it) }; x.size()", 3L);
-    test("[1,2,3].map{ sleep(1,it) * sleep(1,it) }.size()", 3L);
-    test("def f = [1,2,3].map; f{ sleep(1,it) * sleep(1,it) }.size()", 3L);
+    test("def x = [1,2,3].map{ sleep(1,it) * sleep(1,it) }; x.size()", 3);
+    test("[1,2,3].map{ sleep(1,it) * sleep(1,it) }.size() == 3", true);
+    test("def f = [1,2,3].map; f{ sleep(1,it) * sleep(1,it) }.size() == 3", true);
     test("[1,2,3].map{ sleep(1,it) * sleep(1,it) }", Utils.listOf(1,4,9));
     test("[1,2,3].map{ sleep(1,it) }.map{ sleep(1,it) * sleep(1,it) }", Utils.listOf(1,4,9));
     test("[a:1,b:2,c:3].map{ sleep(1,it) }.map{ sleep(sleep(1,1),it[1]) }.map{ sleep(1,it) * sleep(1,it) }", Utils.listOf(1,4,9));
@@ -788,7 +788,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("def x = 0; [1,2,3,4].map{ sleep(1,it) + sleep(1,it) }.each{ x += sleep(1,it) + sleep(1,it) }; x", 40);
     test("[1,2,3,4].collect{ sleep(1,it) }", Utils.listOf(1,2,3,4));
     test("[1,2,3,4].collect{ sleep(1,it) }.collect{ sleep(1,it) + sleep(1,it) }", Utils.listOf(2,4,6,8));
-    test("[1,2,3,4].collect{ sleep(1,it) }.collect{ sleep(1,it) + sleep(1,it) }.size()", 4L);
+    test("[1,2,3,4].collect{ sleep(1,it) }.collect{ sleep(1,it) + sleep(1,it) }.size()", 4);
     test("def x = 0; def c = [1,2,3,4].collect{ sleep(1,it) }; c.each{ x += sleep(1,it) }; x", 10);
     test("def x = 0; [1,2,3,4].collect{ sleep(1,it) }.each{ x += sleep(1,it) }; x", 10);
     test("[1,2,3,4].map{ sleep(1,it) }.collect{ sleep(1,it) + sleep(1,it) }", Utils.listOf(2,4,6,8));

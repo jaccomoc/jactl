@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 
 public class ListMapArrayTests extends BaseTest {
+  
   @Test public void listLiterals() {
     test("[]", Utils.listOf());
     test("[1]", Utils.listOf(1));
@@ -49,7 +50,7 @@ public class ListMapArrayTests extends BaseTest {
     test("def x = []; ''+x", "[]");
     test("def x = [1,[2,3]]; ''+x", "[1, [2, 3]]");
     test("def x = []; x[2] = 2; x[0] == null && x[1] == null && x[2] == 2", true);
-    test("def x = []; x[2] = 2; x.filter{!it}.size()", 2L);
+    test("def x = []; x[2] = 2; x.filter{!it}.size() == 2", true);
     test("def x = [1,2,3]; x[(byte)-1] = 4; x", Utils.listOf(1,2,4));
     test("def x = [1,2,3]; x[-(byte)1] = 4; x", Utils.listOf(1,2,4));
     test("def x = [1,2,3]; x[-1] = 4; x", Utils.listOf(1,2,4));

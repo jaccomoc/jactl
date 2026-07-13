@@ -920,9 +920,9 @@ public class BuiltinFunctions {
 
   // = size
 
-  public static long mapSize(Map map) { return map.size(); }
+  public static int mapSize(Map map) { return map.size(); }
 
-  public static long listSize(List list) {
+  public static int listSize(List list) {
     return list.size();
   }
 

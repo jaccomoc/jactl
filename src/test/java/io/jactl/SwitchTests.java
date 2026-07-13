@@ -244,9 +244,9 @@ public class SwitchTests extends BaseTest {
     test("def a=[1,[x:3]]; switch(a) { [_,i,'cc'] -> i; [_,[x:i]] -> i }", 3);
     test("def a=[1,[x:3]]; switch(a) { [_,int i] -> i; [_,[x:i]] -> i }", 3);
     test("switch ([1,2,3]) { [1,2,3] -> 2; [*] -> 3 }", 2);
-    test("switch ([1,2,3]) { [1,2,4] -> 2; [*t] -> t.size() }", 3L);
-    test("switch ([1,2,3]) { [1,2,4] -> 2; [1,*t] -> t.size() }", 2L);
-    test("switch ([1,2,[3,4,5]]) { [1,2,4] -> 2; [1,*t] -> t.size() }", 2L);
+    test("switch ([1,2,3]) { [1,2,4] -> 2; [*t] -> t.size() }", 3);
+    test("switch ([1,2,3]) { [1,2,4] -> 2; [1,*t] -> t.size() }", 2);
+    test("switch ([1,2,[3,4,5]]) { [1,2,4] -> 2; [1,*t] -> t.size() }", 2);
     testError("switch ([1,2,3]) { [*] -> 1; [1,2,3] -> 2 }", "covered by a previous");
     testError("switch ([1,2,3]) { [*t] -> 1; [1,2,3] -> 2 }", "covered by a previous");
     testError("switch ([1,2,3]) { [1,*] -> 1; [1,2,3] -> 2 }", "covered by a previous");
@@ -456,8 +456,8 @@ public class SwitchTests extends BaseTest {
     testError("List x = [1,2,3]; switch(x) { int i -> i }", "type of binding variable not compatible");
     test("List x = [1,2,3]; switch(x) { List i -> i }", Utils.listOf(1,2,3));
     test("List x = [1,2,3]; switch(x) { def i -> i }", Utils.listOf(1,2,3));
-    test("List x = [1,2,3]; switch(x.size()) { long i -> i }", 3L);
-    testError("List x = [1,2,3]; switch(x.size()) { int i -> i }", "can never match pattern type int");
+    test("List x = [1,2,3]; switch(x.size()) { int i -> i }", 3);
+    testError("List x = [1,2,3]; switch(x.size()) { long i -> i }", "can never match pattern type long");
     test("List x = [1,2,3]; switch(x) { [1,i,3] -> i; [1,4,4] -> 7 }", 2);
     test("List x = [1,2,3]; switch(x) { [1,int i,3] -> i; [1,4,4] -> 7 }", 2);
     test("List x = [1,2,3]; switch(x) { [1,def i,3] -> i; [1,4,4] -> 7 }", 2);
@@ -474,8 +474,8 @@ public class SwitchTests extends BaseTest {
     test("List a = [1,2,3]; switch(a) { List i -> i }", Utils.listOf(1,2,3));
     testError("List a = [1,2,3]; switch(a) { List a -> a }", "binding variable 'a' shadows another variable");
     test("List a = [1,2,3]; switch(a) { def i -> i }", Utils.listOf(1,2,3));
-    test("List a = [1,2,3]; switch(a.size()) { long i -> i }", 3L);
-    testError("List a = [1,2,3]; switch(a.size()) { int i -> i }", "can never match pattern type int");
+    test("List a = [1,2,3]; switch(a.size()) { int i -> i }", 3);
+    testError("List a = [1,2,3]; switch(a.size()) { long i -> i }", "can never match pattern type long");
     testError("List a = [1,2,3]; switch(a) { [1,i,3] -> i; [1,4,3] -> 7 }", "covered by a previous");
     test("List a = [1,2,3]; switch(a) { [1,i,3] -> i; [1,3] -> 7 }", 2);
     test("List a = [1,2,3]; switch(a) { [1,int i,3] -> i; [1,3] -> 7 }", 2);
@@ -490,8 +490,8 @@ public class SwitchTests extends BaseTest {
     test("def a = [1,2,3]; switch(a) { int i -> i; default -> 5 }", 5);
     test("def a = [1,2,3]; switch(a) { List i -> i }", Utils.listOf(1,2,3));
     test("def a = [1,2,3]; switch(a) { def i -> i }", Utils.listOf(1,2,3));
-    test("def a = [1,2,3]; switch(a.size()) { long i -> i }", 3L);
-    test("def a = [1,2,3]; switch(a.size()) { int i -> i; long j -> j*j }", 9L);
+    test("def a = [1,2,3]; switch(a.size()) { int i -> i }", 3);
+    test("def a = [1,2,3]; switch(a.size()) { long i -> i; int j -> j*j }", 9);
     test("def a = [1,2,3]; switch(a) { [1,i,3] -> i; [1,3] -> 7 }", 2);
     test("def a = [1,2,3]; switch(a) { [1,int i,3] -> i; [1,3] -> 7 }", 2);
     test("def a = [1,2,2]; switch(a) { [1,i,i] -> i; [1,3] -> 7 }", 2);
@@ -507,8 +507,8 @@ public class SwitchTests extends BaseTest {
     test("def a = [1,[2,[3,4],2],3,[4,5,[2,[3,4]]]]; switch(a) { [_,[x,y,x],_,[*,[x,y]]] -> y }", Utils.listOf(3,4));
     test("List a = ['aa','bb','cc']; switch(a) { List i -> i }", Utils.listOf("aa","bb","cc"));
     test("List a = ['aa','bb','cc']; switch(a) { def i -> i }", Utils.listOf("aa","bb","cc"));
-    test("List a = ['aa','bb','cc']; switch(a.size()) { long i -> i }", 3L);
-    testError("List a = ['aa','bb','cc']; switch(a.size()) { int i -> i }", "can never match pattern type int");
+    test("List a = ['aa','bb','cc']; switch(a.size()) { int i -> i }", 3);
+    testError("List a = ['aa','bb','cc']; switch(a.size()) { long i -> i }", "can never match pattern type long");
     test("List a = ['aa','bb','cc']; switch(a) { ['aa',i,'cc'] -> i; [4,'cc'] -> 7 }", "bb");
     test("List a = ['aa','bb','cc']; switch(a) { ['aa',String i,'cc'] -> i; ['aa',4,'cc'] -> 7 }", "bb");
     test("List a = ['aa','bb','cc']; switch(a) { ['aa',def i,'cc'] -> i; ['aa','cc'] -> 7 }", "bb");
@@ -523,8 +523,8 @@ public class SwitchTests extends BaseTest {
     test("def a = ['aa','bb','cc']; switch(a) { String i -> i; default -> 5 }", 5);
     test("def a = ['aa','bb','cc']; switch(a) { List i -> i }", Utils.listOf("aa","bb","cc"));
     test("def a = ['aa','bb','cc']; switch(a) { def i -> i }", Utils.listOf("aa","bb","cc"));
-    test("def a = ['aa','bb','cc']; switch(a.size()) { String i -> i; long i -> i }", 3L);
-    test("def a = ['aa','bb','cc']; switch(a.size()) { int i -> i; String j -> j; long i -> i*i }", 9L);
+    test("def a = ['aa','bb','cc']; switch(a.size()) { String i -> i; int i -> i }", 3);
+    test("def a = ['aa','bb','cc']; switch(a.size()) { long i -> i; String j -> j; int i -> i*i }", 9);
     test("def a = ['aa','bb','cc']; switch(a) { ['aa',i,'cc'] -> i; ['aa','cc'] -> 7 }", "bb");
     test("def a = ['aa','bb','cc']; switch(a) { ['aa',String i,'cc'] -> i; ['aa',4,'cc'] -> 7 }", "bb");
     test("def a = ['aa','bb','bb']; switch(a) { ['aa',i,i] -> i; ['aa',4,'cc'] -> 7 }", "bb");

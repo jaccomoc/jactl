@@ -95,8 +95,8 @@ public class CompilerTest3 extends BaseTest {
     test("def y; y ?= sleep(1,null); y", null);
     test("def x; def y; y ?= sleep(1,x)?.size(); y", null);
     test("def x; def y; y ?= x?.(sleep(1,'si') + sleep(1,'ze'))()?.size(); y", null);
-    test("def x = [1,2,3]; def y; y ?= x?.(sleep(1,'si') + sleep(1,'ze'))(); y", 3L);
-    test("def x = [1,2,3]; def y; y ?= x?.(sleep(sleep(1,1),'si') + sleep(sleep(1,1),'ze'))(); y", 3L);
+    test("def x = [1,2,3]; def y; y ?= x?.(sleep(1,'si') + sleep(1,'ze'))(); y", 3);
+    test("def x = [1,2,3]; def y; y ?= x?.(sleep(sleep(1,1),'si') + sleep(sleep(1,1),'ze'))(); y", 3);
     test("def f(int x) { sleep(1,x) + sleep(1,x) }; f(1)", 2);
     test("def f(int x = sleep(1,1)) { sleep(1,x) + sleep(1,x) }; f()", 2);
     test("def f(long x = sleep(1,1)) { sleep(1,x) + sleep(1,x) }; f()", 2L);
@@ -301,7 +301,7 @@ public class CompilerTest3 extends BaseTest {
     replTest.accept("while ((it = nextLine()) != null) println it", "x\ny\n\nz\n",null, "x\ny\n\nz\n");
     replTest.accept("stream(nextLine).map{ eval(it,[:]) }", "[1,2]\n[3]\n", Utils.listOf(Utils.listOf(1,2), Utils.listOf(3)), "");
     replTest.accept("stream{sleep(0,nextLine())}.filter{ !/^$/r }.map{ eval(it,[:]) }.grouped(2).map{ it[0].size() + it[1].size() }.filter{ true }",
-                    "[1,2]\n[3]\n\n", Utils.listOf(3L), "");
+                    "[1,2]\n[3]\n\n", Utils.listOf(3), "");
     try {
       replTest.accept("def x = 0; while(nextLine() =~ /(\\d)/ng) { x+= $1 }; x", null, 0, "");
       fail("Expected error");
@@ -317,7 +317,7 @@ public class CompilerTest3 extends BaseTest {
 
   @Test public void stream() {
     replTest.accept("stream{nextLine()}", "1\n4\n3\n", Utils.listOf("1","4","3"), "");
-    replTest.accept("stream{nextLine()}.size()", "1\n4\n3\n", 3L, "");
+    replTest.accept("stream{nextLine()}.size() == 3", "1\n4\n3\n", true, "");
     replTest.accept("stream{nextLine() as int}", "1\n4\n3\n", Utils.listOf(1,4,3), "");
     replTest.accept("stream(nextLine).max{it as int}", "1\n4\n3\n", "4", "");
     replTest.accept("stream(closure:nextLine).max{it as int}", "1\n4\n3\n", "4", "");
@@ -617,7 +617,7 @@ public class CompilerTest3 extends BaseTest {
     test("def x = 'abc'; x.length()", 3);
     test("def x = 'abc'; def result; 2.each{ result = x.length() }; result", 3);
     test("def x = 'abc'; def result; 2.each{ result = x.size() }; result", 3);
-    test("def x = 'abc'; def f(a) { a.size() }; def i = f(x); x = [1,2,3,4]; 2.each{ i += f(x) }; i", 11L);
+    test("def x = 'abc'; def f(a) { a.size() }; def i = f(x); x = [1,2,3,4]; 2.each{ i += f(x) }; i", 11);
     test("def x = 3; def f(byte a) { a }; def i = f(x); x = 4; 2.each{ i += f(x) }; i", (byte)11);
     test("def x = 'abc'; x.toUpperCase()", "ABC");
     test("def list = ['1','22222','3','4444', '55555']; list.filter{ it.size() > 3 }.map{ it.toUpperCase() }.sort().join(',')", "22222,4444,55555");
