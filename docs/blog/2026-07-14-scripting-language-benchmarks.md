@@ -1069,8 +1069,9 @@ Even Groovy improves from a relative performance point of view.
 
 ## Summary
 
-The table below shows throughput relative to the slowest engine in each benchmark
-(higher multiplier = faster).
+The table below shows throughput relative to the slowest language
+in each benchmark (labelled _baseline_).
+The higher multiplier, the faster the language.
 
 | Benchmark             |      Jactl |   Groovy | JEXL | MVEL |      SpEL |
 |-----------------------|-----------:|---------:|-----:|-----:|----------:|
