@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Closure Currying — ops/s</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f9fa; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .chart-container { background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); padding: 36px 50px 28px; width: 560px; }
+    h2 { margin: 0 0 6px 0; font-size: 20px; font-weight: 600; color: #1a1a2e; text-align: center; }
+    .subtitle { text-align: center; font-size: 13px; color: #888; margin-bottom: 32px; }
+    .bars { display: flex; flex-direction: column; gap: 18px; }
+    .bar-row { display: flex; align-items: center; gap: 14px; }
+    .label { width: 58px; font-size: 14px; font-weight: 600; color: #333; text-align: right; flex-shrink: 0; }
+    .bar-track { flex: 1; background: #f0f0f0; border-radius: 6px; height: 38px; position: relative; overflow: visible; }
+    .bar-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; box-sizing: border-box; overflow: hidden; }
+    .bar-fill span { font-size: 13px; font-weight: 600; color: white; white-space: nowrap; }
+    .bar-label-outside { position: absolute; top: 50%; transform: translateY(-50%); font-size: 13px; font-weight: 600; color: #555; white-space: nowrap; }
+    .jactl  .bar-fill { background: linear-gradient(90deg, #4a90d9, #357abd); }
+    .groovy .bar-fill { background: linear-gradient(90deg, #e8702a, #c9561f); }
+    .jexl   .bar-fill { background: linear-gradient(90deg, #27ae60, #1e8449); }
+    .speedup { font-size: 12px; color: #999; width: 90px; flex-shrink: 0; text-align: left; }
+    .speedup strong { color: #555; }
+    .axis-labels { display: flex; justify-content: space-between; margin-left: 72px; margin-right: 104px; margin-top: 8px; }
+    .axis-labels span { font-size: 11px; color: #bbb; }
+  </style>
+</head>
+<body>
+  <div class="chart-container">
+    <h2>Closure Currying</h2>
+    <p class="subtitle">Operations per second · higher is better · MVEL and SpEL not supported</p>
+    <div class="bars">
+
+      <div class="bar-row jactl">
+        <div class="label">Jactl</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:100%"><span>2.04M</span></div>
+        </div>
+        <div class="speedup"><strong>30.5×</strong> faster</div>
+      </div>
+
+      <div class="bar-row groovy">
+        <div class="label">Groovy</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:80.8%"><span>1.65M</span></div>
+        </div>
+        <div class="speedup"><strong>24.7×</strong> faster</div>
+      </div>
+
+      <div class="bar-row jexl">
+        <div class="label">JEXL</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:3.3%"></div>
+          <div class="bar-label-outside" style="left:calc(3.3% + 6px)">66.8K</div>
+        </div>
+        <div class="speedup">baseline</div>
+      </div>
+
+    </div>
+    <div class="axis-labels">
+      <span>0</span><span>509K</span><span>1.02M</span><span>1.53M</span><span>2.04M</span>
+    </div>
+  </div>
+</body>
+</html>

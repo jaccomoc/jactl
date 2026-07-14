@@ -74,7 +74,7 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Thread)
 @Warmup(iterations = 4, time = 2)
 @Measurement(iterations = 3, time = 2)
-@Fork(value = 1, jvmArgs="-Xms1g")
+@Fork(value = 1, jvmArgs={"-Xms1g"})
 //@Fork(value = 0)
 public class ScriptingLanguageBenchmarks {
 
@@ -260,14 +260,14 @@ public class ScriptingLanguageBenchmarks {
     "\n" +
     "'Processed ' + itemCount + ' orders. Grand total: ' + grandTotal + '. Top category: ' + topCategory";
 
-  private static final String JACTL_COMPLEX_SCRIPT =
+  private static final String GROOVY_COMPLEX_SCRIPT =
     "var totals    = [:];\n" +
     "var itemCount = 0;\n" +
     "var grandTotal = 0.0;\n" +
     "var topCategory = '';\n" +
     "var topAmount = -1.0;\n" +
     "\n" +
-    "for (order : orders) {\n" +
+    "for (order in orders) {\n" +
     "    var price    = order.price;\n" +
     "    var qty      = order.quantity;\n" +
     "    var category = order.category;\n" +
@@ -289,40 +289,6 @@ public class ScriptingLanguageBenchmarks {
     "    if (totals[category] > topAmount) {\n" +
     "        topAmount   = totals[category];\n" +
     "        topCategory = category;\n" +
-    "    }\n" +
-    "}\n" +
-    "\n" +
-    "'Processed ' + itemCount + ' orders. Grand total: ' + grandTotal + '. Top category: ' + topCategory";
-
-  private static final String GROOVY_COMPLEX_SCRIPT =
-    "def totals    = [:]\n" +
-    "def itemCount = 0\n" +
-    "def grandTotal = 0.0\n" +
-    "def topCategory = ''\n" +
-    "def topAmount = -1.0\n" +
-    "\n" +
-    "for (order in orders) {\n" +
-    "    def price    = order.price\n" +
-    "    def qty      = order.quantity\n" +
-    "    def category = order.category\n" +
-    "\n" +
-    "    def discount = 0.0\n" +
-    "    if      (qty >= 100) { discount = 0.20 }\n" +
-    "    else if (qty >=  50) { discount = 0.10 }\n" +
-    "    else if (qty >=  20) { discount = 0.05 }\n" +
-    "\n" +
-    "    def lineTotal = price * qty * (1.0 - discount)\n" +
-    "\n" +
-    "    if (totals[category] == null) {\n" +
-    "      totals[category] = 0.0\n" +
-    "    }\n" +
-    "    totals[category] = totals[category] + lineTotal\n" +
-    "    grandTotal       = grandTotal + lineTotal\n" +
-    "    itemCount        = itemCount + 1\n" +
-    "\n" +
-    "    if (totals[category] > topAmount) {\n" +
-    "        topAmount   = totals[category]\n" +
-    "        topCategory = category\n" +
     "    }\n" +
     "}\n" +
     "\n" +
@@ -429,9 +395,9 @@ public class ScriptingLanguageBenchmarks {
         "function fib(n) { if (n <= 1) { return n; } return fib(n - 1) + fib(n - 2); } fib(n)", "n");
     jexlClosureCurrying = jexlEngine.createScript(
         "var multiplier = factor -> x -> x * factor;"
-      + "var double = multiplier(2);"
+      + "var twice = multiplier(2);"
       + "var triple = multiplier(3);"
-      + "for (var i = 0; i < 100; i++) { triple(double(value)) }", "value");
+      + "for (var i = 0; i < 100; i++) { triple(twice(value)) }", "value");
 
     jexlComplexScript = jexlEngine.createScript(JEXL_COMPLEX_SCRIPT, "orders");
 
@@ -530,7 +496,7 @@ public class ScriptingLanguageBenchmarks {
         jactlContext, jactlCurryBindings);
 
     jactlOrderBindings = Collections.singletonMap("orders", ordersList);
-    jactlComplexScript = Compiler.compileScript(JACTL_COMPLEX_SCRIPT, jactlContext, jactlOrderBindings);
+    jactlComplexScript = Compiler.compileScript(GROOVY_COMPLEX_SCRIPT, jactlContext, jactlOrderBindings);
 
     jactlMapAccess = Compiler.compileScript(
         "record.name + ' - ' + record.address.city + ', ' + record.address.country",
@@ -561,12 +527,12 @@ public class ScriptingLanguageBenchmarks {
     groovyConditionalClass = groovyShell.getClassLoader().parseClass(groovyConditionalSrc);
 
     groovyFibonacciClass = groovyShell.getClassLoader().parseClass(
-        "long fib(int n) { if (n <= 1) return n; return fib(n - 1) + fib(n - 2) }; fib(n)");
+        "long fib(int n) { n <= 1 ? n : fib(n - 1) + fib(n - 2) }; fib(n)");
 
     groovyClosureCurryingClass = groovyShell.getClassLoader().parseClass(
-        "def multiplier = { factor -> { x -> x * factor } };"
-        + "def twice = multiplier(2);"
-        + "def triple = multiplier(3);"
+        "var multiplier = { factor -> { x -> x * factor } };"
+        + "var twice = multiplier(2);"
+        + "var triple = multiplier(3);"
         + "for (int i = 0; i < 100; i++) { triple(twice(value)) }");
 
     groovyComplexClass = groovyShell.getClassLoader().parseClass(GROOVY_COMPLEX_SCRIPT);
@@ -779,7 +745,7 @@ public class ScriptingLanguageBenchmarks {
 
   @Benchmark
   public Object compileScript_jactl() {
-    Object result = Compiler.compileScript(JACTL_COMPLEX_SCRIPT, JactlContext.create().async(false).build(), "Script", "jactl.pkg", jactlOrderBindings);
+    Object result = Compiler.compileScript(GROOVY_COMPLEX_SCRIPT, JactlContext.create().async(false).build(), "Script", "jactl.pkg", jactlOrderBindings);
     assert result != null;
     return result;
   }
