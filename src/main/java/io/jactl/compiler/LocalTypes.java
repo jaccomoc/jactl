@@ -294,6 +294,12 @@ public class LocalTypes {
     }
   }
 
+  public void popVal(int n) {
+    for (; n > 0; n--) {
+      popVal();
+    }
+  }
+  
   /**
    * Pop value off JVM stack but don't touch type stack
    */

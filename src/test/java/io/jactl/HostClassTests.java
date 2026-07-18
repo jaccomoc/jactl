@@ -110,6 +110,12 @@ public class HostClassTests extends BaseTest {
     test("new io.jactl.HostClassTests.NewType(sleep(1,'pre')).process('abc')", "pre: abc");
     test("io.jactl.HostClassTests.NewType x = new io.jactl.HostClassTests.NewType('pre'); x.process('abc')", "pre: abc");
     test("io.jactl.HostClassTests.NewType x = new io.jactl.HostClassTests.NewType('pre'); x.'process'('abc')", "pre: abc");
+    testError("io.jactl.HostClassTests.NewType x; x.process('abc')", "cannot invoke method on null object");
+    testError("io.jactl.HostClassTests.NewType x; x.'process'('abc')", "cannot invoke method on null object");
+    testError("io.jactl.HostClassTests.NewType x; x.processMap([:])", "cannot invoke method on null object");
+    testError("io.jactl.HostClassTests.NewType x; x.'processMap'([:])", "cannot invoke method on null object");
+    test("io.jactl.HostClassTests.NewType x; x?.process('abc')", null);
+    test("io.jactl.HostClassTests.NewType x; x?.processMap([:])", null);
     test("def x = new io.jactl.HostClassTests.NewType('pre'); x.process('abc')", "pre: abc");
     test("def x = new io.jactl.HostClassTests.NewType('pre'); def y = 'abc'; x.process(y)", "pre: abc");
     test("def x = new io.jactl.HostClassTests.NewType('pre'); def f = x.process; f('abc')", "pre: abc");
@@ -223,6 +229,7 @@ public class HostClassTests extends BaseTest {
     test("import io.jactl.HostClassTests.NewType; def x = new NewType('xyz'); switch (x) { NewType -> 'NewType' }", "NewType");
     test("import io.jactl.HostClassTests.NewType; def x = new NewType('xyz'); switch (x) { NewType a -> a.baseMethod('xxx') }", "baseMethod: xxx");
     test("import io.jactl.HostClassTests.NewType; def x = new NewType('xyz'); switch (x) { NewType a if a.baseMethod('xxx') == 'baseMethod: xxx' -> it.baseMethod('xxx') }", "baseMethod: xxx");
+    test("import io.jactl.HostClassTests.NewType; def x = new NewType('xyz'); switch (x) { NewType a if a?.baseMethod('xxx') == 'baseMethod: xxx' -> it?.baseMethod('xxx') }", "baseMethod: xxx");
     test("import io.jactl.HostClassTests.NewType; def x = new NewType('xxx'); switch (x) { io.jactl.HostClassTests.NewBaseType -> 'NewBaseType' }", "NewBaseType");
   }
   
@@ -235,31 +242,50 @@ public class HostClassTests extends BaseTest {
     testError("class X { io.jactl.HostClassTests.NewType x }; new X(new io.jactlxxxx.HostClassTest.NewType('abc')).x.process('xyz')", "unknown package 'io.jactlxxxx'");
     testError("class X { io.jactlxxxx.HostClassTests.NewType x }; new X(new io.jactl.HostClassTests.NewType('abc')).x.process('xyz')", "unknown package 'io.jactlxxxx'");
     test("class X { io.jactl.HostClassTests.NewType x }; new X(new io.jactl.HostClassTests.NewType('prefix')).x.process('xyz')", "prefix: xyz");
+    test("class X { io.jactl.HostClassTests.NewType x }; new X(new io.jactl.HostClassTests.NewType('prefix'))?.x?.process('xyz')", "prefix: xyz");
     testError("class X { io.jactl.HostClassTests.NewType x }; new X([x:new io.jactl.HostClassTests.NewType('prefix')]).x.process('xyz')", "cannot convert from type Map to Instance");
     test("class X { io.jactl.HostClassTests.NewType x }; new X(x:new io.jactl.HostClassTests.NewType('prefix')).x.process('xyz')", "prefix: xyz");
+    test("class X { io.jactl.HostClassTests.NewType x }; new X(x:new io.jactl.HostClassTests.NewType('prefix'))?.x?.process('xyz')", "prefix: xyz");
     test("class X { io.jactl.HostClassTests.NewType x }; def x = new X(x:new io.jactl.HostClassTests.NewType('prefix')); x.x.process('xyz')", "prefix: xyz");
+    test("class X { io.jactl.HostClassTests.NewType x }; def x = new X(x:new io.jactl.HostClassTests.NewType('prefix')); x?.x?.process('xyz')", "prefix: xyz");
     test("class X { io.jactl.HostClassTests.NewType x }; ([x:new io.jactl.HostClassTests.NewType('prefix')] as X).x.process('xyz')", "prefix: xyz");
+    test("class X { io.jactl.HostClassTests.NewType x }; ([x:new io.jactl.HostClassTests.NewType('prefix')] as X)?.x?.process('xyz')", "prefix: xyz");
     test("class X { io.jactl.HostClassTests.NewType x }; def x = [x:new io.jactl.HostClassTests.NewType('prefix')]; (x as X).x.process('xyz')", "prefix: xyz");
+    test("class X { io.jactl.HostClassTests.NewType x }; def x = [x:new io.jactl.HostClassTests.NewType('prefix')]; (x as X)?.x?.process('xyz')", "prefix: xyz");
     test("class X { io.jactl.HostClassTests.NewType x }; class Y extends X { int i }; def y = new Y(new io.jactl.HostClassTests.NewType('prefix'), 3).x.process('xyz')", "prefix: xyz");
+    test("class X { io.jactl.HostClassTests.NewType x }; class Y extends X { int i }; def y = new Y(new io.jactl.HostClassTests.NewType('prefix'), 3)?.x?.process('xyz')", "prefix: xyz");
     test("class X { io.jactl.HostClassTests.NewType x }; class Y extends X { int i }; def y = new Y(x:new io.jactl.HostClassTests.NewType('prefix'), i:3).x.process('xyz')", "prefix: xyz");
+    test("class X { io.jactl.HostClassTests.NewType x }; class Y extends X { int i }; def y = new Y(x:new io.jactl.HostClassTests.NewType('prefix'), i:3)?.x?.process('xyz')", "prefix: xyz");
     test("class X { io.jactl.HostClassTests.NewType x }; class Y extends X { int i }; def y = [x:new io.jactl.HostClassTests.NewType('prefix'), i:3]; (y as Y).x.process('xyz')", "prefix: xyz");
+    test("class X { io.jactl.HostClassTests.NewType x }; class Y extends X { int i }; def y = [x:new io.jactl.HostClassTests.NewType('prefix'), i:3]; (y as Y)?.x?.process('xyz')", "prefix: xyz");
 
     testError("import io.jactl.HostClassTests; class X { HostClassTests.NewType x }; new X(new HostClassTest.NewType('abc')).x.process('xyz')", "unknown class 'HostClassTest'");
     test("import io.jactl.HostClassTests.NewType; class X { NewType x }; new X(new NewType('abc')).x.process('xyz')", "abc: xyz");
+    test("import io.jactl.HostClassTests.NewType; class X { NewType x }; new X(new NewType('abc'))?.x?.process('xyz')", "abc: xyz");
     test("import io.jactl.HostClassTests; class X { HostClassTests.NewType x }; new X(new HostClassTests.NewType('abc')).x.process('xyz')", "abc: xyz");
+    test("import io.jactl.HostClassTests; class X { HostClassTests.NewType x }; new X(new HostClassTests.NewType('abc'))?.x?.process('xyz')", "abc: xyz");
     test("import io.jactl.*; class X { HostClassTests.NewType x }; new X(new HostClassTests.NewType('abc')).x.process('xyz')", "abc: xyz");
+    test("import io.jactl.*; class X { HostClassTests.NewType x }; new X(new HostClassTests.NewType('abc'))?.x?.process('xyz')", "abc: xyz");
     testError("import io.jactl.HostClassTests; class X { HostClassTests.NewType x }; new X([x:new HostClassTests.NewType('prefix')]).x.process('xyz')", "cannot convert from type Map to Instance");
+    testError("import io.jactl.HostClassTests; class X { HostClassTests.NewType x }; new X([x:new HostClassTests.NewType('prefix')])?.x?.process('xyz')", "cannot convert from type Map to Instance");
     testError("import io.jactl.HostClassTests.NewType; class X { NewType x }; new X([x:new NewType('prefix')]).x.process('xyz')", "cannot convert from type Map to Instance");
+    testError("import io.jactl.HostClassTests.NewType; class X { NewType x }; new X([x:new NewType('prefix')])?.x?.process('xyz')", "cannot convert from type Map to Instance");
     test("import io.jactl.HostClassTests; class X { HostClassTests.NewType x }; new X(x:new HostClassTests.NewType('prefix')).x.process('xyz')", "prefix: xyz");
     test("import io.jactl.HostClassTests.NewType; class X { NewType x }; new X(x:new NewType('prefix')).x.process('xyz')", "prefix: xyz");
+    test("import io.jactl.HostClassTests.NewType; class X { NewType x }; new X(x:new NewType('prefix'))?.x?.process('xyz')", "prefix: xyz");
     test("import io.jactl.HostClassTests.NewType; class X { NewType x }; def x = [x:new NewType('prefix')]; (x as X).x.process('xyz')", "prefix: xyz");
+    test("import io.jactl.HostClassTests.NewType; class X { NewType x }; def x = [x:new NewType('prefix')]; (x as X)?.x?.process('xyz')", "prefix: xyz");
     test("import io.jactl.*; class X { HostClassTests.NewType x }; class Y extends X { int i }; def y = new Y(new HostClassTests.NewType('prefix'), 3).x.process('xyz')", "prefix: xyz");
+    test("import io.jactl.*; class X { HostClassTests.NewType x }; class Y extends X { int i }; def y = new Y(new HostClassTests.NewType('prefix'), 3)?.x?.process('xyz')", "prefix: xyz");
     test("import io.jactl.HostClassTests.NewType; class X { NewType x }; class Y extends X { int i }; def y = new Y(x:new NewType('prefix'), i:3).x.process('xyz')", "prefix: xyz");
+    test("import io.jactl.HostClassTests.NewType; class X { NewType x }; class Y extends X { int i }; def y = new Y(x:new NewType('prefix'), i:3)?.x?.process('xyz')", "prefix: xyz");
     test("import io.jactl.*; class X { HostClassTests.NewBaseType x }; class Y extends X { int i }; def y = new Y(x:new HostClassTests.NewType('prefix'), i:3).x.baseMethod('xyz')", "baseMethod: xyz");
+    test("import io.jactl.*; class X { HostClassTests.NewBaseType x }; class Y extends X { int i }; def y = new Y(x:new HostClassTests.NewType('prefix'), i:3)?.x?.baseMethod('xyz')", "baseMethod: xyz");
     
     NewType.throwException = true;
     NewBaseType.throwException = true;
     testError("import io.jactl.HostClassTests; class X { HostClassTests.NewType x }; new X(x:new HostClassTests.NewType('prefix')).x.process('xyz')", "error invoking host class method");
+    testError("import io.jactl.HostClassTests; class X { HostClassTests.NewType x }; new X(x:new HostClassTests.NewType('prefix'))?.x?.process('xyz')", "error invoking host class method");
     testError("import io.jactl.HostClassTests.NewType; class X { NewType x }; new X(x:new NewType('prefix')).x.process('xyz')", "error invoking host class method");
     testError("import io.jactl.HostClassTests.NewType; class X { NewType x }; def x = [x:new NewType('prefix')]; (x as X).x.process('xyz')", "error invoking host class method");
     testError("import io.jactl.*; class X { HostClassTests.NewType x }; class Y extends X { int i }; def y = new Y(new HostClassTests.NewType('prefix'), 3).x.process('xyz')", "error invoking host class method");

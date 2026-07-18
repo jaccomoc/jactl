@@ -2469,13 +2469,45 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         argTypes.add(arg.type);
       }
       Method m = classCompiler.context.findMatchingMethod(hostClass, expr.methodName, argTypes, parentType.is(CLASS), msg -> { throw new CompileError(msg, expr.location); });
-      if (Modifier.isStatic(m.getModifiers()) && !parentType.is(CLASS)) {
+      boolean isStatic = Modifier.isStatic(m.getModifiers());
+      if (isStatic && !parentType.is(CLASS)) {
         popVal();
       }
-      compileAndConvert(expr.args, m.getParameterTypes());
-      invokeAndCatchRuntimeException(hostClass, m, getTypeFromClass(m.getReturnType()), expr.location);
-      if (m.getReturnType().equals(void.class)) {
-        loadConst(null);
+      if (!isStatic && expr.parent.couldBeNull) {
+        if (!expr.accessOperator.is(QUESTION_DOT)) {
+          throwIfNull("Cannot invoke method on null object", expr.location);
+          compileAndConvert(expr.args, m.getParameterTypes());
+          invokeAndCatchRuntimeException(hostClass, m, getTypeFromClass(m.getReturnType()), expr.location);
+          if (m.getReturnType().equals(void.class)) {
+            loadConst(null);
+          }
+        }
+        else {
+          int parentSlot = stack.allocateSlot(parentType);
+          dupVal();
+          storeLocal(parentSlot);
+          compileAndConvert(expr.args, m.getParameterTypes());
+          emitIf(false, IfTest.IS_NULL,
+                 () -> loadLocal(parentSlot),
+                 () -> {
+                   popVal(expr.args.size() + 1);
+                   loadConst(null);
+                 },
+                 () -> {
+                   invokeAndCatchRuntimeException(hostClass, m, getTypeFromClass(m.getReturnType()), expr.location);
+                   if (m.getReturnType() == void.class) {
+                     loadConst(null);
+                   }
+                 });
+          stack.freeSlot(parentSlot);
+        }
+      }
+      else {
+        compileAndConvert(expr.args, m.getParameterTypes());
+        invokeAndCatchRuntimeException(hostClass, m, getTypeFromClass(m.getReturnType()), expr.location);
+        if (m.getReturnType().equals(void.class)) {
+          loadConst(null);
+        }
       }
       return null;
     }
@@ -3441,6 +3473,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     IS_NOTNULL(IFNULL);
     final int opCode; IfTest(int opCode) { this.opCode = opCode; }
   }
+
+  /**
+   * Emit an if with a test, a true set of statements, and a false set of statements.
+   * NOTE: the usesTryCatch should be set to true if either of the true/false statements
+   * includes a try/catch where the catch does not immediately rethrow - i.e. a catch that
+   * falls through to subsequent code.
+   * @param usesTryCatch     true if we wrap code that has try/catch where catch falls through
+   * @param testInstruction  the type of test for the if condition (see {@link IfTest})
+   * @param condition        the code to execute to get and expression value on the stack for the test
+   * @param trueStmts        the code to execute if the test is true
+   * @param falseStmts       the code to execute if the test is false
+   */
   void emitIf(boolean usesTryCatch, IfTest testInstruction, Runnable condition, Runnable trueStmts, Runnable falseStmts) {
     emitIf(usesTryCatch, true, testInstruction, condition, trueStmts, falseStmts);
   }
@@ -3843,6 +3887,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   void popVal() {
     stack.popVal();
+  }
+
+  void popVal(int n) {
+    stack.popVal(n);
   }
   
   void popVal(boolean doPop) {
