@@ -1359,6 +1359,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             expect(2);
             box();
             loadConst(expr.originalOperator != null && expr.originalOperator.is(PLUS_EQUAL));
+            loadLocation(expr.location);
             invokeMethod(RuntimeUtils.LIST_ADD_METHOD);
             return null;
           }
@@ -1370,13 +1371,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           compile(expr.right);
           expect(2);
           loadConst(expr.originalOperator != null && expr.originalOperator.is(PLUS_EQUAL, MINUS_EQUAL));
-          if (expr.operator.is(PLUS)) {
-            invokeMethod(RuntimeUtils.MAP_ADD_METHOD);
-          }
-          else {
-            loadLocation(expr.operator);
-            invokeMethod(RuntimeUtils.MAP_SUBSTRACT_METHOD);
-          }
+          loadLocation(expr.operator);
+          invokeMethod(expr.operator.is(PLUS) ? RuntimeUtils.MAP_ADD_METHOD : RuntimeUtils.MAP_SUBSTRACT_METHOD);
           return null;
         }
         break;
@@ -5690,14 +5686,21 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     int slot = stack.globalVarSlot(varName);
     loadGlobals();
     loadConst(varName);
-    invokeMethod(MAP_GET_METHOD);
-    if (create && !varDecl.type.is(ANY)) {
-      tryCatch(ClassCastException.class, false,
-               () -> Utils.checkCast(mv, varDecl.type),
-               () -> throwError("Global var " + varName + " not of type " + varDecl.type.toString(), methodFunDecl.location));
+    MethodRef method = RuntimeUtils.getGlobalVarMethod(varDecl.type);
+    if (method == null) {
+      invokeMethod(MAP_GET_METHOD);
+      if (create && !varDecl.type.is(ANY)) {
+        tryCatch(ClassCastException.class, false,
+                 () -> Utils.checkCast(mv, varDecl.type),
+                 () -> throwError("Global variable " + varName + " not of type " + varDecl.type.toString(), methodFunDecl.location));
+      }
+      else {
+        Utils.checkCast(mv, varDecl.type);
+      }
     }
     else {
-      Utils.checkCast(mv, varDecl.type);
+      loadLocation(varDecl.location);
+      invokeMethod(method);
     }
     popType();
     pushType(varDecl.type);
@@ -5719,8 +5722,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       loadGlobals();
       loadConst(varName);
-      invokeMethod(MAP_GET_METHOD);
-      checkCast(varDecl.type);
+      MethodRef method = RuntimeUtils.getGlobalVarMethod(varDecl.type);
+      if (method == null) {
+        invokeMethod(MAP_GET_METHOD);
+        checkCast(varDecl.type);
+      }
+      else {
+        loadLocation(varDecl.location);
+        invokeMethod(method);
+      }
       popType();
       pushType(varDecl.type.boxed());
       if (slot != -1) {

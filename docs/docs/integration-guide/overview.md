@@ -47,8 +47,8 @@ Similarly, Map objects should have keys and values of types that are supported t
 
 Arrays of these types are also supported.
 
-It is also allowed that the value of a variable is `null` which can be used as a way to create the variable when there is no
-initial value that makes sense for it.
+It is also possible for the value of a variable to be `null` which can be used as a way to create the variable
+when there is no initial value that makes sense for it.
 
 Objects which are instances of a user defined Jactl class are also supported, so, if a previous script invocation has
 returned such a value, then this same value can be passed to another script invocation. Note that this requires
@@ -95,16 +95,20 @@ operation) then Jactl suspends the script and resumes it once the result is read
 been set).
 This allows event-loop based applications to run Jactl scrips without worrying about blocking the event-loop thread that
 invokes a Jactl script.
-The `eval()` method works like `Jactl.eval()` in that it waits for the script to complete before returning the result to
-the caller.
-If you are invoking scripts from an event-loop thread of your application, be aware that this might therefore block that thread
-if the script does something asynchronous.
+The `JactlScript.eval()` method works like `Jactl.eval()` in that it waits for the script to complete before returning
+the result to the caller.
+If you are invoking scripts from an event-loop thread of your application, be aware that this might therefore block
+that thread if the script does something asynchronous.
+
 If the threading model of the application requires that the result of an asynchronous operation is processed on the
-same event-loop thread that invoked the operation (for example Vert.x based applications) then using `eval()` will
-cause the event-loop thread to block forever if the script does something asynchronous since the thread waiting for
-the script to complete is also the thread that the result needs to be processed on before the script can return.
-This is why `eval()` should only be used if the caller can guarantee that the script does not invoke an asynchronous
-function or if the caller is not running on an event-loop thread.
+same event-loop thread that invoked the operation (for example Vert.x based applications), then using `eval()` with
+a script that does something asynchronous will cause the event-loop thread to block forever.
+This is because the thread waiting for the script to complete is also the thread that the result needs to be processed
+on before the script can return.
+Therefore, `eval()` should only be used if:
+- the caller can guarantee that the script does not invoke an asynchronous function, or
+- the caller is not running on an event-loop thread, or
+- Jactl has been configured with `async(false)` to disable asynchronous behaviour.
 
 ```java
 Map<String,Object> globals = new HashMap<>();
@@ -121,7 +125,7 @@ exists or not.
 The globals Map passed into `eval()` (and `run()`) will be then be the one that the script
 uses at runtime.
 This can be a different Map each time but should, obviously, contain an entry for each variable passed in at compile
-time or you will get a runtime error when the script tries to access a global variable not present in the map passed
+time, or you will get a runtime error when the script tries to access a global variable not present in the map passed
 in.
 
 The `run()` method should be used in situations where you don't want to block the current thread (for example,
@@ -158,6 +162,84 @@ Alternatively, you can use the version of `run()` that returns a `Future`:
 Future<Object> future = script.run(globalValues);
 System.out.println("Result is " + future.get());
 ```
+
+## Using Types in the Globals Map
+
+If you are using the recommended compile/eval process to compile scripts once and then run them multiple times,
+the globals map you pass to the compile step can be a map of _types_ rather than concrete objects.
+This allows you to specify the type of the globals in a more flexible way.
+For example, this allows you to say that a global variable is a type that implements a given interface, which
+is not possible to do when passing in a concrete object.
+
+There are some static types declared by the `Jactl` class for the common built-in types:
+```groovy
+Jactl.OBJECT_TYPE
+Jactl.BOOLEAN_TYPE
+Jactl.BYTE_TYPE
+Jactl.INT_TYPE
+Jactl.LONG_TYPE
+Jactl.DOUBLE_TYPE
+Jactl.DECIMAL_TYPE
+Jactl.STRING_TYPE
+Jactl.MAP_TYPE
+Jactl.LIST_TYPE
+Jactl.INSTANT_TYPE
+Jactl.LOCAL_TIME_TYPE
+Jactl.LOCAL_DATE_TYPE
+Jactl.LOCAL_DATE_TIME_TYPE
+Jactl.ZONED_DATE_TIME_TYPE
+Jactl.ZONE_ID_TYPE
+Jactl.DURATION_TYPE
+Jactl.PERIOD_TYPE
+```
+
+Here is an example of how to use these:
+```java
+Map<String,Object> globals = new HashMap<>();
+globals.put("today", Jactl.LOCAL_DATE_TYPE);
+globals.put("count", Jactl.INT_TYPE);
+JactlScript script = Jactl.compileScript("today.plusDays(count)", globals);
+Map<String,Object> values = new HashMap<>(); 
+values.put("today", LocalDate.now());
+values.put("count", 1);
+LocalDate tomorrow = (LocalDate)script.eval(values);
+```
+
+For other types you want to specify you can use `Jactl.type(class)` to get a type that
+you add to the globals map.
+
+For example:
+```java
+Map<String,Object> globals = new HashMap<>();
+globals.put("arr", Jactl.type(int[].class));
+JactlScript script = Jactl.compileScript("arr.filter{ it % 2 }.sum()", globals);
+Map<String,Object> values = new HashMap<>(); 
+values.put("arr", new int[]{ 1,2,3,4,5 });
+assertEquals(9, script.eval(values));
+```
+
+If you are allowing [host class access](jactl-context#allowhostaccessboolean-allowed), then you
+can also pass in instances of allowed host classes:
+```java
+JactlContext ctx = JactlContext.create()
+                               .allowHostAccess(true)
+                               .allowHostClassLookup(name -> name.equals("com.acme.Application"))
+                               .build();
+var globals = new HashMap<String,Object>();
+globals.put("app", Jactl.type(com.acme.Application.class));
+
+JactlScript script = Jactl.compileScript("app.userCount()", globals);
+
+var values = new HashMap<String,Object>();
+values.put("app", com.acme.Application.instance());
+
+int count = (int)script.eval(values);
+```
+
+:::note
+You can pass in objects of classes that have not been enabled with `allowHostClassLookup()` but
+Jactl will generate an error if you try to invoke a method on such an object.
+:::
 
 ## Input/Output
 

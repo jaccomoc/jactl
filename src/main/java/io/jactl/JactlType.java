@@ -45,10 +45,6 @@ import java.util.Map;
  */
 public class JactlType extends JactlUserDataHolder {
 
-  public static JactlType builtinTypeFromClass(Class<?> clss) {
-    return typeCache.get(clss);
-  }
-
   public enum TypeEnum {
     BOOLEAN,
     BYTE,
@@ -99,6 +95,7 @@ public class JactlType extends JactlUserDataHolder {
   public static JactlType ANY           = createRefType(TypeEnum.ANY);
   public static JactlType FUNCTION      = createRefType(TypeEnum.FUNCTION);
 
+  public static JactlType VOID          = createRefType(TypeEnum.VOID);
   public static JactlType HEAPLOCAL      = createRefType(TypeEnum.HEAPLOCAL);
   public static JactlType OBJECT_ARR     = JactlType.arrayOf(ANY);
   public static JactlType LONG_ARR       = JactlType.arrayOf(LONG);
@@ -107,12 +104,11 @@ public class JactlType extends JactlUserDataHolder {
   public static JactlType NUMBER         = createRefType(TypeEnum.NUMBER);
   public static JactlType MATCHER        = createRefType(TypeEnum.MATCHER);
   public static JactlType CONTINUATION   = createRefType(TypeEnum.CONTINUATION);
-  public static JactlType INSTANCE       = createInstanceType(JactlClassDescriptor.getJactlObjectDescriptor());
   public static JactlType CLASS          = createRefType(TypeEnum.CLASS);
   public static JactlType UNKNOWN        = createRefType(TypeEnum.UNKNOWN);
   public static JactlType OPTIONAL       = createRefType(TypeEnum.OPTIONAL);
-  public static JactlType VOID           = createRefType(TypeEnum.VOID);
   public static JactlType STRING_BUILDER = createRefType(TypeEnum.STRING_BUILDER);
+
   static final HashMap<Class<?>, JactlType> typeCache = new HashMap() {{
     put(boolean.class, BOOLEAN);
     put(Boolean.class, BOXED_BOOLEAN);
@@ -137,6 +133,12 @@ public class JactlType extends JactlUserDataHolder {
     put(void.class, VOID);
     put(Void.class, VOID);
   }};
+
+  public static JactlType builtinTypeFromClass(Class<?> clss) {
+    return typeCache.get(clss);
+  }
+
+  public static JactlType INSTANCE       = createInstanceType(JactlClassDescriptor.getJactlObjectDescriptor());
 
   private TypeEnum type;
   private boolean  boxed;
@@ -724,8 +726,8 @@ public class JactlType extends JactlUserDataHolder {
       }
     }
 
-    if (type1.is(type2))                { return type1.unboxed(); }
-    if (type1.is(ANY) || type2.is(ANY)) { return ANY;             }
+    if (type1.is(type2) && !type1.is(BYTE)) { return type1.unboxed(); }
+    if (type1.is(ANY) || type2.is(ANY))     { return ANY;             }
 
     JactlType result = resultType(type1, type2);
     if (result == null) {
@@ -735,6 +737,9 @@ public class JactlType extends JactlUserDataHolder {
   }
 
   private static JactlType resultType(JactlType type1, JactlType type2) {
+    if (type1.is(BYTE) && type2.is(BYTE)) {
+      return BYTE;
+    }
     if (type1.is(type2)) {
       return type1;
     }

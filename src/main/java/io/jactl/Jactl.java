@@ -22,12 +22,13 @@ import io.jactl.compiler.JactlClassLoader;
 import io.jactl.runtime.*;
 
 import java.io.*;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -54,6 +55,26 @@ import java.util.stream.Collectors;
  */
 public class Jactl {
 
+  // Built-in types:
+  public static final JactlType OBJECT_TYPE          = Jactl.type(Object.class);
+  public static final JactlType BOOLEAN_TYPE         = Jactl.type(Boolean.class);
+  public static final JactlType BYTE_TYPE            = Jactl.type(Byte.class);
+  public static final JactlType INT_TYPE             = Jactl.type(Integer.class);
+  public static final JactlType LONG_TYPE            = Jactl.type(Long.class);
+  public static final JactlType DOUBLE_TYPE          = Jactl.type(Double.class);
+  public static final JactlType DECIMAL_TYPE         = Jactl.type(BigDecimal.class);
+  public static final JactlType STRING_TYPE          = Jactl.type(String.class);
+  public static final JactlType MAP_TYPE             = Jactl.type(Map.class);
+  public static final JactlType LIST_TYPE            = Jactl.type(List.class);
+  public static final JactlType INSTANT_TYPE         = Jactl.type(Instant.class);
+  public static final JactlType LOCAL_TIME_TYPE      = Jactl.type(LocalTime.class);
+  public static final JactlType LOCAL_DATE_TYPE      = Jactl.type(LocalDate.class);
+  public static final JactlType LOCAL_DATE_TIME_TYPE = Jactl.type(LocalDateTime.class);
+  public static final JactlType ZONED_DATE_TIME_TYPE = Jactl.type(ZonedDateTime.class);
+  public static final JactlType ZONE_ID_TYPE        = Jactl.type(ZoneId.class);
+  public static final JactlType DURATION_TYPE        = Jactl.type(Duration.class);
+  public static final JactlType PERIOD_TYPE          = Jactl.type(Period.class);
+  
   /**
    * <p>Evaluate a Jactl script and return the result.</p>
    * <p>NOTE: the preferred way is to compile the script and then execute the script.
@@ -292,6 +313,25 @@ public class Jactl {
     Functions.INSTANCE.deregisterFunction(name);
   }
 
+  /**
+   * Create a JactlType marker that can be used in the globals map that is passed
+   * in at compile time to specify the type of a global variable.
+   * The globals map used at compile time can have concrete objects whose type is
+   * used as the global variable type of they can be JactlType instances that specify
+   * the type. The advantage of using JactlType instances is that you don't need to
+   * artificially create objects of the right type just to specify a type and you can
+   * use it to specify an Interface type rather than a concrete type.
+   * For one-shot eval() calls, the globals map is used for both compile and runtime
+   * values and for these calls you need to make sure that the globals map has the
+   * actual global variable values that will be used during evaluation. Otherwise
+   * you will get errors about global variable not matching the expected type.
+   * @param clss  the Java class of the global variable
+   * @return a JactlType that can be stored in the globals map used at compile time
+   */
+  public static JactlType type(Class<?> clss) {
+    return JactlType.createInstanceType(clss);
+  }
+  
   ////////////////////////////////////////////
 
   /**

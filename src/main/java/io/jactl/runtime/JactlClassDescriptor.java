@@ -435,7 +435,7 @@ public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDe
     return false;
   }
 
-  private static JactlClassDescriptor JACTL_OBJECT_DESCRIPTOR = new JactlClassDescriptor("JactlObject", "JactlObject", true, "", "", null, Utils.listOf(), true);
+  private static JactlClassDescriptor JACTL_OBJECT_DESCRIPTOR = new JactlClassDescriptor("JactlObject", "JactlObject", true, "", "", null, Collections.EMPTY_LIST, true);
   public static JactlClassDescriptor getJactlObjectDescriptor() {
     return JACTL_OBJECT_DESCRIPTOR;
   }

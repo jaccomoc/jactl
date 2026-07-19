@@ -141,7 +141,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (jactlContext.replMode) {
       this.globals.keySet().forEach(name -> {
         if (!globalVarDecls.containsKey(name)) {
-          createGlobalVarDecl(name, JactlContext.typeOf(globals.get(name), jactlContext).boxed(), location);
+          Object obj = globals.get(name);
+          JactlType type = obj instanceof JactlType ? jactlContext.typeFromClass(((JactlType)obj).getJavaClass()) : JactlContext.typeOf(obj, jactlContext);
+          createGlobalVarDecl(name, type.boxed(), location);
         }
       });
     }
@@ -2415,12 +2417,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     if (expr.operator.is(PLUS) && expr.type.is(MAP)) {
-      expr.constValue = RuntimeUtils.mapAdd((Map) leftValue, (Map) rightValue, false);
+      expr.constValue = RuntimeUtils.mapAdd((Map) leftValue, (Map) rightValue, false, expr.operator.getSource(), expr.operator.getOffset());
       return expr.type;
     }
 
     if (expr.operator.is(PLUS) && expr.type.is(LIST)) {
-      expr.constValue = RuntimeUtils.listAdd((List) leftValue, rightValue, false);
+      expr.constValue = RuntimeUtils.listAdd((List) leftValue, rightValue, false, expr.operator.getSource(), expr.operator.getOffset());
     }
 
     if (expr.operator.is(AMPERSAND_AMPERSAND)) {
@@ -3141,7 +3143,19 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         Object globalVar = null;
         if (globals.containsKey(name)) {
           globalVar = globals.get(name);
-          varDecl = createGlobalVarDecl(name, globalVar == null ? ANY : JactlContext.typeOf(globalVar, jactlContext).boxed(), location);
+          JactlType type;
+          if (globalVar instanceof JactlType) {
+            JactlType globalType = (JactlType) globalVar;
+            // Regenerate type backed by our jactlContext
+            type = jactlContext.typeFromClass(globalType.getJavaClass());
+          }
+          else if (globalVar == null) {
+            type = ANY;
+          }
+          else {
+            type = JactlContext.typeOf(globalVar, jactlContext);
+          }
+          varDecl = createGlobalVarDecl(name, type.boxed(), location);
         }
         else if (jactlContext.allowUndeclaredGlobals) {
           varDecl = createGlobalVarDecl(name, ANY, location);
@@ -3823,8 +3837,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private Expr.VarDecl createGlobalVarDecl(String name, JactlType type, Token location) {
-    Expr.VarDecl varDecl = new Expr.VarDecl(new Token("",0).setType(IDENTIFIER).setValue(name),
-                                            null, null);
+    Expr.VarDecl varDecl = new Expr.VarDecl(location.newIdent(name), null, null);
     varDecl.type = type;
     varDecl.isGlobal = true;
     if (varDecl.type.is(INSTANCE)) {

@@ -20,9 +20,17 @@ package io.jactl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.HashMap;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 public class HostClassTests extends BaseTest {
+  
+  public interface NewInterface {
+    String process(String x);
+    void processMap(Map x);
+  }
   
   public static class NewBaseType {
     static boolean throwException = false;
@@ -36,7 +44,7 @@ public class HostClassTests extends BaseTest {
     public static String staticMethod() {  if (throwException) throw new RuntimeException("throwing test exception"); return "static in base"; }
   }
 
-  public static class NewType extends NewBaseType {
+  public static class NewType extends NewBaseType implements NewInterface {
     static boolean throwException = false;
     String prefix;
     public NewType(String prefix) {this.prefix = prefix;}
@@ -315,5 +323,33 @@ public class HostClassTests extends BaseTest {
     test("new java.lang.String('abc')", "abc");
     test("java.lang.Math.min(1,2)", 1);
     test("import java.lang.Math; Math.min(1,2)", 1);
+    test("io.jactl.HostClassTests.NewType x; x.staticMethod()", "static");
+    test("io.jactl.HostClassTests.NewType x; x.staticProcessMap([:])", null);
+  }
+  
+  @Test public void typedGlobals() {
+    JactlContext ctx = JactlContext.create().allowHostAccess(true).allowHostClassLookup(true).build();
+    JactlScript script = Jactl.compileScript("x.process('abc')", new HashMap() {{ put("x", Jactl.type(NewType.class)); }}, ctx);
+    assertEquals("pre: abc", script.eval(new HashMap() {{ put("x", new NewType("pre")); }}));
+    script = Jactl.compileScript("x.process('abc')", new HashMap() {{ put("x", Jactl.type(NewInterface.class)); }}, ctx);
+    assertEquals("pre: abc", script.eval(new HashMap() {{ put("x", new NewType("pre")); }}));
+  }
+
+  @Test public void globalInterfaceVarDisallowedClass() {
+    JactlContext ctx = JactlContext.create().allowHostAccess(true).allowHostClassLookup(n -> n.equals(NewInterface.class.getName())).build();
+    JactlScript script = Jactl.compileScript("x.process('abc')", new HashMap() {{ put("x", Jactl.type(NewType.class)); }}, ctx);
+    try {
+      script.eval(new HashMap() {{ put("x", new NewType("pre")); }});
+      fail("Expected error");
+    }
+    catch (RuntimeException e) {
+      assertTrue(e.getMessage().contains("not an allowed class"));
+    }
+  }
+
+  @Test public void globalInterfaceVarAllowedClass() {
+    JactlContext ctx = JactlContext.create().allowHostAccess(true).allowHostClassLookup(n -> n.startsWith("io.jactl.HostClassTests")).build();
+    JactlScript script = Jactl.compileScript("x.process('abc')", new HashMap() {{ put("x", Jactl.type(NewType.class)); }}, ctx);
+    assertEquals("pre: abc", script.eval(new HashMap() {{ put("x", new NewType("pre")); }}));
   }
 }

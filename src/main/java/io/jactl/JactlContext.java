@@ -815,11 +815,22 @@ public class JactlContext {
   public Method findMatchingMethod(Class<?> parentClass, String methodName, List<JactlType> argTypes, boolean mustBeStatic, Consumer<String> errorHandler) {
     return findMatchingMethod(parentClass, methodName, argTypes, mustBeStatic, errorHandler, new AtomicBoolean());
   }
-  
-  private Method findMatchingMethod(Class<?> parentClass, String methodName, List<JactlType> argTypes, boolean mustBeStatic, Consumer<String> errorHandler, AtomicBoolean multipleMethods) {
-    List<Method> methods = Arrays.stream(parentClass.getMethods())
+
+  /**
+   * <p>We need to find the best matching method based on arguments and then see if the class declaring that
+   * method is an allowed class or not to see if we are allowed to invoke it.</p>
+   * @param objClass         the class of the object on which we are invoking a method
+   * @param methodName       the name of the method
+   * @param argTypes         a list of the argument types
+   * @param mustBeStatic     true if the method call is known to be static
+   * @param errorHandler     the error handler to invoke if the method does not exist or cannot be invoked
+   * @param multipleMethods  an output parameter that is set to true if there were multiple matching methods
+   * @return
+   */
+  private Method findMatchingMethod(Class<?> objClass, String methodName, List<JactlType> argTypes, boolean mustBeStatic, Consumer<String> errorHandler, AtomicBoolean multipleMethods) {
+    List<Method> methods = Arrays.stream(objClass.getMethods())
                                  .filter(m -> m.getName().equals(methodName))
-                                 .filter(m -> Modifier.isPublic(m.getModifiers()))
+                                 .filter(m -> !m.isBridge())
                                  .filter(m -> !mustBeStatic || Modifier.isStatic(m.getModifiers()))
                                  .filter(m -> argTypes == null || m.getParameterCount() == argTypes.size())
                                  .collect(Collectors.toList());
@@ -828,7 +839,7 @@ public class JactlContext {
     multipleMethods.set(methods.size() > 1);
     if (multipleMethods.get()) {
       if (argTypes == null) {
-        errorHandler.accept("Multiple methods named " + methodName + " found in class " + parentClass.getName());
+        errorHandler.accept("Multiple methods named " + methodName + " found in class " + objClass.getName());
       }
       // Try to find matching method based on exact arg types
       List<Method> exactMethods = new ArrayList<>(); 
@@ -861,10 +872,10 @@ public class JactlContext {
         methods = enabledMethods;
       }
       if (methods.size() > 1) {
-        errorHandler.accept("Multiple methods named '" + methodName + "' with compatible parameter types found class " + parentClass.getName());
+        errorHandler.accept("Multiple methods named '" + methodName + "' with compatible parameter types found class " + objClass.getName());
       }
       if (methods.isEmpty()) {
-        errorHandler.accept("Multiple methods named '" + methodName + "' in class " + parentClass.getName() + " but none match argument types");
+        errorHandler.accept("Multiple methods named '" + methodName + "' in class " + objClass.getName() + " but none match argument types");
       }
     }
     else if (methods.size() == 1) {
@@ -875,7 +886,7 @@ public class JactlContext {
     }
     else {
       // No methods found
-      errorHandler.accept("Could not find " + (mustBeStatic ? "static " : "") + "public method named '" + methodName + "' in class " + parentClass.getName() + " with matching argument count");
+      errorHandler.accept("Could not find " + (mustBeStatic ? "static " : "") + "public method named '" + methodName + "' in class " + objClass.getName() + " with matching argument count");
     }
     Method method = methods.get(0);
     if (!this.allowHostClassLookup.test(method.getDeclaringClass().getName())) {

@@ -143,6 +143,12 @@ public class RuntimeUtils {
 
   public static final MethodRef DECIMAL_BINARY_OPERATION_METHOD = Utils.getMethod(RuntimeUtils.class, "decimalBinaryOperation", BigDecimal.class, BigDecimal.class, String.class, int.class, String.class, int.class);
   public static BigDecimal decimalBinaryOperation(BigDecimal left, BigDecimal right, String operator, int minScale, String source, int offset) {
+    if (left == null) {
+      throw new NullError("Left hand side of '" + operator + "' is null", source, offset);
+    }
+    if (right == null) {
+      throw new NullError("Right hand side of '" + operator + "' is null", source, offset);
+    }
     BigDecimal result;
     switch (operator) {
       case PLUS:
@@ -333,7 +339,7 @@ public class RuntimeUtils {
       if (operator != PLUS) {
         throw new RuntimeError("Non-numeric operand for " + originalOperator + " of type " + className(left), source, offset);
       }
-      return listAdd((List) left, right, originalOperator == PLUS_EQUAL);
+      return listAdd((List) left, right, originalOperator == PLUS_EQUAL, source, offset);
     }
 
     if (left instanceof Map) {
@@ -344,7 +350,7 @@ public class RuntimeUtils {
         if (!(right instanceof Map)) {
           throw new RuntimeError("Cannot add " + className(right) + " to Map", source, offset);
         }
-        return mapAdd((Map) left, (Map) right, originalOperator == PLUS_EQUAL);
+        return mapAdd((Map) left, (Map) right, originalOperator == PLUS_EQUAL, source, offset);
       }
       return mapSubtract((Map)left, right, originalOperator == MINUS_EQUAL, source, offset);
     }
@@ -1018,9 +1024,14 @@ public class RuntimeUtils {
    * @param list        the list
    * @param obj         object to add or merge with list
    * @param isPlusEqual whether we are doing += or just +
+   * @param source       the source code
+   * @param offset       offset in source code
    * @return new list which is result of adding second object to first list
    */
-  public static List listAdd(List list, Object obj, boolean isPlusEqual) {
+  public static List listAdd(List list, Object obj, boolean isPlusEqual, String source, int offset) {
+    if (list == null) {
+      throw new NullError("Left hand side of " + (isPlusEqual ? "'+='" : "'+'") + " is null", source, offset);
+    }
     // If ++= then add to existing list rather than creating a new one
     List result = isPlusEqual ? list : new ArrayList<>(list);
     if (obj instanceof List) {
@@ -1031,7 +1042,7 @@ public class RuntimeUtils {
     }
     return result;
   }
-  public static final MethodRef LIST_ADD_METHOD = Utils.getMethod(RuntimeUtils.class, "listAdd", List.class, Object.class, boolean.class);
+  public static final MethodRef LIST_ADD_METHOD = Utils.getMethod(RuntimeUtils.class, "listAdd", List.class, Object.class, boolean.class, String.class, int.class);
 
   /**
    * Add single element to a list even if element is itself a list.
@@ -1054,15 +1065,23 @@ public class RuntimeUtils {
    * @param map1         the first map
    * @param map2         the second map
    * @param isPlusEqual  true if using += rather than just +
+   * @param source       the source code
+   * @param offset       offset in source code
    * @return a new map which is the combination of the two maps
    */
-  public static Map mapAdd(Map map1, Map map2, boolean isPlusEqual) {
+  public static Map mapAdd(Map map1, Map map2, boolean isPlusEqual, String source, int offset) {
+    if (map1 == null) {
+      throw new NullError("Left hand side of " + (isPlusEqual ? "'+='" : "'+'") + " is null", source, offset);
+    }
+    if (map2 == null) {
+      throw new NullError("Right hand side of " + (isPlusEqual ? "'+='" : "'+'") + " is null", source, offset);
+    }
     // If plusEqual then just merge map2 into map1
     Map result = isPlusEqual ? map1 : new LinkedHashMap(map1);
     result.putAll(map2);
     return result;
   }
-  public static final MethodRef MAP_ADD_METHOD = Utils.getMethod(RuntimeUtils.class, "mapAdd", Map.class, Map.class, boolean.class);
+  public static final MethodRef MAP_ADD_METHOD = Utils.getMethod(RuntimeUtils.class, "mapAdd", Map.class, Map.class, boolean.class, String.class, int.class);
 
   public static Map mapSubtract(Map map1, Object obj2, boolean isMinusEqual, String source, int offset) {
     Map result = isMinusEqual ? map1 : new LinkedHashMap(map1);
@@ -3287,5 +3306,129 @@ public class RuntimeUtils {
       map.put(key, list);
     }
     list.add(value);
+  }
+
+  public static final MethodRef GET_GLOBAL_BOOLEAN = Utils.getMethod(RuntimeUtils.class, "getGlobalBoolean", Map.class, String.class, String.class, int.class);
+  public static Boolean getGlobalBoolean(Map globals, String name, String source, int offset) {
+    Object value = globals.get(name);
+    if (value == null) {
+      throw new NullError("Null value for global variable '" + name + "' of type Boolean", source, offset);
+    }
+    if (value instanceof Boolean) {
+      return (Boolean)value;
+    }
+    throw new RuntimeError("Global variable '" + name + "' not of type Boolean", source, offset);
+  }
+
+  public static final MethodRef GET_GLOBAL_BYTE = Utils.getMethod(RuntimeUtils.class, "getGlobalByte", Map.class, String.class, String.class, int.class);
+  public static Byte getGlobalByte(Map globals, String name, String source, int offset) {
+    Object value = globals.get(name);
+    if (value == null) {
+      throw new NullError("Null value for global variable '" + name + "' of type Byte", source, offset);
+    }
+    if (value instanceof Byte) {
+      return (Byte)value;
+    }
+    throw new RuntimeError("Global variable '" + name + "' not of type Byte", source, offset);
+  }
+
+  public static final MethodRef GET_GLOBAL_INT = Utils.getMethod(RuntimeUtils.class, "getGlobalInt", Map.class, String.class, String.class, int.class);
+  public static Integer getGlobalInt(Map globals, String name, String source, int offset) {
+    Object value = globals.get(name);
+    if (value == null) {
+      throw new NullError("Null value for global variable '" + name + "' of type Integer", source, offset);
+    }
+    if (value instanceof Integer) {
+      return (Integer)value;
+    }
+    throw new RuntimeError("Global variable " + name + "' not of type Integer", source, offset);
+  }
+
+  public static final MethodRef GET_GLOBAL_LONG = Utils.getMethod(RuntimeUtils.class, "getGlobalLong", Map.class, String.class, String.class, int.class);
+  public static Long getGlobalLong(Map globals, String name, String source, int offset) {
+    Object value = globals.get(name);
+    if (value == null) {
+      throw new NullError("Null value for global variable '" + name + "' of type Long", source, offset);
+    }
+    if (value instanceof Long) {
+      return (Long)value;
+    }
+    throw new RuntimeError("Global variable " + name + "' not of type Long", source, offset);
+  }
+
+  public static final MethodRef GET_GLOBAL_DOUBLE = Utils.getMethod(RuntimeUtils.class, "getGlobalDouble", Map.class, String.class, String.class, int.class);
+  public static Double getGlobalDouble(Map globals, String name, String source, int offset) {
+    Object value = globals.get(name);
+    if (value == null) {
+      throw new NullError("Null value for global variable '" + name + "' of type Double", source, offset);
+    }
+    if (value instanceof Double) {
+      return (Double)value;
+    }
+    throw new RuntimeError("Global variable " + name + "' not of type Double", source, offset);
+  }
+
+  public static final MethodRef GET_GLOBAL_DECIMAL = Utils.getMethod(RuntimeUtils.class, "getGlobalDecimal", Map.class, String.class, String.class, int.class);
+  public static BigDecimal getGlobalDecimal(Map globals, String name, String source, int offset) {
+    Object value = globals.get(name);
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof BigDecimal) {
+      return (BigDecimal)value;
+    }
+    throw new RuntimeError("Global variable " + name + "' not of type Decimal", source, offset);
+  }
+
+  public static final MethodRef GET_GLOBAL_STRING = Utils.getMethod(RuntimeUtils.class, "getGlobalString", Map.class, String.class, String.class, int.class);
+  public static String getGlobalString(Map globals, String name, String source, int offset) {
+    Object value = globals.get(name);
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof String) {
+      return (String)value;
+    }
+    throw new RuntimeError("Global variable " + name + "' not of type String", source, offset);
+  }
+
+  public static final MethodRef GET_GLOBAL_LIST = Utils.getMethod(RuntimeUtils.class, "getGlobalList", Map.class, String.class, String.class, int.class);
+  public static List getGlobalList(Map globals, String name, String source, int offset) {
+    Object value = globals.get(name);
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof List) {
+      return (List)value;
+    }
+    throw new RuntimeError("Global variable " + name + "' not of type List", source, offset);
+  }
+
+  public static final MethodRef GET_GLOBAL_MAP = Utils.getMethod(RuntimeUtils.class, "getGlobalMap", Map.class, String.class, String.class, int.class);
+  public static Map getGlobalMap(Map globals, String name, String source, int offset) {
+    Object value = globals.get(name);
+    if (value == null) {
+      return null;
+    }
+    if (value instanceof Map) {
+      return (Map)value;
+    }
+    throw new RuntimeError("Global variable " + name + "' not of type Map", source, offset);
+  }
+
+  private static final Map<JactlType, MethodRef> GLOBAL_VAR_METHODS = new HashMap() {{
+    put(JactlType.BOXED_BOOLEAN, GET_GLOBAL_BOOLEAN);
+    put(JactlType.BOXED_BYTE, GET_GLOBAL_BYTE);
+    put(JactlType.BOXED_INT, GET_GLOBAL_INT);
+    put(JactlType.BOXED_LONG, GET_GLOBAL_LONG);
+    put(JactlType.BOXED_DOUBLE, GET_GLOBAL_DOUBLE);
+    put(JactlType.DECIMAL, GET_GLOBAL_DECIMAL);
+    put(JactlType.STRING, GET_GLOBAL_STRING);
+    put(JactlType.LIST, GET_GLOBAL_LIST);
+    put(JactlType.MAP, GET_GLOBAL_MAP);
+  }};
+
+  public static MethodRef getGlobalVarMethod(JactlType type) {
+    return GLOBAL_VAR_METHODS.get(type);
   }
 }

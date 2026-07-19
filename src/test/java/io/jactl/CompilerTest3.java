@@ -25,7 +25,9 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.stream.IntStream;
@@ -777,5 +779,141 @@ public class CompilerTest3 extends BaseTest {
     test("class X { Decimal f(Decimal d = 3) { d + 1 } }; def x = new X(); def g = x.f; g()", "#4");
     test("class X { def f = { Decimal d = 3 -> d + 1 } }; def x = new X(); def g = x.f; g()", "#4");
     test("def f(Decimal dd) { dd }; def g = f; def b = (byte)200; 3.map{ g(b) }.sum()", BigDecimal.valueOf(600));
+  }
+  
+  @Test public void globalTypedVars() {
+    globalTypedVars(Jactl.type(byte.class), (byte)2, (byte)3, (byte)7);
+    globalTypedVars(Jactl.type(Byte.class), (byte)2, (byte)3, (byte)7);
+    globalTypedVars(Jactl.BYTE_TYPE, (byte)2, (byte)3, (byte)7);
+    globalTypedVars(Jactl.type(Byte.class), (byte)254, (byte)253, (byte)-7);
+    globalTypedVars(Jactl.BYTE_TYPE, (byte)254, (byte)253, (byte)-7);
+    globalTypedVars(Jactl.type(int.class), 2, 3,  7);
+    globalTypedVars(Jactl.type(Integer.class), 2, 3,  7);
+    globalTypedVars(Jactl.INT_TYPE, 2, 3,  7);
+    globalTypedVars(Jactl.type(long.class), 2L, 3L, 7L);
+    globalTypedVars(Jactl.type(Long.class), 2L, 3L, 7L);
+    globalTypedVars(Jactl.LONG_TYPE, 2L, 3L, 7L);
+    globalTypedVars(Jactl.type(double.class), 2D, 3D, 7D);
+    globalTypedVars(Jactl.type(Double.class), 2D, 3D, 7D);
+    globalTypedVars(Jactl.DOUBLE_TYPE, 2D, 3D, 7D);
+    globalTypedVars(Jactl.type(BigDecimal.class), BigDecimal.valueOf(2), BigDecimal.valueOf(3), BigDecimal.valueOf(7));
+    globalTypedVars(Jactl.DECIMAL_TYPE, BigDecimal.valueOf(2), BigDecimal.valueOf(3), BigDecimal.valueOf(7));
+    globalTypedVars(Jactl.type(String.class), "abc", "def", "defabcabc");
+    globalTypedVars(Jactl.STRING_TYPE, "abc", "def", "defabcabc");
+    globalTypedVars(Jactl.type(List.class), Utils.listOf(1,2,3), Utils.listOf(4,5,6), Utils.listOf(4,5,6,1,2,3,1,2,3));
+    globalTypedVars(Jactl.LIST_TYPE, Utils.listOf(1,2,3), Utils.listOf(4,5,6), Utils.listOf(4,5,6,1,2,3,1,2,3));
+    globalTypedVars(Jactl.type(Map.class), Utils.mapOf("a",1), Utils.mapOf("b",2,"c",3), Utils.mapOf("a",1,"b",2,"c",3));
+    globalTypedVars(Jactl.MAP_TYPE, Utils.mapOf("a",1), Utils.mapOf("b",2,"c",3), Utils.mapOf("a",1,"b",2,"c",3));
+  }
+  
+  private void globalTypedVars(JactlType type, Object x, Object y, Object expected) {
+    Map<String,Object> globals = new HashMap<>();
+    globals.put("x", type);
+    globals.put("y", type);
+    JactlContext ctx = JactlContext.create().build();
+    JactlScript script = Jactl.compileScript("def f(){ x }; f(); y + x + f()", globals, ctx);
+    try {
+      script.eval(new HashMap<>());
+      if (type.getJavaClass() != String.class) {
+        fail("Expected error");
+      }
+    }
+    catch (NullError e) {
+      // Success
+    }
+    try {
+      script.eval(new HashMap() {{ put("y", new CompilerTest3()); put("x", new CompilerTest3()); }});
+      fail("Expected error");
+    }
+    catch (RuntimeError e) {
+      assertTrue(e.getMessage().contains("not of type "));
+    }
+    assertEquals(expected, script.eval(new HashMap() {{ put("x", x); put("y", y); }}));
+  }
+
+  @Test public void globalBooleanVars() {
+    Map<String,Object> globals = new HashMap<>();
+    globals.put("x", Jactl.type(Boolean.class));
+    globals.put("y", Jactl.type(Boolean.class));
+    JactlContext ctx = JactlContext.create().build();
+    JactlScript script = Jactl.compileScript("def f(){ 1 }; f(); x && y", globals, ctx);
+    try {
+      script.eval(new HashMap<>());
+      fail("Expected error");
+    }
+    catch (NullError e) {
+      assertTrue(e.getMessage().contains("Null value for global variable"));
+    }
+    try {
+      script.eval(new HashMap() {{ put("y", new CompilerTest3()); put("x", new CompilerTest3()); }});
+      fail("Expected error");
+    }
+    catch (RuntimeError e) {
+      assertTrue(e.getMessage().contains("not of type Boolean"));
+    }
+    assertEquals(true, script.eval(new HashMap() {{ put("x", true); put("y", true); }}));
+  }
+
+  @Test public void globalIntArrVars() {
+    Map<String,Object> globals = new HashMap<>();
+    globals.put("x", Jactl.type(int[].class));
+    globals.put("y", Jactl.type(int[].class));
+    JactlContext ctx = JactlContext.create().build();
+    JactlScript script = Jactl.compileScript("def f(){ 1 }; f(); (x as List) + (y as List)", globals, ctx);
+    try {
+      script.eval(new HashMap<>());
+      fail("Expected error");
+    }
+    catch (NullError e) {
+      assertTrue(e.getMessage().contains("Left hand side of '+' is null"));
+    }
+    try {
+      script.eval(new HashMap() {{ put("y", new CompilerTest3()); put("x", new CompilerTest3()); }});
+      fail("Expected error");
+    }
+    catch (RuntimeError e) {
+      assertTrue(e.getMessage().contains("not of type int[]"));
+    }
+    assertEquals(Utils.listOf(1,2,3,4,5,6), script.eval(new HashMap() {{ put("x", new int[]{1,2,3}); put("y", new int[]{4,5,6}); }}));
+  }
+  
+  @Test public void globalLocalDateVars() {
+    Map<String,Object> globals = new HashMap<>();
+    globals.put("today", Jactl.LOCAL_DATE_TYPE);
+    globals.put("count", Jactl.INT_TYPE);
+    JactlScript script   = Jactl.compileScript("today.plusDays(count)", globals);
+    LocalDate   tomorrow = (LocalDate)script.eval(new HashMap(){{ put("today", LocalDate.now()); put("count", 1); }});
+    assertEquals(LocalDate.now().plusDays(1), tomorrow);
+  }
+  
+  @Test public void globalIntArrVar() {
+    Map<String,Object> globals = new HashMap<>();
+    globals.put("arr", Jactl.type(int[].class));
+    JactlScript script = Jactl.compileScript("arr.filter{ it % 2 }.sum()", globals);
+    Map<String,Object> values = new HashMap<>();
+    values.put("arr", new int[]{ 1,2,3,4,5 });
+    assertEquals(9, script.eval(values));
+  }
+  
+  @Test public void globalObjectVar() {
+    Map<String,Object> globals = new HashMap<>();
+    globals.put("arr", Jactl.OBJECT_TYPE);
+    JactlScript script = Jactl.compileScript("arr.filter{ it % 2 }.sum()", globals);
+    Map<String,Object> values = new HashMap<>();
+    values.put("arr", new int[]{ 1,2,3,4,5 });
+    assertEquals(9, script.eval(values));
+  }
+  
+  @Test public void script() {
+    String source = String.join("\n",
+                         "def customer = body.customer",
+                         "def items    = body.items",
+                         "def total    = items.map{ it.qty * it.unitPrice }.sum()",
+                         "def discount = customer.tier == 'gold' && total >= 10000 ? 1500 : customer.tier == 'silver' && total >= 10000 ? 500 : 0",
+                         "def subtotals = [:]",
+                         "items.each{ subtotals[it.category] = (subtotals[it.category] ?: 0) + it.qty * it.unitPrice }",
+                         "def result = [customer:customer.name, total:total, discount:discount, payable:total - discount, categories:subtotals, summary:\"${customer.name}: ${items.size()} items, payable ${total - discount}c\".toString()]",
+                         "result");
+    JactlScript script = Jactl.compileScript(source, new HashMap() {{ put("body", new Object()); }});
   }
 }
