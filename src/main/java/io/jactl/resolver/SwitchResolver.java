@@ -155,16 +155,7 @@ public class SwitchResolver {
       return false;
     }
     if (subjectType.isNumeric() && patType.isNumeric()) {
-      if (!subjectType.boxed().is(patType.boxed())) {
-        // Only implicit conversion allowed is between byte and int
-        if (patType.is(INT) && subjectType.unboxed().is(BYTE)) {
-          return (int) pat.constValue >= 0 && (int) pat.constValue < 256;
-        }
-        return false;
-      }
-      else {
-        return true;
-      }
+      return subjectType.boxed().is(patType.boxed());
     }
     if (subjectType.is(ARRAY)) {
       if (!(pat instanceof Expr.ListLiteral)) { return false; }

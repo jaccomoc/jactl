@@ -57,7 +57,7 @@ public class Utils {
   // Support Java 8 and later
   public static final int    JAVA_VERSION        = V1_8;
 
-  public static final String JACTL_VERSION          = "2.9.0";    // Jactl version
+  public static final String JACTL_VERSION          = "2.9.1";    // Jactl version
   public static final String JACTL_LANGUAGE_VERSION = "2.8";      // Version of language. 2.8 due to support for 'for (i in ...)'
   
   public static final String JACTL_PKG           = "jactl.pkg";   // Java base package for Jactl classes

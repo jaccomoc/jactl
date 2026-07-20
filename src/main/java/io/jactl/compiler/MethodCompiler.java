@@ -1598,8 +1598,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
 
       // We have two booleans or two numbers (int, byte, long, or double)
-      JactlType operandType = expr.left.type.is(BOOLEAN,BYTE) ? INT :
-                              expr.left.type.is(DOUBLE) || expr.right.type.is(DOUBLE) ? DOUBLE :
+      JactlType operandType = expr.left.type.is(DOUBLE) || expr.right.type.is(DOUBLE) ? DOUBLE :
                               expr.left.type.is(LONG)   || expr.right.type.is(LONG)   ? LONG :
                               INT;
       desiredType = operandType;
@@ -1653,38 +1652,37 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Everything else
     compile(expr.left);
-    // Don't sign extend if doing bitwise operations
-    if (expr.left.type.is(BYTE) && expr.operator.getType().isBitOperator()) {
-      // If >> then don't mask as we want sign extension to take place so that we get 1s shifted in from the left.
-      // For all other operators, mask to prevent sign extension.
-      if (!expr.operator.is(DOUBLE_GREATER_THAN)) {
-        _loadConst(255);
-        mv.visitInsn(IAND);
-      }
-    }
+    unbox();
+    JactlType lhsType = peek();
     if (expr.operator.getType().isBitOperator() && expr.left.type.is(ANY)) {
       // Don't do any conversion yet for bit manipulation ops since if we have ANY we don't know whether
       // we want to do an int or long manipulation yet. We need to box any primitives, however, if result
-      // is ANY since we are going to pass them to RuntimeUtils a bit later
+      // is ANY, since we are going to pass them to RuntimeUtils a bit later
       box();
     }
     else {
       convertTo(expr.type, expr.left, true, expr.left.location);
     }
     compile(expr.right);
-    if (expr.type.is(BYTE) && expr.operator.is(DOUBLE_GREATER_THAN, TRIPLE_GREATER_THAN, DOUBLE_LESS_THAN)) {
-      // Since byte shift actually happens after promotion to int we restrict number of shifts to 0..7
-      _loadConst(7);
-      mv.visitInsn(IAND);
-    }
-    else if (expr.right.type.is(BYTE) && expr.operator.getType().isBitOperator()) {
-      _loadConst(255);
-      mv.visitInsn(IAND);
-    }
+    unbox();
     if (expr.operator.getType().isBitShift()) {
-      // Right-hand side of shift has to be an integer if we know we aren't doing list << elem or list <<= elem
       if (!expr.left.type.is(LIST, ANY)) {
-        castToIntOrLong(INT, expr.right.location);
+        assert lhsType.isNumeric();
+        if (lhsType.is(INT,BYTE,LONG)) {
+          // As per Java, for shift operations if the lhs is int use only bottom 5 bits
+          if (!peek().is(INT,BYTE)) {
+            convertToLong(expr.right.location);
+            _loadConst(lhsType.is(LONG) ? 0x3fL : lhsType.is(INT) ? 0x1fL : 0x7L);
+            mv.visitInsn(LAND);
+            mv.visitInsn(L2I);
+            popType();
+            pushType(INT);
+          }
+          else if (lhsType.is(BYTE)) {
+            _loadConst(0x7);
+            mv.visitInsn(IAND);
+          }
+        }
       }
     }
     else {
@@ -4289,9 +4287,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.CAST_TO_NUMBER_METHOD);
       invokeMethod(NUMBER_LONG_VALUE_METHOD);
     }
-    else if (peek().is(BYTE.boxed())) {
-      mv.visitTypeInsn(CHECKCAST, "java/lang/Byte");
-      invokeMethod(NUMBER_BYTE_VALUE_METHOD);
+    else if (peek().is(BYTE,BYTE.boxed())) {
+      if (peek().is(BYTE.boxed())) {
+        mv.visitTypeInsn(CHECKCAST, "java/lang/Byte");
+        invokeMethod(NUMBER_BYTE_VALUE_METHOD);
+      }
       _loadConst(255);
       mv.visitInsn(IAND);
       mv.visitInsn(I2L);
@@ -4326,9 +4326,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.CAST_TO_NUMBER_METHOD);
       invokeMethod(NUMBER_DOUBLE_VALUE_METHOD);
     }
-    else if (peek().is(BYTE.boxed())) {
-      mv.visitTypeInsn(CHECKCAST, "java/lang/Byte");
-      invokeMethod(NUMBER_BYTE_VALUE_METHOD);
+    else if (peek().is(BYTE,BYTE.boxed())) {
+      if (peek().is(BYTE.boxed())) {
+        mv.visitTypeInsn(CHECKCAST, "java/lang/Byte");
+        invokeMethod(NUMBER_BYTE_VALUE_METHOD);
+      }
       _loadConst(255);
       mv.visitInsn(IAND);
       mv.visitInsn(I2D);

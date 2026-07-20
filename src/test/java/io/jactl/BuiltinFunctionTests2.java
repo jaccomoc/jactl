@@ -853,7 +853,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
   @Test public void toJson() {
     test("((byte)0).toJson()", "0");
     test("((byte)123).toJson()", "123");
-    test("((byte)255).toJson()", "-1");
+    test("((byte)255).toJson()", "255");
     test("0.toJson()", "0");
     test("1.toJson()", "1");
     test("1L.toJson()", "1");

@@ -98,6 +98,10 @@ public class JsonEncoder {
       writeString(((BigDecimal) obj).toPlainString(), false);
       return;
     }
+    if (obj instanceof Byte) {
+      writeInt((byte)obj & 0xff);
+      return;
+    }
     if (obj instanceof Byte || obj instanceof Integer || obj instanceof Long) {
       writeLong(((Number)obj).longValue());
       return;

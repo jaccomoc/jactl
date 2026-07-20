@@ -917,8 +917,8 @@ public class RuntimeUtils {
 
     long rhs = ((Number) right).longValue();
     if (isShift) {
-      // Maximum shift amount based on size of lhs
-      rhs = leftIsLong ? rhs : left instanceof Integer ? rhs & 0x1f : rhs & 0x7;
+      // Maximum shift amount based on size of lhs to match Java behaviour
+      rhs = left instanceof Byte ? rhs & 0x7 : left instanceof Integer ? rhs & 0x1f : rhs & 0x3f;
     }
     else if (rhs < 0) {
       // For non-shift don't sign extend ints and bytes
@@ -934,14 +934,14 @@ public class RuntimeUtils {
 
     // >> is special since it works differently for negative numbers
     if (operator == DOUBLE_GREATER_THAN) {
-      long lhs = leftIsLong ? ((Number) left).longValue() : left instanceof Byte ? ((int)(byte)left) & 0xff : (int)left;
+      if (leftIsLong) {
+        return ((long)left) >> rhs;
+      }
+      int lhs = left instanceof Byte ? ((int)(byte)left) & 0xff : (int)left;
       result = lhs >> rhs;
     }
     else {
       long lhs = leftIsLong ? ((Number) left).longValue() : left instanceof Byte ? ((long)(byte)left) & 0xff : ((long)(int)left) & 0xffffffffL;
-      if (left instanceof Byte && operator == DOUBLE_LESS_THAN) {
-        rhs = rhs & 0x07;
-      }
       switch (operator) {
         case DOUBLE_LESS_THAN:    result = lhs << rhs;  break;
         case TRIPLE_GREATER_THAN: result = lhs >>> rhs; break;
@@ -2584,23 +2584,14 @@ public class RuntimeUtils {
   }
 
   /**
-   * Same as Object.equals() except that Byte and Integer are treated
-   * as equivalent to allow byte values to match int literals in switch
-   * expressions.
-   * Also allow o1 and o2 to be null.
-   * Note that o1 can be an array in which case it can be compared with
-   * a list value for o2.
+   * Same as Object.equals() except:
+   * - allow o1 and o2 to be null.
+   * - o1 can be an array in which case it can be compared with a list value for o2
    */
   public static final MethodRef SWITCH_EQUALS_METHOD = Utils.getMethod(RuntimeUtils.class, "switchEquals", Object.class, Object.class);
   public static boolean switchEquals(Object o1, Object o2) {
     if (o1 == null || o2 == null) {
       return o1 == o2;
-    }
-    if (o1 instanceof Byte && o2 instanceof Integer) {
-      return ((Byte) o1).intValue() == ((Integer) o2).intValue();
-    }
-    if (o2 instanceof Byte && o1 instanceof Integer) {
-      return ((Byte) o2).intValue() == ((Integer) o1).intValue();
     }
     if (o1 instanceof List && o2 instanceof List) {
       List l1 = (List)o1;
@@ -2658,7 +2649,7 @@ public class RuntimeUtils {
     JactlType clssType = RuntimeState.getState().getContext().typeFromClass(clss).unboxed();
     JactlType objType  = RuntimeState.getState().getContext().typeOf(obj).unboxed();
     if (clssType.isNumeric() && objType.isNumeric()) {
-      return objType.is(clssType) || objType.is(JactlType.BYTE) && clssType.is(JactlType.INT);
+      return objType.is(clssType);
     }
     if (obj instanceof JactlObject) {
       return clss.isAssignableFrom(obj.getClass());

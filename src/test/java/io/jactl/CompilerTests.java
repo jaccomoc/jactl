@@ -1249,6 +1249,41 @@ class CompilerTests extends BaseTest {
     test("double i = (byte)257", 1.0D);
     test("Decimal i = (byte)257", "#1");
     test("(byte)127 + (byte)127 + (byte)3", (byte)1);
+    test("byte f() { (byte)200 }; f()", (byte)200);
+    test("byte f() { (byte)200 }; f() + 1", 201);
+    test("byte f() { (byte)200 }; f() + 1L", 201L);
+    test("byte f() { (byte)200 }; f() + 1D", 201D);
+    test("byte f() { (byte)200 }; f() + 1.0", "#201.0");
+    test("byte f() { (byte)200 }; int x = f(); x", 200);
+    test("byte f() { (byte)200 }; long x = f(); x", 200L);
+    test("byte f() { (byte)200 }; double x = f(); x", 200D);
+    test("byte f() { (byte)200 }; Decimal x = f(); x", "#200");
+    test("class X{ byte f() { (byte)200 } }; new X().f() + 1L", 201L);
+    test("class X{ byte f() { (byte)200 } }; new X().f() + 1D", 201D);
+    test("class X{ byte f() { (byte)200 } }; new X().f() + 1.0", "#201.0");
+    test("class X{ static byte f() { (byte)200 } }; new X().f() + 1L", 201L);
+    test("class X{ static byte f() { (byte)200 } }; 1L + new X().f()", 201L);
+    test("class X{ static byte f() { (byte)200 } }; new X().f() + 1D", 201D);
+    test("class X{ static byte f() { (byte)200 } }; 1D + new X().f()", 201D);
+    test("class X{ static byte f() { (byte)200 } }; new X().f() + 1.0", "#201.0");
+    test("class X{ static byte f() { (byte)200 } }; 1.0 + new X().f()", "#201.0");
+    test("byte x = 1; x < 3000000000L", true);
+    test("byte x = 1; x == 1.5D", false);
+    test("byte x = 1; x < 1.5D", true);
+    test("byte x = 1; x == 4294967496L", false);
+    test("byte x = 255; x >> 4", (byte)15);
+    test("byte x = 255; x >> 7", (byte)1);
+    test("byte x = 255; x >> 8", (byte)255);
+    test("byte x = 255; x >> 9", (byte)127);
+    test("byte x = 255; x >> 30000L", (byte)255);
+    test("byte x = 255; x >> 300000", (byte)255);
+    test("byte x = 255; x >> 300000L", (byte)255);
+    test("int x = 255; x >> 300000L", 255);
+    test("byte x = 255; x >> 3000000L", (byte)255);
+    test("byte x = 255; x >> 3000000001L", (byte)127);
+    test("byte x = 255; x >> 4L", (byte)15);
+    test("((byte)200).toJson()", "200");
+    test("((byte)255).toJson()", "255");
   }
 
   @Test public void numericConversions() {
