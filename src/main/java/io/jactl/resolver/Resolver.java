@@ -2456,85 +2456,84 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (leftValue == null)  { error("Null operand for left-hand side of '" + expr.operator.getChars(), expr.operator); return expr.type = TYPE_FOR_BAD_REF; }
     if (rightValue == null) { error("Null operand for right-hand side of '" + expr.operator.getChars(), expr.operator); return expr.type = TYPE_FOR_BAD_REF; }
 
-    switch (expr.type.getType()) {
-      case BYTE: case INT: {
-        int left  = Utils.toInt(leftValue);
-        int right = Utils.toInt(rightValue);
-        if (expr.type.is(BYTE) && expr.operator.is(DOUBLE_LESS_THAN)) {
-          right = right & 0x07;
+    if (expr.operator.getType().isBitShift()) {
+      expr.constValue = RuntimeUtils.bitOperation(leftValue, rightValue, RuntimeUtils.getOperatorType(expr.operator.getType()), false, false, expr.operator.getSource(), expr.operator.getOffset());
+    }
+    else {
+      switch (expr.type.getType()) {
+        case BYTE: case INT: {
+          int left  = Utils.toInt(leftValue);
+          int right = Utils.toInt(rightValue);
+          if (expr.type.is(BYTE) && expr.operator.is(DOUBLE_LESS_THAN)) {
+            right = right & 0x07;
+          }
+          if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right == 0) {
+            error("Divide by zero error", expr.right.location);
+            return expr.type = TYPE_FOR_BAD_REF;
+          }
+          switch (expr.operator.getType()) {
+            case PLUS:                expr.constValue = left + right;   break;
+            case MINUS:               expr.constValue = left - right;   break;
+            case STAR:                expr.constValue = left * right;   break;
+            case SLASH:               expr.constValue = left / right;   break;
+            case PERCENT_PERCENT:     expr.constValue = left % right;   break;
+            case PERCENT:             expr.constValue = ((left % right) + right) % right;   break;
+            case AMPERSAND:           expr.constValue = left & right;   break;
+            case PIPE:                expr.constValue = left | right;   break;
+            case ACCENT:              expr.constValue = left ^ right;   break;
+            default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for ints");
+          }
+          if (expr.type.is(BYTE)) {
+            expr.constValue = (byte)(int)expr.constValue;
+          }
+          break;
         }
-        if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right == 0) {
-          error("Divide by zero error", expr.right.location);
-          return expr.type = TYPE_FOR_BAD_REF;
+        case LONG: {
+          long left  = Utils.toLong(leftValue);
+          long right = Utils.toLong(rightValue);
+          if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right == 0) {
+            error("Divide by zero error", expr.right.location);
+            return expr.type = TYPE_FOR_BAD_REF;
+          }
+          switch (expr.operator.getType()) {
+            case PLUS:                expr.constValue = left + right;        break;
+            case MINUS:               expr.constValue = left - right;        break;
+            case STAR:                expr.constValue = left * right;        break;
+            case SLASH:               expr.constValue = left / right;        break;
+            case PERCENT_PERCENT:     expr.constValue = left % right;        break;
+            case PERCENT:             expr.constValue = ((left % right) + right) % right;   break;
+            case AMPERSAND:           expr.constValue = left & right;        break;
+            case PIPE:                expr.constValue = left | right;        break;
+            case ACCENT:              expr.constValue = left ^ right;        break;
+            default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for longs");
+          }
+          break;
         }
-        switch (expr.operator.getType()) {
-          case PLUS:                expr.constValue = left + right;   break;
-          case MINUS:               expr.constValue = left - right;   break;
-          case STAR:                expr.constValue = left * right;   break;
-          case SLASH:               expr.constValue = left / right;   break;
-          case PERCENT_PERCENT:     expr.constValue = left % right;   break;
-          case PERCENT:             expr.constValue = ((left % right) + right) % right;   break;
-          case AMPERSAND:           expr.constValue = left & right;   break;
-          case PIPE:                expr.constValue = left | right;   break;
-          case ACCENT:              expr.constValue = left ^ right;   break;
-          case DOUBLE_LESS_THAN:    expr.constValue = left << right;  break;
-          case DOUBLE_GREATER_THAN: expr.constValue = left >> right;  break;
-          case TRIPLE_GREATER_THAN: expr.constValue = left >>> right; break;
-          default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for ints");
+        case DOUBLE: {
+          double left  = Utils.toDouble(leftValue);
+          double right = Utils.toDouble(rightValue);
+          switch (expr.operator.getType()) {
+            case PLUS:            expr.constValue = left + right;                     break;
+            case MINUS:           expr.constValue = left - right;                     break;
+            case STAR:            expr.constValue = left * right;                     break;
+            case SLASH:           expr.constValue = left / right;                     break;
+            case PERCENT_PERCENT: expr.constValue = left % right;                     break;
+            case PERCENT:         expr.constValue = ((left % right) + right) % right; break;
+            default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for doubles");
+          }
+          break;
         }
-        if (expr.type.is(BYTE)) {
-          expr.constValue = (byte)(int)expr.constValue;
+        case DECIMAL: {
+          BigDecimal left  = Utils.toDecimal(leftValue);
+          BigDecimal right = Utils.toDecimal(rightValue);
+          if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right.stripTrailingZeros() == BigDecimal.ZERO) {
+            error("Divide by zero error", expr.right.location);
+            return expr.type = TYPE_FOR_BAD_REF;
+          }
+          expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), jactlContext.minScale,
+                                                                expr.operator.getSource(), expr.operator.getOffset());
+          break;
         }
-        break;
-      }
-      case LONG: {
-        long left  = Utils.toLong(leftValue);
-        long right = Utils.toLong(rightValue);
-        if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right == 0) {
-          error("Divide by zero error", expr.right.location);
-          return expr.type = TYPE_FOR_BAD_REF;
-        }
-        switch (expr.operator.getType()) {
-          case PLUS:                expr.constValue = left + right;        break;
-          case MINUS:               expr.constValue = left - right;        break;
-          case STAR:                expr.constValue = left * right;        break;
-          case SLASH:               expr.constValue = left / right;        break;
-          case PERCENT_PERCENT:     expr.constValue = left % right;        break;
-          case PERCENT:             expr.constValue = ((left % right) + right) % right;   break;
-          case AMPERSAND:           expr.constValue = left & right;        break;
-          case PIPE:                expr.constValue = left | right;        break;
-          case ACCENT:              expr.constValue = left ^ right;        break;
-          case DOUBLE_LESS_THAN:    expr.constValue = left << (int)right;  break;
-          case DOUBLE_GREATER_THAN: expr.constValue = left >> (int)right;  break;
-          case TRIPLE_GREATER_THAN: expr.constValue = left >>> (int)right; break;
-          default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for longs");
-        }
-        break;
-      }
-      case DOUBLE: {
-        double left  = Utils.toDouble(leftValue);
-        double right = Utils.toDouble(rightValue);
-        switch (expr.operator.getType()) {
-          case PLUS:            expr.constValue = left + right;                     break;
-          case MINUS:           expr.constValue = left - right;                     break;
-          case STAR:            expr.constValue = left * right;                     break;
-          case SLASH:           expr.constValue = left / right;                     break;
-          case PERCENT_PERCENT: expr.constValue = left % right;                     break;
-          case PERCENT:         expr.constValue = ((left % right) + right) % right; break;
-          default: throw new IllegalStateException("Internal error: operator " + expr.operator.getChars() + " not supported for doubles");
-        }
-        break;
-      }
-      case DECIMAL: {
-        BigDecimal left  = Utils.toDecimal(leftValue);
-        BigDecimal right = Utils.toDecimal(rightValue);
-        if (expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && right.stripTrailingZeros() == BigDecimal.ZERO) {
-          error("Divide by zero error", expr.right.location);
-          return expr.type = TYPE_FOR_BAD_REF;
-        }
-        expr.constValue = RuntimeUtils.decimalBinaryOperation(left, right, RuntimeUtils.getOperatorType(expr.operator.getType()), jactlContext.minScale,
-                                                              expr.operator.getSource(), expr.operator.getOffset());
-        break;
       }
     }
     return expr.type;

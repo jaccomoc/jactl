@@ -1275,6 +1275,12 @@ class CompilerTests extends BaseTest {
     test("byte x = 255; x >> 7", (byte)1);
     test("byte x = 255; x >> 8", (byte)255);
     test("byte x = 255; x >> 9", (byte)127);
+    test("byte x = 255; x >>= 9", (byte)127);
+    test("byte x = 255; x >>= 9; x", (byte)127);
+    test("(byte)255 >> 9", (byte)127);
+    test("(byte)255 >>> 9", (byte)127);
+    test("(byte)255 << 9", (byte)254);
+    test("(byte)255 >> (byte)9", (byte)127);
     test("byte x = 255; x >> 30000L", (byte)255);
     test("byte x = 255; x >> 300000", (byte)255);
     test("byte x = 255; x >> 300000L", (byte)255);
@@ -1282,6 +1288,8 @@ class CompilerTests extends BaseTest {
     test("byte x = 255; x >> 3000000L", (byte)255);
     test("byte x = 255; x >> 3000000001L", (byte)127);
     test("byte x = 255; x >> 4L", (byte)15);
+    test("byte x = 255; x >>= 4L", (byte)15);
+    test("byte x = 255; x >>= 4L; x", (byte)15);
     test("((byte)200).toJson()", "200");
     test("((byte)255).toJson()", "255");
   }
