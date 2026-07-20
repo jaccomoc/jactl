@@ -102,9 +102,8 @@ JactlContext context = JactlContext.create()
 
 This method, in combination with the `allowHostClassLookup()` method, allows you to permit scripts to perform
 operations on host classes (i.e. classes from the Java application in which Jactl is embedded).
-If this method sets this flag to `true` then when an unknown class is encountered, Jactl will pass the
-name of the class to the predicate configured with `allowHostClassLookup()` and if the predicate returns true,
-Jactl will permit method calls on instances of that class and permit static method calls on that class.
+If this method sets this flag to `true` then the predicate passed to `allowHostClassLookup()` is used to
+decide whether method calls are allowed for configured classes.
 
 :::warning
 Use of these flags will weaken the sandbox security built-in to Jactl.
@@ -115,8 +114,15 @@ They should only be used with trusted host classes and trusted scripts.
 
 If the `allowHostAccess()` flag is set, then setting a predicate using this method allows you to control
 exactly which host classes are permitted to be accessed from Jactl scripts.
-The predicate will be passed a Java class name (e.g. `a.b.c.SomeClass`) and the predicate should return `true`
-if access is allowed or `false` otherwise.
+When Jactl encounters an object that is of an unknkown class, it will invoke the predicate twice:
+1. it will pass the Java class name (e.g. `a.b.c.SomeClass`) of the object on which the method is being invoked, and 
+2. it will pass the Java class name of the class that declared the method being invoked (which will be the same
+class a base class of that class, depending on where the method was declared).
+
+The job of the predicate is to decide which classes are trusted and which ones aren't.
+Both the object's class and the declaration class where the method implementation lives must be allowed 
+by the predicate for the call to succeed.
+
 Note that inner classes will be passed using Java syntax (e.g. `a.b.c.SomeClass$InnerClass`).
 
 ## allowHostClassLookup(boolean allowed)

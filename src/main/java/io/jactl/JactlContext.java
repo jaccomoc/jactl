@@ -830,7 +830,6 @@ public class JactlContext {
   private Method findMatchingMethod(Class<?> objClass, String methodName, List<JactlType> argTypes, boolean mustBeStatic, Consumer<String> errorHandler, AtomicBoolean multipleMethods) {
     List<Method> methods = Arrays.stream(objClass.getMethods())
                                  .filter(m -> m.getName().equals(methodName))
-                                 .filter(m -> !m.isBridge())
                                  .filter(m -> !mustBeStatic || Modifier.isStatic(m.getModifiers()))
                                  .filter(m -> argTypes == null || m.getParameterCount() == argTypes.size())
                                  .collect(Collectors.toList());
