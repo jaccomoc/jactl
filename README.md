@@ -268,7 +268,7 @@ In the `dependencies` section of your `pom.xml`:
 <dependency>
  <groupId>io.jactl</groupId>
  <artifactId>jactl</artifactId>
- <version>2.9.2</version>
+ <version>2.9.1</version>
 </dependency>
 ```
 
