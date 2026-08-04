@@ -3,7 +3,7 @@
 .sectionHeading {
   text-align: center;
   max-width: 40rem;
-  margin: 0 auto 3rem;
+  margin: 0 auto 2.5rem;
 }
 
 .sectionHeading h2 {
@@ -19,7 +19,7 @@
 
 .featureCol {
   display: flex;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .featureCard {

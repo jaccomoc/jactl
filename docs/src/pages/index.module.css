@@ -6,7 +6,7 @@
 /* ------------------------------------------------------------- Hero --- */
 .heroBanner {
   position: relative;
-  padding: 6rem 0 5rem;
+  padding: 5rem 0 4rem;
   text-align: center;
   overflow: hidden;
   background-color: var(--jactl-brand-blue);
@@ -96,22 +96,22 @@
 
 /* --------------------------------------------------------- Sections --- */
 .features {
-  padding: 4rem 0;
+  padding: 3rem 0 0;
 }
 
 .opensource {
-  padding: 3rem 0 4rem;
+  padding: 1.5rem 0 1.5rem;
 }
 
 .examples {
-  padding: 4rem 0;
+  padding: 3rem 0;
   background: var(--jactl-surface-1);
 }
 
 .sectionHeading {
   text-align: center;
   max-width: 40rem;
-  margin: 0 auto 3rem;
+  margin: 0 auto 2.5rem;
 }
 
 .sectionHeading h2 {
@@ -150,7 +150,7 @@
 
 /* ------------------------------------------------- Ecosystem callout --- */
 .ecosystem {
-  padding: 0 0 4rem;
+  padding: 0 0 2rem;
 }
 
 .ecosystemCard {
