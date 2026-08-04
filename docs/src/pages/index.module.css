@@ -206,6 +206,14 @@
   margin-bottom: 0;
 }
 
+/* Grid/flex children default to min-width: auto, so a code block with long
+   lines would force its column (and the whole card) wider than the screen.
+   Allow the columns to shrink so text wraps and the <pre> scrolls internally. */
+.exampleText,
+.exampleCode {
+  min-width: 0;
+}
+
 .exampleText h3 {
   margin-top: 0;
   font-size: 1.4rem;
