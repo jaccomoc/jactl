@@ -10,3 +10,9 @@ jvm:
 tutorial:
   label: Tutorial
   description: Jactl tutorials and guides
+benchmarks:
+  label: Benchmarks
+  description: Benchmark comparisons of Jactl with other languages
+performance:
+  label: Performance
+  description: Jactl performance topics

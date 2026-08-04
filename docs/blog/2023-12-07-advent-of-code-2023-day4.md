@@ -2,7 +2,7 @@
 title:      "Advent Of Code 2023 - Day 4"
 date:       2023-12-07T15:12:22+11:00
 categories: blog
-image:      /assets/logo-picture.jpg
+image:      /img/social-card.png
 authors: [james]
 tags: [advent-of-code]
 description: "Solving Advent of Code 2023 Day 4 (Scratchcards) using the Jactl programming language."

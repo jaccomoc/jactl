@@ -1,60 +1,212 @@
 /**
- * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
- * work well for content-centric websites.
+ * Global styles for the Jactl website.
+ *
+ * The classic template bundles Infima (a content-centric CSS framework).
+ * This file layers a small, modern design system on top: one consistent
+ * blue brand ramp, self-hosted Inter + JetBrains Mono, and clean,
+ * theme-aware chrome. Keep it minimal — component styling lives in the
+ * per-page CSS modules.
  */
 
-/* You can override the default Infima variables here. */
-/*:root {*/
-/*  --ifm-color-primary: #18329f;*/
-/*  --ifm-color-primary-dark: #162d8f;*/
-/*  --ifm-color-primary-darker: #142a87;*/
-/*  --ifm-color-primary-darkest: #11236f;*/
-/*  --ifm-color-primary-light: #1a37af;*/
-/*  --ifm-color-primary-lighter: #1c39b7;*/
-/*  --ifm-color-primary-lightest: #21409e;*/
-/*  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);*/
-/*}*/
+/* ============================================================ Fonts ===
+ * Self-hosted (docs/static/fonts, latin subset, ~140 KB total) so the
+ * site has no external font requests and renders identically offline.
+ */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/inter-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/inter-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/inter-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/inter-latin-700-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2');
+}
 
+/* ======================================================= Light theme ===
+ * Brand blue as one consistent Infima ramp generated from #2563eb
+ * (fixes the old blue-base / green-shade mismatch from the starter).
+ */
 :root {
-  --ifm-color-primary: #4786f0;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
-  --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --ifm-color-primary: #2563eb;
+  --ifm-color-primary-dark: #1554e0;
+  --ifm-color-primary-darker: #1350d4;
+  --ifm-color-primary-darkest: #1042ae;
+  --ifm-color-primary-light: #3e75ed;
+  --ifm-color-primary-lighter: #4a7eee;
+  --ifm-color-primary-lightest: #7098f2;
+
+  /* Typography */
+  --ifm-font-family-base: 'Inter', system-ui, -apple-system, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', SFMono-Regular, Menlo,
+    Consolas, 'Liberation Mono', monospace;
+  --ifm-heading-font-weight: 700;
+  --ifm-font-weight-semibold: 600;
+
+  /* Shape & code */
+  --ifm-global-radius: 8px;
+  --ifm-code-font-size: 90%;
+  --ifm-code-border-radius: 6px;
+  --docusaurus-highlighted-code-line-bg: rgba(37, 99, 235, 0.12);
+
+  /* Custom design tokens (jactl namespace) */
+  --jactl-border: var(--ifm-color-emphasis-200);
+  --jactl-surface-1: #f6f8fc; /* subtle neutral section band */
+  --jactl-brand-blue: #143698; /* dark blue for the navbar + hero band */
 }
 
-/* For readability concerns, you should choose a lighter palette in dark mode. */
+/* ======================================================== Dark theme === */
 [data-theme='dark'] {
-  /*-webkit-text-fill-color: white;*/
-  --ifm-color-primary: #4786f0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  --ifm-color-primary: #6c9bf5;
+  --ifm-color-primary-dark: #4b85f3;
+  --ifm-color-primary-darker: #3a79f2;
+  --ifm-color-primary-darkest: #105ae7;
+  --ifm-color-primary-light: #8db1f7;
+  --ifm-color-primary-lighter: #9ebdf8;
+  --ifm-color-primary-lightest: #cfdefc;
+
+  --docusaurus-highlighted-code-line-bg: rgba(108, 155, 245, 0.15);
+
+  --jactl-border: var(--ifm-color-emphasis-200);
+  --jactl-surface-1: #1c1f24;
 }
 
-.hero {
-  background-image: url("/img/background.jpg");
-  background-repeat: round;
+/* =================================================== Base element polish === */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.hero__title {
-  color: #ffffff;
+h1,
+h2,
+h3 {
+  letter-spacing: -0.015em;
 }
 
-.hero__subtitle {
-  color: #ffffff;
-  text-shadow: 2px 2px 0px #143698;
+/* Show the literal ASCII characters in code: disable JetBrains Mono's
+   programming ligatures so multi-character operators (->, =>, >=, <=, !=,
+   ==, &&, ||, etc.) render as their real characters, not combined glyphs. */
+code,
+kbd,
+pre,
+.prism-code {
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
 }
 
+/* ============================================================ Navbar ===
+ * Clean, theme-aware, translucent bar with a hairline underline
+ * (replaces the old hard-coded #143698 sky-blue navbar). The navbar
+ * follows the site theme now — navbar.style is removed in the config.
+ */
 .navbar {
-  background-color: #143698;
+  background-color: var(--jactl-brand-blue);
+  border-bottom: none;
+  box-shadow: 0 1px 12px rgba(0, 0, 0, 0.12);
+}
+
+.navbar__link,
+.navbar__brand {
+  font-weight: 600;
+}
+
+/* ============================================================ Footer ===
+ * Theme-aware now (footer.style removed in config): a quiet surface with
+ * a hairline top border instead of the old hard dark bar.
+ */
+.footer {
+  --ifm-footer-background-color: var(--jactl-surface-1);
+  border-top: 1px solid var(--jactl-border);
+}
+
+/* ====================================================== Docs sidebar ===
+ * Rounded, quiet menu items with a clear accent on the active page.
+ */
+.menu__link {
+  border-radius: 6px;
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  font-weight: 600;
+}
+
+.table-of-contents__link--active {
+  font-weight: 600;
+}
+
+/* ================================================= Markdown content ===
+ * Small refinements to tables, blockquotes and inline code so long-form
+ * docs and blog posts feel cohesive with the rest of the site.
+ */
+.markdown table {
+  display: table;
+  width: 100%;
+  border: 1px solid var(--jactl-border);
+  border-radius: var(--ifm-global-radius);
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+}
+
+.markdown table thead {
+  background: var(--ifm-color-emphasis-100);
+}
+
+.markdown table thead tr {
+  border-bottom: 1px solid var(--jactl-border);
+}
+
+.markdown blockquote {
+  border-left: 4px solid var(--ifm-color-primary);
+  background: var(--ifm-color-emphasis-100);
+  border-radius: 0 var(--ifm-global-radius) var(--ifm-global-radius) 0;
+}
+
+.theme-admonition {
+  border-radius: var(--ifm-global-radius);
+}
+
+/* ============================================================== Blog ===
+ * Separate posts on the list page with a hairline. Tag styling is left to
+ * the Docusaurus default — its ticket-with-count component on the tags
+ * index resists a clean pill override, so keeping the default stays
+ * consistent across posts and the index.
+ */
+.blog-list-page article {
+  padding-bottom: 2rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--jactl-border);
 }

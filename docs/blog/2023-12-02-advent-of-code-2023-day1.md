@@ -2,7 +2,7 @@
 title:      "Advent Of Code 2023 - Day 1"
 date:       2023-12-02T13:53:36+11:00
 categories: blog
-image:      /assets/logo-picture.jpg
+image:      /img/social-card.png
 authors: [james]
 tags: [advent-of-code]
 description: "Solving Advent of Code 2023 Day 1 (Trebuchet?!) using the Jactl programming language."

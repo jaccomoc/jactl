@@ -3,7 +3,7 @@ title:      "Proof of Concept: 20,000 Payments per Second with Checkpoint Replic
 date:       2023-11-10 15:11:44 +1100
 categories: blog
 authors: [james]
-image:      /assets/logo-picture.jpg
+image:      /img/social-card.png
 tags: [jvm]
 description: "Proof of concept demonstrating 20,000 payments per second with Jactl checkpoint replication for high availability."
 ---

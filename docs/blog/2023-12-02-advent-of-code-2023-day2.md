@@ -2,7 +2,7 @@
 title:      "Advent Of Code 2023 - Day 2"
 date:       2023-12-02T17:48:26+11:00
 categories: blog
-image:      /assets/logo-picture.jpg
+image:      /img/social-card.png
 authors: [james]
 tags: [advent-of-code]
 description: "Solving Advent of Code 2023 Day 2 (Cube Conundrum) using the Jactl programming language."

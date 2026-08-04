@@ -59,7 +59,7 @@ const FeatureList = [
     Svg: require('@site/static/img/dependencies.svg').default,
     description: (
       <>
-        Jactl does not have any dependencies on any other libraries (apart from an embedded instance of the stand-alone ASM
+        Jactl does not have any dependencies on any other libraries (apart from an embedded and shaded instance of the stand-alone ASM
         library).
       </>
     ),
@@ -68,11 +68,11 @@ const FeatureList = [
 
 function Feature({Svg, title, description}) {
   return (
-    <div className={clsx('col col--4')}>
-      <div className="text--center">
-        <Svg className={styles.featureSvg} role="img" />
-      </div>
-      <div className="text--center padding-horiz--md">
+    <div className={clsx('col col--4', styles.featureCol)}>
+      <div className={styles.featureCard}>
+        <div className={styles.featureIcon}>
+          <Svg className={styles.featureSvg} role="img" />
+        </div>
         <Heading as="h3">{title}</Heading>
         <p>{description}</p>
       </div>
@@ -82,12 +82,16 @@ function Feature({Svg, title, description}) {
 
 export default function HomepageFeatures() {
   return (
-      <div className="container">
-        <div className="row">
-          {FeatureList.map((props, idx) => (
-            <Feature key={idx} {...props} />
-          ))}
-        </div>
+    <div className="container">
+      <div className={styles.sectionHeading}>
+        <Heading as="h2">Why Jactl?</Heading>
+        <p>A small language with some big capabilities.</p>
       </div>
+      <div className="row">
+        {FeatureList.map((props, idx) => (
+          <Feature key={idx} {...props} />
+        ))}
+      </div>
+    </div>
   );
 }

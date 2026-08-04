@@ -9,9 +9,12 @@ description: "Introducing camel-jactl, an Apache Camel language module for Jactl
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-[camel-jactl](https://github.com/jaccomoc/camel-jactl) is a new [Apache Camel](https://camel.apache.org)
+[camel-jactl](https://camel.apache.org/components/next/languages/jactl-language.html) is a new [Apache Camel](https://camel.apache.org)
 language module that lets you use [Jactl](https://jactl.io) as the scripting language inside Camel for things such as
 filter predicates, content-based routing rules, and message transformations.
+
+It is available in Apache Camel version 4.22 and later.
+
 It registers itself through Camel's Language SPI under the name `jactl`.
 
 ```java
@@ -484,8 +487,7 @@ sandbox model that allows the application to control what scripts can and cannot
 
 ### Further Reading
 
-The camel-jactl source, including these benchmarks, is at
-[github.com/jaccomoc/camel-jactl](https://github.com/jaccomoc/camel-jactl).
+The official camel-jactl documentation is on the [Apache Camel](https://camel.apache.org/) site here: [camel-jactl](https://camel.apache.org/components/next/languages/jactl-language.html)
 
 There is a comparison of Jactl and Groovy here: [Groovy vs Jactl](https://jactl.io/blog/2026/03/16/groovy-vs-jactl).
 

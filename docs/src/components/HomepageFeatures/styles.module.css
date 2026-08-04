@@ -1,11 +1,70 @@
-.features {
+/* Feature grid (CSS module, locally scoped). Tokens come from custom.css. */
+
+.sectionHeading {
+  text-align: center;
+  max-width: 40rem;
+  margin: 0 auto 3rem;
+}
+
+.sectionHeading h2 {
+  font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+  margin-bottom: 0.5rem;
+}
+
+.sectionHeading p {
+  color: var(--ifm-color-emphasis-600);
+  font-size: 1.1rem;
+  margin-bottom: 0;
+}
+
+.featureCol {
   display: flex;
-  align-items: center;
-  padding: 2rem 0;
+  margin-bottom: 2rem;
+}
+
+.featureCard {
   width: 100%;
+  height: 100%;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--jactl-border);
+  border-radius: 12px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.featureCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
+  border-color: var(--ifm-color-primary-lighter);
+}
+
+.featureIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 96px;
+  margin-bottom: 1.25rem;
+  border-radius: 18px;
+  /* Always-light tile so the colour illustrations stay legible on dark cards */
+  background: #eef3fb;
+  border: 1px solid var(--jactl-border);
 }
 
 .featureSvg {
-  height: 125px;
-  width: 125px;
+  height: 56px;
+  width: 56px;
+}
+
+.featureCard h3 {
+  font-size: 1.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.featureCard p {
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.95rem;
+  margin-bottom: 0;
 }

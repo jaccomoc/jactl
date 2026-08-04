@@ -1,62 +1,233 @@
 /**
- * CSS files with the .module.css suffix will be treated as CSS modules
- * and scoped locally.
+ * Homepage styles (CSS module, locally scoped).
+ * Clean, minimal, theme-aware. Global design tokens come from custom.css.
  */
 
+/* ------------------------------------------------------------- Hero --- */
 .heroBanner {
-  padding: 4rem 0;
-  text-align: center;
   position: relative;
+  padding: 6rem 0 5rem;
+  text-align: center;
   overflow: hidden;
+  background-color: var(--jactl-brand-blue);
 }
 
-@media screen and (max-width: 996px) {
-  .heroBanner {
-    padding: 2rem;
-  }
+/* Faint dot-grid, faded toward the edges so it never competes with text. */
+.heroBanner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(
+    ellipse 65% 65% at 50% 40%,
+    #000 0%,
+    transparent 78%
+  );
+  mask-image: radial-gradient(
+    ellipse 65% 65% at 50% 40%,
+    #000 0%,
+    transparent 78%
+  );
+  pointer-events: none;
+}
+
+.heroContent {
+  position: relative;
+  z-index: 1;
+}
+
+.heroTitle {
+  font-size: clamp(2.75rem, 6vw, 4.25rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  margin-bottom: 1rem;
+  color: #ffffff;
+}
+
+.heroSubtitle {
+  font-size: clamp(1.1rem, 2.2vw, 1.45rem);
+  font-weight: 400;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.85);
+  max-width: 42rem;
+  margin: 0 auto 2rem;
 }
 
 .buttons {
   display: flex;
+  gap: 1rem;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
+/* Buttons sit on the dark-blue hero, so they carry their own light styling. */
+.heroBanner .btnPrimary {
+  background-color: #ffffff;
+  border: 1px solid #ffffff;
+  color: var(--jactl-brand-blue);
+}
+
+.heroBanner .btnPrimary:hover {
+  background-color: #e9f0ff;
+  border-color: #e9f0ff;
+  color: #0f2870;
+}
+
+.heroBanner .btnGhost {
+  background-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  color: #ffffff;
+}
+
+.heroBanner .btnGhost:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: #ffffff;
+  color: #ffffff;
+}
+
+@media screen and (max-width: 996px) {
+  .heroBanner {
+    padding: 4rem 1rem 3rem;
+  }
+}
+
+/* --------------------------------------------------------- Sections --- */
 .features {
-  display: flex;
-  align-items: center;
-  padding: 2rem 0;
-  width: 100%;
-}
-
-.featureSvg {
-  height: 125px;
-  width: 125px;
-}
-
-.examples {
-  background: #f0f8ff;
-  display: flex;
-  align-items: center;
-  padding: 2rem 0;
-  width: 100%;
+  padding: 4rem 0;
 }
 
 .opensource {
-  background: #105086;
-  display: flex;
-  align-items: center;
-  padding: 2rem 0;
-  width: 100%;
-  color: #ffffff;
-  a { color: #ccccff; }
+  padding: 3rem 0 4rem;
 }
 
-[data-theme="dark"] {
-  .examples {
-    background: #1D5Ea6;
+.examples {
+  padding: 4rem 0;
+  background: var(--jactl-surface-1);
+}
+
+.sectionHeading {
+  text-align: center;
+  max-width: 40rem;
+  margin: 0 auto 3rem;
+}
+
+.sectionHeading h2 {
+  font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+  margin-bottom: 0.5rem;
+}
+
+.sectionHeading p {
+  color: var(--ifm-color-emphasis-600);
+  font-size: 1.1rem;
+  margin-bottom: 0;
+}
+
+/* ---------------------------------------------- Open-source callout --- */
+.opensourceCard {
+  max-width: 46rem;
+  margin: 0 auto;
+  text-align: center;
+  padding: 2.5rem 2rem;
+  background: var(--jactl-surface-1);
+  border: 1px solid var(--jactl-border);
+  border-radius: var(--ifm-global-radius);
+}
+
+.opensourceCard h2 {
+  margin-bottom: 0.75rem;
+}
+
+.opensourceCard p {
+  margin-bottom: 0.5rem;
+}
+
+.opensourceCard p:last-child {
+  margin-bottom: 0;
+}
+
+/* ------------------------------------------------- Ecosystem callout --- */
+.ecosystem {
+  padding: 0 0 4rem;
+}
+
+.ecosystemCard {
+  max-width: 60rem;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 2rem 2.5rem;
+  background: var(--jactl-surface-1);
+  border: 1px solid var(--jactl-border);
+  border-radius: var(--ifm-global-radius);
+}
+
+.ecosystemText h2 {
+  margin-bottom: 0.4rem;
+  font-size: 1.5rem;
+}
+
+.ecosystemText p {
+  margin-bottom: 0;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.ecosystemCard .button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+@media screen and (max-width: 996px) {
+  .ecosystemCard {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1.75rem;
   }
-  .features {
-    background: #1D5Ea6;
+}
+
+/* ---------------------------------------------------- Example cards --- */
+.example {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 2rem;
+  align-items: start;
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--jactl-border);
+  border-radius: var(--ifm-global-radius);
+}
+
+.example:last-child {
+  margin-bottom: 0;
+}
+
+.exampleText h3 {
+  margin-top: 0;
+  font-size: 1.4rem;
+}
+
+.exampleText p {
+  color: var(--ifm-color-emphasis-700);
+  margin-bottom: 0.75rem;
+}
+
+.exampleText p:last-child {
+  margin-bottom: 0;
+}
+
+.exampleCode :global(pre) {
+  margin: 0;
+}
+
+@media screen and (max-width: 996px) {
+  .example {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+    padding: 1.5rem;
   }
 }

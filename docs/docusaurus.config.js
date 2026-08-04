@@ -5,8 +5,27 @@
 // See: https://docusaurus.io/docs/api/docusaurus-config
 
 import {themes as prismThemes} from 'prism-react-renderer';
+import fs from 'node:fs';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
+
+// Single source of truth for the Jactl version: the project's build.gradle.
+// Blog posts contain a leftover Jekyll placeholder, {{ site.content.jactl_version }},
+// which the markdown.preprocessor below substitutes at build time.
+const JACTL_VERSION = (() => {
+  try {
+    const dir = path.dirname(fileURLToPath(import.meta.url));
+    const gradle = fs.readFileSync(path.resolve(dir, '../build.gradle'), 'utf8');
+    const match = gradle.match(/^version\s+'([^']+)'/m);
+    if (match) return match[1];
+    console.warn('[jactl] Could not parse version from build.gradle');
+  } catch (err) {
+    console.warn('[jactl] Could not read ../build.gradle:', err.message);
+  }
+  return '2.9.2'; // fallback if build.gradle is unavailable
+})();
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
@@ -42,6 +61,16 @@ const config = {
     locales: ['en'],
   },
 
+  markdown: {
+    // Fill in the leftover Jekyll {{ site.content.jactl_version }} placeholder
+    // (used in the Advent-of-Code blog posts) with the current Jactl version.
+    preprocessor: ({fileContent}) =>
+      fileContent.replace(
+        /\{\{\s*site\.content\.jactl_version\s*\}\}/g,
+        JACTL_VERSION,
+      ),
+  },
+
   presets: [
     [
       'classic',
@@ -73,13 +102,13 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
-      // Replace with your project's social card
-      image: 'img/logo-picture.png',
+      // Social card shown when a page is shared (Open Graph / Twitter).
+      image: 'img/social-card.png',
       navbar: {
         style: 'dark',
         logo: {
           alt: 'Jactl - A Secure Scripting Language for Java',
-          src: 'img/logo2.png',
+          src: 'img/logo2-dark.png',
         },
         items: [
           {
@@ -97,7 +126,6 @@ const config = {
         ],
       },
       footer: {
-        style: 'dark',
         links: [
           {
             title: 'Docs',
@@ -160,8 +188,8 @@ const config = {
         }
       },
       prism: {
-        theme: prismThemes.shadesOfPurple,
-        darkTheme: prismThemes.dracula,
+        theme: prismThemes.oneLight,
+        darkTheme: prismThemes.nightOwl,
         additionalLanguages: ['groovy','java','bash'],
       },
     }),
