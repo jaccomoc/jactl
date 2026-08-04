@@ -108,7 +108,7 @@ const config = {
         style: 'dark',
         logo: {
           alt: 'Jactl - A Secure Scripting Language for Java',
-          src: 'img/logo2-dark.png',
+          src: 'img/logo2.png',
         },
         items: [
           {
