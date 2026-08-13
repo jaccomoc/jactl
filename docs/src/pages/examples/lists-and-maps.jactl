@@ -8,4 +8,5 @@ numbers.map{ x -> x * x }
        .each{ x -> println x }
 
 // Implicit it parameter
-println "Sum: ${ numbers.map{ it * it }.sum() }
+println "Sum: ${ numbers.map{ it * it }.sum() }"
+
