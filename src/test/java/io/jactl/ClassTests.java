@@ -35,6 +35,11 @@ public class ClassTests extends BaseTest {
     test(Utils.listOf( "class X{ static int f(int x){x} }"), "X.f(x:3)", 3);
   }
 
+  @Test public void unknownClassField() {
+    testError("new X().field", "unknown class");
+    testError("new java.io.File('/dev/null').text", "unknown class");
+  }
+  
   @Test public void nameScoping() {
     replModeEnabled = false;
     test("class X{}; int X = 1; X", 1);

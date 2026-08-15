@@ -886,6 +886,7 @@ public class JactlContext {
     else {
       // No methods found
       errorHandler.accept("Could not find " + (mustBeStatic ? "static " : "") + "public method named '" + methodName + "' in class " + objClass.getName() + " with matching argument count");
+      return null;
     }
     Method method = methods.get(0);
     if (!this.allowHostClassLookup.test(method.getDeclaringClass().getName())) {
