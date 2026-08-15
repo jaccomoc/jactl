@@ -11,6 +11,11 @@ You can use Jactl in three different ways:
 2. In an interactive REPL shell, or
 3. You can integrate it into your application.
 
+:::tip Try it online
+Want to experiment without installing anything? Head to the **[online Playground](/playground)**
+to write and run Jactl code right in your browser.
+:::
+
 ## Command Line Scripts
 
 To run command line scripts you only need the Jactl jar which can be downloaded from Maven Central:
@@ -207,6 +212,7 @@ To push to your local Maven repository you can use `publishToMavenLocal`:
 
 For more information see the various guides under in the [documentation](../docs/introduction) section
 of the [Jactl](https://jactl.io) website including:
+* [Playground](/playground) to try Jactl in your browser without installing anything
 * [Language Features](language-features) for a brief overview of the various features of the Jactl language
 * [Language Guide](language-guide/introduction) for a complete description of the language
 * [Integration Guide](integration-guide/introduction) for more information about how to integrate Jactl into a Java application

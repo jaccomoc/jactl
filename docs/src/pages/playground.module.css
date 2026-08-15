@@ -1,0 +1,219 @@
+/* Styles for the "Try it now" Jactl playground page. */
+
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+.header {
+  margin-bottom: 1.5rem;
+}
+
+.title {
+  margin-bottom: 0.5rem;
+}
+
+.subtitle {
+  color: var(--ifm-color-emphasis-700);
+  max-width: 70ch;
+  margin: 0;
+}
+
+/* --------------------------------------------------------------- Toolbar */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.runButton {
+  appearance: none;
+  border: none;
+  border-radius: 6px;
+  background: var(--ifm-color-primary);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.5rem 1.25rem;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.runButton:hover:not(:disabled) {
+  background: var(--ifm-color-primary-dark);
+}
+.runButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.clearButton {
+  appearance: none;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ifm-color-emphasis-800);
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.clearButton:hover:not(:disabled) {
+  background: var(--ifm-color-emphasis-200);
+  border-color: var(--ifm-color-emphasis-400);
+}
+.clearButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.exampleLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ifm-color-emphasis-700);
+  font-size: 0.9rem;
+}
+
+.exampleSelect {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 6px;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  padding: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+}
+
+.hint {
+  margin-left: auto;
+  color: var(--ifm-color-emphasis-500);
+  font-size: 0.85rem;
+}
+
+/* ----------------------------------------------------------------- Panes */
+
+.panes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  min-height: 460px;
+}
+
+@media (max-width: 850px) {
+  .panes {
+    grid-template-columns: 1fr;
+  }
+}
+
+.editorPane {
+  height: 460px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.editorLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ifm-color-emphasis-500);
+}
+
+.outputPane {
+  height: 460px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  background: var(--ifm-color-emphasis-100);
+  padding: 1rem;
+  overflow: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+}
+
+.outputPlaceholder {
+  color: var(--ifm-color-emphasis-500);
+}
+
+.outputBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.outputStream {
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ifm-font-color-base);
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.outputResult {
+  border-top: 1px dashed var(--ifm-color-emphasis-300);
+  padding-top: 0.5rem;
+  color: var(--ifm-font-color-base);
+}
+.outputResult code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--ifm-color-primary);
+}
+.resultLabel {
+  color: var(--ifm-color-emphasis-600);
+  margin-right: 0.35rem;
+}
+
+.outputError {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #b91c1c;
+  font-family: inherit;
+  font-size: inherit;
+}
+[data-theme='dark'] .outputError {
+  color: #f87171;
+}
+
+.outputTimeout {
+  color: #b45309;
+}
+[data-theme='dark'] .outputTimeout {
+  color: #fbbf24;
+}
+
+.outputNote {
+  color: var(--ifm-color-emphasis-600);
+  font-style: italic;
+  font-size: 0.8rem;
+}
+
+/* ---------------------------------------------------------------- Spinner */
+
+.spinner {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-right: 0.35rem;
+  vertical-align: -0.1em;
+  border: 2px solid var(--ifm-color-emphasis-400);
+  border-top-color: var(--ifm-color-primary);
+  border-radius: 50%;
+  animation: playground-spin 0.7s linear infinite;
+}
+
+@keyframes playground-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,113 @@
+/*
+ * Copyright © 2022-2026 James Crawford
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Standalone HTTP service that runs untrusted Jactl snippets for the jactl.io
+// "Try it now" playground. Depends on the root :jactl project for the language
+// runtime and shades everything into a single runnable jar for deployment.
+plugins {
+    id 'java'
+    id 'application'
+    // Version comes from the root project's plugins block, which already puts
+    // the shadow plugin on the build classpath.
+    id 'com.github.johnrengelman.shadow'
+}
+
+group   'io.jactl'
+version '2.9.2'
+
+repositories {
+    mavenCentral()
+}
+
+// Jactl targets Java 8 bytecode; keep the service on the same floor so it can
+// run on the same JRE as the language itself.
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(8) }
+}
+
+dependencies {
+    // The root project (io.jactl.* runtime + shaded ASM) is the only dependency.
+    // The HTTP layer and JSON handling use the JDK and Jactl's own Json class,
+    // so no extra runtime dependencies are pulled in.
+    implementation project(':')
+}
+
+application {
+    mainClass = 'io.jactl.playground.PlaygroundServer'
+}
+
+// Produce build/libs/jactl-playground.jar as a single runnable artifact to scp
+// to the VM (java -jar jactl-playground.jar).
+shadowJar {
+    archiveBaseName.set('jactl-playground')
+    archiveClassifier.set('')
+    mergeServiceFiles()
+}
+
+// -------------------------------------------------------------------------
+// Self-contained backend deployment archive.
+//
+// Bundles the fat jar together with the deploy/ scripts and config into a
+// single archive that unpacks to a top-level jactl-playground-<version>/
+// directory laid out exactly how provision.sh expects (jar as a sibling, plus
+// systemd/ and nginx/ subdirs). Workflow on the VM:
+//
+//   scp jactl-playground-deploy-<version>.tar.gz  vm:
+//   tar xzf jactl-playground-deploy-<version>.tar.gz
+//   cd jactl-playground-<version>
+//   sudo CERTBOT_EMAIL=you@example.com ./provision.sh
+//
+// Build with:  ./gradlew :playground-server:deployTar   (or deployZip / deployDist)
+// Output in:   build/deploy-dist/
+// -------------------------------------------------------------------------
+def deployStageName = "jactl-playground-${version}"
+
+def configureDeployArchive = { task ->
+    task.group = 'distribution'
+    task.dependsOn tasks.named('shadowJar')
+    task.archiveBaseName.set('jactl-playground-deploy')
+    task.destinationDirectory.set(layout.buildDirectory.dir('deploy-dist'))
+    // Everything lands under a single top-level versioned directory.
+    task.into(deployStageName) {
+        // The fat jar, renamed to the stable name provision.sh defaults to.
+        from(tasks.named('shadowJar').flatMap { it.archiveFile }) {
+            rename '.*', 'jactl-playground.jar'
+        }
+        // deploy/ contents: provision.sh, README.md, systemd/*, nginx/*
+        from('deploy')
+    }
+    // Deterministic permissions: provision.sh executable, everything else 0644.
+    task.dirMode = 0755
+    task.eachFile { fcd -> fcd.mode = (fcd.name == 'provision.sh') ? 0755 : 0644 }
+}
+
+tasks.register('deployTar', Tar) {
+    description = 'Self-contained backend deployment archive (tar.gz) for provision.sh.'
+    configureDeployArchive(it)
+    archiveExtension.set('tar.gz')
+    compression = Compression.GZIP
+}
+
+tasks.register('deployZip', Zip) {
+    description = 'Self-contained backend deployment archive (zip) for provision.sh.'
+    configureDeployArchive(it)
+}
+
+tasks.register('deployDist') {
+    group = 'distribution'
+    description = 'Build both backend deployment archives (tar.gz and zip).'
+    dependsOn 'deployTar', 'deployZip'
+}

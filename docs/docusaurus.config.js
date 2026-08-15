@@ -50,6 +50,12 @@ const config = {
   deploymentBranch: 'gh-pages',
   trailingSlash: false,
 
+  // Backend endpoint for the "Try it now" playground. Override at build time
+  // with PLAYGROUND_API_URL (e.g. http://127.0.0.1:18080 for a local backend).
+  customFields: {
+    playgroundApiUrl: process.env.PLAYGROUND_API_URL || 'https://api.jactl.io',
+  },
+
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
 
@@ -117,6 +123,7 @@ const config = {
             position: 'left',
             label: 'Docs',
           },
+          {to: '/playground', label: 'Try it', position: 'left'},
           {to: '/blog', label: 'Blog', position: 'left'},
           {
             href: 'https://github.com/jaccomoc/jactl',
