@@ -1,0 +1,64 @@
+# /etc/systemd/system/jactl-playground.service
+#
+# Runs the Jactl playground eval service (the backend for jactl.io/playground).
+# In-process isolation model: one long-running, warm JVM that runs each submitted
+# script on a watchdog-guarded worker thread under Jactl's deny-all sandbox. The
+# MemoryMax / CPUQuota / Restart directives below are the VM-level backstop for
+# the residual cases the in-process watchdog can't preempt (a tight non-looping
+# CPU burn, or an in-JVM sandbox escape): the cgroup caps contain the blast
+# radius and Restart=always brings the service back.
+
+[Unit]
+Description=Jactl playground eval service
+After=network.target
+
+[Service]
+Type=simple
+User=jactl-playground
+Group=jactl-playground
+WorkingDirectory=/opt/jactl-playground
+
+# Heap is capped well under MemoryMax so JVM non-heap (metaspace, thread stacks,
+# code cache) has headroom before the cgroup hard limit trips the OOM killer.
+ExecStart=/usr/bin/java \
+  -Xmx512m \
+  -Djactl.playground.port=8080 \
+  -Djactl.playground.bind=127.0.0.1 \
+  -Djactl.playground.corsOrigin=https://jactl.io \
+  -Djactl.playground.maxExecMs=5000 \
+  -Djactl.playground.wallClockMs=8000 \
+  -Djactl.playground.maxLoops=10000000 \
+  -Djactl.playground.maxConcurrent=4 \
+  -Djactl.playground.maxOutputChars=65536 \
+  -Djactl.playground.logDir=/var/log/jactl-playground \
+  -Djactl.playground.logMaxBytes=1073741824 \
+  -Djactl.playground.logCount=10 \
+  -jar /opt/jactl-playground/jactl-playground.jar
+
+Restart=always
+RestartSec=5
+
+# Rolling request/error logs. LogsDirectory creates /var/log/jactl-playground owned
+# by the service user and makes it writable even under ProtectSystem=strict. At most
+# logCount (10) files of logMaxBytes (1 GB) each are kept -> <= ~10 GB on disk.
+LogsDirectory=jactl-playground
+
+# --- VM-level resource backstops (the crux of the in-process safety model) ---
+MemoryMax=1G
+CPUQuota=80%
+TasksMax=256
+
+# --- Hardening (kept JVM-compatible: NO MemoryDenyWriteExecute, which breaks the JIT) ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictSUIDSGID=true
+# The app writes nothing to disk; /opt/jactl-playground is read-only to it.
+ReadOnlyPaths=/opt/jactl-playground
+
+[Install]
+WantedBy=multi-user.target

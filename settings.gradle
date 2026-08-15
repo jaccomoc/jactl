@@ -16,3 +16,5 @@
 
 rootProject.name = 'jactl'
 
+include 'playground-server'
+
