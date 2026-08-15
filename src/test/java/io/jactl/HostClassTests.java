@@ -325,6 +325,7 @@ public class HostClassTests extends BaseTest {
     test("import java.lang.Math; Math.min(1,2)", 1);
     test("io.jactl.HostClassTests.NewType x; x.staticMethod()", "static");
     test("io.jactl.HostClassTests.NewType x; x.staticProcessMap([:])", null);
+    testError("new java.io.File('/dev/null').text", "could not find public method");
   }
   
   @Test public void typedGlobals() {

@@ -1177,8 +1177,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           // Check for valid field/method name
           JactlClassDescriptor desc = (JactlClassDescriptor)parent.type.getClassDescriptor();
           if (desc == null) {
-            error("Could not get class descriptor for " + parent.type, parent.location);
-            return null;
+            error("Could not get class descriptor for " + parent.type, field.location);
+            return Pair.of(TYPE_FOR_BAD_REF, null);
           }
           type = fieldName != null ? desc.getField(fieldName) : null;
           if (type != null && parent.type.is(CLASS)) {
