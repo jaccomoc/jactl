@@ -29,7 +29,7 @@ const EXAMPLES = [
   },
   {
     label: 'Regular expressions',
-    code: `def text = 'Product: MacBook, Price: 3299.00, Quantity: 14'\n\nif (text =~ /Product: (.*), Price: (.*), Quantity: (\\d+)/) {\n  println "Product: $1"\n  println "Total value: \${$2 * $3}"\n}\n`,
+    code: `def text = 'Product: MacBook, Price: 3299.00, Quantity: 14'\n\nif (text =~ /Product: (.*), Price: (.*), Quantity: (\\d+)/n) {\n  println "Product: $1"\n  println "Total value: \${$2 * $3}"\n}\n`,
   },
   {
     label: 'Quicksort',
