@@ -52,6 +52,7 @@ module.exports = {
             'integration-guide/dependency',
             'integration-guide/overview',
             'integration-guide/jactl-context',
+            'integration-guide/security',
             'integration-guide/compiling-classes',
             'integration-guide/script-location',
             'integration-guide/jactl-execution-environment',
