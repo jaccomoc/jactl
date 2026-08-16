@@ -26,6 +26,11 @@ function HomepageHeader() {
           </Link>
           <Link
             className={clsx('button button--lg', styles.btnGhost)}
+            to="/playground">
+            Playground
+          </Link>
+          <Link
+            className={clsx('button button--lg', styles.btnGhost)}
             href={GITHUB_URL}>
             ★ Star on GitHub
           </Link>
