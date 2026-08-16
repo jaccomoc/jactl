@@ -123,7 +123,7 @@ const config = {
             position: 'left',
             label: 'Docs',
           },
-          {to: '/playground', label: 'Try it', position: 'left'},
+          {to: '/playground', label: 'Playground', position: 'left'},
           {to: '/blog', label: 'Blog', position: 'left'},
           {
             href: 'https://github.com/jaccomoc/jactl',
