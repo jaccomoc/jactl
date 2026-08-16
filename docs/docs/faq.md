@@ -101,6 +101,9 @@ what scripts can do.
 The only way in which scripts can interact with their environment is via extension functions
 and methods provided by the application in which it is embedded.
 
+As of Jactl 2.6.0 it is possible to set the `allowHostAccess()` flag and `allowHostLookup()` predicate on the `JactlContext` object to selectively permit access to host classes (application classes and Java library classes).
+The application can control exactly which classes are permitted (including allowing access to all classes for scenarios where scripts are trusted).
+
 ## Can I run Jactl code without having to embed it in another appplication?
 
 If you just want to run Jactl scripts on their own, you can run them from the command line.
@@ -125,6 +128,14 @@ command-line history and editing.
 See the [Jactl REPL](https://github.com/jaccomoc/jactl-repl) project for more details including
 a link for where the JAR file can be downloaded from.
 
+## Is there an online playground for experimenting with Jactl?
+
+You can use the online [Jactl Playground](https://jactl.io/playground) to run arbitrary Jactl scripts online without needing to install anything.
+
+## Where does the name Jactl come from?
+
+Jactl stands for **J**ava **A**pplication **C**on**T**ro**L** 
+
 ## What language is the Jactl compiler written in?
 
 The Jactl compiler is written almost entirely in Java (compatible with Java 8+).
@@ -133,8 +144,8 @@ specification (see Expr.java and Stmt.java).
 
 ## How big is the compiler?
 
-The Jactl source code currently is about 30K lines of code after stripping out comments and
-blank lines (or 40K lines including comments and blank lines).
+The Jactl source code currently is about 36K lines of code after stripping out comments and
+blank lines (or 48K lines including comments and blank lines).
 
 ## How many test cases are there?
 
@@ -144,8 +155,9 @@ result (or the expected error).
 
 ## Was any of Jactl written by AI?
 
-No, AI was not used in the development of Jactl, nor was it used to produce any of the documentation.
-The only use of AI was to help in producing the drawings on the home page of the Jactl website.
+None of the code for Jactl has been written by AI.
+None of the documentation has been written by AI (unless otherwise explicitly called out).
+AI has been used to help build the website and generate some icons and charts.
 
 ## What other libraries does Jactl depend on?
 
