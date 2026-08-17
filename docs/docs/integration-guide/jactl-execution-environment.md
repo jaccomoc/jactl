@@ -3,6 +3,11 @@ title: Jactl Execution Environment
 description: "Creating a Jactl execution environment."
 ---
 
+:::note
+This section is only relevant if using Jactl in its async non-blcoking mode.
+If you are using synchronous execution ([JactlContext.async(false)](jactl-context#asyncboolean-enabled)), then this section can be ignored.
+:::
+
 In order for Jactl to support event-loop based applications with non-blocking execution of scripts, it needs
 to know how to schedule blocking and non-blocking operations.
 

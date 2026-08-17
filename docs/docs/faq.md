@@ -136,6 +136,10 @@ You can use the online [Jactl Playground](https://jactl.io/playground) to run ar
 
 Jactl stands for **J**ava **A**pplication **C**on**T**ro**L** 
 
+## How do you pronounce Jactl?
+
+The name Jactl is prounounced so that it rhymes with fractal. `
+
 ## What language is the Jactl compiler written in?
 
 The Jactl compiler is written almost entirely in Java (compatible with Java 8+).
