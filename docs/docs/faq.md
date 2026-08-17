@@ -134,7 +134,8 @@ You can use the online [Jactl Playground](https://jactl.io/playground) to run ar
 
 ## Where does the name Jactl come from?
 
-Jactl stands for **J**ava **A**pplication **C**on**T**ro**L** 
+Jactl stands for **J**ava **A**pplication **C**on**T**ro**L**.
+Its provides a mechanism by which applications can give users the ability to control the application behaviour via scripting.
 
 ## How do you pronounce Jactl?
 
