@@ -197,8 +197,9 @@ For example, to replace all occurrences of `abc` with `xyz` in a file:
 $ jactl -p -e 's/abc/xyz/g'
 ```
 
-The `r` modifier can be used to force a regex match since without any modifiers, and when using implicit match against `it`,
-the compiler can't tell whether a regex string or an arithmetic division is wanted:
+The `r` modifier forces a bare pattern string to be treated as a regex match against the implicit `it` variable.
+Without a modifier, `/abc/` is just a string value, so using it directly in a boolean context (like the condition below)
+needs `r` to perform the match:
 ```shell
 $ jactl -n -e '/abc/r and println it'
 ```
