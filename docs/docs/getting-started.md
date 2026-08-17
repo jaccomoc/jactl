@@ -217,4 +217,5 @@ of the [Jactl](https://jactl.io) website including:
 * [Language Guide](language-guide/introduction) for a complete description of the language
 * [Integration Guide](integration-guide/introduction) for more information about how to integrate Jactl into a Java application
 * [Command-line Scripts](command-line-scripts) for more information about how to run scripts on the command line
+* [Jactl for Groovy Programmers Guide](jactl-for-groovy-programmers) for Groovy programmers who want a quick introduction to the language
 * [FAQ](faq) for some commonly asked questions and the answers 

@@ -46,11 +46,15 @@ allow their users to provide customisations and extensions that have the followi
   The language should be fun to code in &mdash; a language that provides a nice concise syntax with powerful
   features.
 
-## Why wouldn't I just use Groovy?
+## It seems very similar to Groovy, why wouldn't I just use Groovy?
 
 For many applications Groovy might be the better choice.
 It depends on many things.
 See [Groovy vs Jactl](/blog/2026/03/16/groovy-vs-jactl) for a comparison of the two languages and why you might choose one over the other.
+
+## How does the language itself differ from Groovy?
+
+If you are already familiar with Groovy then the [Jactl for Groovy Programmers](jactl-for-groovy-programmers) guide will give you a quick overview of the similarities and differences between the two languages.
 
 ## What does it mean that it never blocks?
 

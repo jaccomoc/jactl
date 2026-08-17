@@ -63,6 +63,7 @@ module.exports = {
             'integration-guide/example-application',
           ]
         },
+        'jactl-for-groovy-programmers',
         'faq',
       ],
     },
