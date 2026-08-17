@@ -65,7 +65,7 @@ Scripts are cached so the compilation cost is only incurred once.
 
 The benchmarks are modelled on the [camel-jmh](https://github.com/apache/camel-performance-tests/tree/main/tests/camel-jmh)
 module in Apache's own camel-performance-tests project and can be found in the
-[benchmarks](https://github.com/jaccomoc/camel-jactl/tree/main/benchmarks) subproject of camel-jactl.
+[camel-jactl-benchmarks](https://github.com/jaccomoc/camel-jactl-benchmarks) project.
 
 | Component                   | Version        |
 |-----------------------------|----------------|
