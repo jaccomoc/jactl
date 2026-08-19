@@ -69,7 +69,7 @@ module in Apache's own camel-performance-tests project and can be found in the
 
 | Component                   | Version        |
 |-----------------------------|----------------|
-| Apache Camel                | 4.20.0         |
+| Apache Camel                | 4.22.0         |
 | Jactl                       | 2.9.2          |
 | Groovy (via `camel-groovy`) | 5.0.5          |
 | JMH                         | 1.37           |
