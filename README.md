@@ -282,4 +282,3 @@ Related GitHub projects:
 
 * The [Jactl REPL project](https://github.com/jaccomoc/jactl-repl) provides a simple Read-Eval-Print-Loop shell for running Jactl code interactively.
 * The [Jactl-Vertx library](https://github.com/jaccomoc/jactl-vertx) provides some basic Vert.x integration capabilities.
-
