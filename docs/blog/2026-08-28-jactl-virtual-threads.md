@@ -101,11 +101,13 @@ execution state of the script:
 
 ![The Jactl call stack unwinds into a chain of Continuation objects](/img/continuation-chain.svg)
 
+:::note
 For anyone who has done performance tuning of Java applications, the idea of throwing exceptions
 instantly makes one think of the cost involved, but in reality, the cost of throwing an exception is
 mostly in the generation of the stack trace that goes along with it.
 As long as you throw an exception that does not fill in the stack trace, it is actually very
 efficient.
+:::
 
 ## Async Functions
 
@@ -136,9 +138,11 @@ primitives, and an `Object[]` that is used for all other types.
 
 Every async function is implicitly passed a `Continuation` object as its first argument.
 The first time through, the argument is null, but if the function was suspended due to
-a long-running operation and is then later resumed, the argument will be non-null and the
-generated code then uses the location within the `Continuation` object to work out where
-in the function to jump to in order to continue execution.
+a long-running operation and is then later resumed, it will be reinvoked with the 
+`Continuation` it originally threw when it was suspended.
+The generated code checks if the continuation argument is non-null and if so, uses the
+location within the `Continuation object to work out where in the function to jump to in
+order to continue execution.
 
 Here is some pseudocode that shows what the generated code from the compiler for a function
 that invokes another async function might look like:
@@ -186,7 +190,7 @@ so that the chain starts with the `Continuation` from the top of the stack.
 Once a long-running operation completes, the initial `Continuation` object in the chain is
 resumed by invoking its `continueExecution(Object result)` method.
 This method extracts the `MethodHandle` and calls it, passing in the
-`Continuation` as previously described so that the function can restore any local variable
+`Continuation` as previously described so that the function can restore any local variables
 and work out where to continue from.
 
 Since the call stack no longer matches the original call stack, 
@@ -199,7 +203,8 @@ registered completion from the application is invoked with the final result.
 ## Invoking a Subsequent Async Function
 
 While walking the chain of `Continuation` objects and resuming them, another async function may
-be invoked that throws a new `Continuation` object for a new long-running operation.
+be invoked that throws a new `Continuation` object for a new long-running operation, possibly
+from a function many nested calls further in.
 When this happens, we take the new chain of continuations and add the remainder of the existing
 chain to the end of that chain:
 
@@ -214,9 +219,12 @@ It will first resume each of the new continuations and then continue on to the r
 Once Jactl had the ability to save the current execution state in a chain of continuations, I realised that if
 these continuations could be serialised into a byte array, I could use this as a way to checkpoint the state
 of a script.
+Jactl offers a `checkpoint()` function that allows a script to checkpoint its state it
+important steps during its processing.
 Once a script state has been checkpointed, the state can be persisted to disk, or into a database, or replicated
 across a network to another application instance.
-This provides a way to resume a script after the failure of an application host.
+Once the state has been persisted or replicated, it can be resumed at any point in time
+if the original application host fails, for example.
 
 For every built-in type and every user defined class, Jactl generates code to store instances of these 
 types into a byte array, along with other types used internally by the Jactl runtime.
@@ -285,19 +293,21 @@ for (order in orders) {
 
 </details>
 
-For each batch `processOrder()` is called for each order which then
+For each batch, `processOrder()` is called for each order in the batch which then
 invokes `checkInventory()` (which always returns true) for each item in the order.
-The `checkInventory()` function invokes `sleep(0)` up to `n` times so we can then measure the overhead of suspending
-and resuming a script from inside a nested call stack.
-The call to `sleep(0)` will suspend the script by throwing a `Continuation` as described but will then immediately
-resume execution since the sleep time is 0.
+The `checkInventory()` function invokes `sleep(0)` the first `n` times it is invoked
+so we can then measure the overhead of suspending and resuming a script from inside
+a nested call stack.
+The call to `sleep(0)` will suspend the script by throwing a `Continuation` as described but,
+since the sleep time is 0, it will then immediately schedule a resume event to continue
+the script execution.
 
 The benchmark measures performance for when the script performs 0, 1, 2, 5, and 10 calls to `sleep(0)`.
 Here are the results:
 
 <img src="/charts/suspend_resume_chart.svg" alt="Throughput vs number of suspend/resume operations" />
 
-As the chart shows, the impact of each suspend/resume is quite small in this benchmark. 
+As the chart shows, in this benchmark, he impact of each suspend/resume is quite small.
 In a real world scenario, the relative impact will be based on how much work the script is doing, how
 nested the stack is, and the number of local variables (including parameters) there are at each level
 of the stack.
@@ -307,12 +317,12 @@ executing both the scripts and the resume events.
 ## Conclusion
 
 For reactive applications that need to run on older versions of Java, the Jactl continuation based mechanism for
-handling blocking operations provides a convenient and efficient way for applications to offer customisation via scripting
-without having to worry about scripts blocking event-loop threads.
-Scripts can be written with inlined blocking operations in a natural manner without having to pollute the code
-with `async/await` or having to deal with `Futures` or `Promises` or other mechanisms that programming languages
-have used to deal with asynchronous code in the past.
-
+handling blocking operations provides a convenient and efficient way for applications to offer customisation via scripting,
+without needint to be concerned about scripts blocking event-loop threads.
+Scripts can be written with inlined blocking operations in a natural manner: there is no need
+to pollute the code with `async/await` or deal with `Futures` or `Promises` or other
+mechanisms that programming languages have used to deal with asynchronous behaviour in the
+past.
 From a script point of view, Jactl provides the equivalent programming model as Virtual Threads in Java 21 provide
 to Java programs.
 
