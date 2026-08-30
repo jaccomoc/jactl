@@ -1,0 +1,133 @@
+<!--
+  - Copyright © 2022,2023,2024  James Crawford
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  -
+  -->
+
+<svg width="100%" viewBox="0 0 920 520" fill="none" xmlns="http://www.w3.org/2000/svg"
+     font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif">
+  <defs>
+    <marker id="arrowHead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/>
+    </marker>
+    <marker id="arrowHeadBlue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#1d4ed8"/>
+    </marker>
+    <marker id="arrowHeadSlate" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="920" height="520" fill="#ffffff"/>
+
+  <text x="165" y="24" text-anchor="middle" font-size="12" font-weight="700" fill="#1d4ed8" letter-spacing="0.5">RESUMING THE ORIGINAL CHAIN</text>
+  <text x="715" y="24" text-anchor="middle" font-size="12" font-weight="700" fill="#1d4ed8" letter-spacing="0.5">THE SPLICED CHAIN</text>
+
+  <!-- LEFT panel: bracket around the not-yet-resumed remainder -->
+  <path d="M42 218 H34 V358 H42" stroke="#1d4ed8" stroke-width="2" fill="none"/>
+  <text x="18" y="288" text-anchor="middle" font-size="10.5" font-weight="700" fill="#1d4ed8"
+        letter-spacing="0.5" transform="rotate(-90 18 288)">NOT YET RESUMED</text>
+
+  <!-- LEFT panel chain arrows -->
+  <line x1="165" y1="106" x2="165" y2="134" stroke="#1d4ed8" stroke-width="1.5" marker-end="url(#arrowHeadBlue)"/>
+  <line x1="165" y1="190" x2="165" y2="218" stroke="#1d4ed8" stroke-width="1.5" marker-end="url(#arrowHeadBlue)"/>
+  <line x1="165" y1="274" x2="165" y2="302" stroke="#1d4ed8" stroke-width="1.5" marker-end="url(#arrowHeadBlue)"/>
+
+  <!-- LEFT ROW 1: sleep - already resumed -->
+  <g>
+    <rect x="50" y="50" width="230" height="56" rx="8" fill="#eef1f5" stroke="#94a3b8" stroke-width="2"/>
+    <text x="66" y="74" font-size="14" font-weight="700" fill="#64748b" font-family="'JetBrains Mono', Menlo, Consolas, monospace">Continuation</text>
+    <text x="66" y="94" font-size="11.5" fill="#94a3b8">sleep &#8212; origin</text>
+    <rect x="196" y="59" width="68" height="18" rx="9" fill="#94a3b8"/>
+    <text x="230" y="72" text-anchor="middle" font-size="10" font-weight="700" fill="#ffffff" letter-spacing="0.5">DONE</text>
+  </g>
+
+  <!-- LEFT ROW 2: checkInventory - currently resuming -->
+  <g>
+    <rect x="50" y="134" width="230" height="56" rx="8" fill="#eaf1fd" stroke="#1d4ed8" stroke-width="3"/>
+    <text x="66" y="158" font-size="14" font-weight="700" fill="#0f2a5c" font-family="'JetBrains Mono', Menlo, Consolas, monospace">Continuation</text>
+    <text x="66" y="178" font-size="11.5" fill="#5b7db8">checkInventory &#183; line 15</text>
+    <rect x="196" y="143" width="68" height="18" rx="9" fill="#1d4ed8"/>
+    <text x="230" y="156" text-anchor="middle" font-size="10" font-weight="700" fill="#ffffff" letter-spacing="0.5">RESUMING</text>
+  </g>
+
+  <!-- LEFT ROW 3: processOrder - waiting -->
+  <g>
+    <rect x="50" y="218" width="230" height="56" rx="8" fill="#eaf1fd" stroke="#1d4ed8" stroke-width="2"/>
+    <text x="66" y="242" font-size="14" font-weight="700" fill="#0f2a5c" font-family="'JetBrains Mono', Menlo, Consolas, monospace">Continuation</text>
+    <text x="66" y="262" font-size="11.5" fill="#5b7db8">processOrder &#183; line 9</text>
+  </g>
+
+  <!-- LEFT ROW 4: scriptMain - waiting -->
+  <g>
+    <rect x="50" y="302" width="230" height="56" rx="8" fill="#eaf1fd" stroke="#1d4ed8" stroke-width="2"/>
+    <text x="66" y="326" font-size="14" font-weight="700" fill="#0f2a5c" font-family="'JetBrains Mono', Menlo, Consolas, monospace">Continuation</text>
+    <text x="66" y="346" font-size="11.5" fill="#5b7db8">scriptMain &#183; line 3</text>
+  </g>
+
+  <!-- Arrow: checkInventory suspends again -->
+  <line x1="280" y1="162" x2="600" y2="162" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowHead)"/>
+  <text x="440" y="140" text-anchor="middle" font-size="11" fill="#475569">checkInventory() calls</text>
+  <text x="440" y="154" text-anchor="middle" font-size="11" fill="#475569">applyDiscount() at line 18 &#8594; suspends</text>
+
+  <!-- Arrows: remaining chain carried over unchanged -->
+  <line x1="280" y1="246" x2="600" y2="358" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowHead)"/>
+  <line x1="280" y1="330" x2="600" y2="442" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#arrowHead)"/>
+  <text x="440" y="340" text-anchor="middle" font-size="11" font-style="italic" fill="#475569">remaining chain</text>
+  <text x="440" y="354" text-anchor="middle" font-size="11" font-style="italic" fill="#475569">carried over unchanged</text>
+
+  <!-- RIGHT panel chain arrows -->
+  <line x1="715" y1="190" x2="715" y2="218" stroke="#1d4ed8" stroke-width="1.5" marker-end="url(#arrowHeadBlue)"/>
+  <text x="735" y="208" font-size="10.5" font-style="italic" fill="#5b7db8">chained to&#8595;</text>
+  <line x1="715" y1="274" x2="715" y2="330" stroke="#64748b" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrowHeadSlate)"/>
+  <text x="735" y="306" font-size="10.5" font-style="italic" fill="#64748b">old chain appended here</text>
+  <line x1="715" y1="386" x2="715" y2="414" stroke="#1d4ed8" stroke-width="1.5" marker-end="url(#arrowHeadBlue)"/>
+
+  <!-- RIGHT ROW 1: applyDiscount - new origin -->
+  <g>
+    <rect x="600" y="134" width="230" height="56" rx="8" fill="#fff7ed" stroke="#d97706" stroke-width="2.5"/>
+    <text x="616" y="158" font-size="14" font-weight="700" fill="#b45309" font-family="'JetBrains Mono', Menlo, Consolas, monospace">Continuation</text>
+    <text x="616" y="178" font-size="11.5" fill="#8a5a1e">applyDiscount &#8212; origin</text>
+    <rect x="746" y="143" width="68" height="18" rx="9" fill="#d97706"/>
+    <text x="780" y="156" text-anchor="middle" font-size="10" font-weight="700" fill="#ffffff" letter-spacing="0.5">BLOCKING</text>
+  </g>
+
+  <!-- RIGHT ROW 2: checkInventory - new location -->
+  <g>
+    <rect x="600" y="218" width="230" height="56" rx="8" fill="#eaf1fd" stroke="#1d4ed8" stroke-width="2"/>
+    <text x="616" y="242" font-size="14" font-weight="700" fill="#0f2a5c" font-family="'JetBrains Mono', Menlo, Consolas, monospace">Continuation</text>
+    <text x="616" y="262" font-size="11.5" fill="#5b7db8">checkInventory &#183; line 18</text>
+    <rect x="746" y="227" width="68" height="18" rx="9" fill="#1d4ed8"/>
+    <text x="780" y="240" text-anchor="middle" font-size="10" font-weight="700" fill="#ffffff" letter-spacing="0.5">NEW</text>
+  </g>
+
+  <!-- RIGHT ROW 3: processOrder - carried over -->
+  <g>
+    <rect x="600" y="330" width="230" height="56" rx="8" fill="#eaf1fd" stroke="#1d4ed8" stroke-width="2"/>
+    <text x="616" y="354" font-size="14" font-weight="700" fill="#0f2a5c" font-family="'JetBrains Mono', Menlo, Consolas, monospace">Continuation</text>
+    <text x="616" y="374" font-size="11.5" fill="#5b7db8">processOrder &#183; line 9</text>
+  </g>
+
+  <!-- RIGHT ROW 4: scriptMain - carried over -->
+  <g>
+    <rect x="600" y="414" width="230" height="56" rx="8" fill="#eaf1fd" stroke="#1d4ed8" stroke-width="2"/>
+    <text x="616" y="438" font-size="14" font-weight="700" fill="#0f2a5c" font-family="'JetBrains Mono', Menlo, Consolas, monospace">Continuation</text>
+    <text x="616" y="458" font-size="11.5" fill="#5b7db8">scriptMain &#183; line 3</text>
+  </g>
+
+  <!-- RIGHT panel: bracket around the part carried over from the old chain -->
+  <path d="M838 330 H846 V470 H838" stroke="#64748b" stroke-width="2" fill="none"/>
+  <text x="870" y="400" text-anchor="middle" font-size="10.5" font-weight="700" fill="#64748b"
+        letter-spacing="0.5" transform="rotate(-90 870 400)">CARRIED OVER</text>
+</svg>

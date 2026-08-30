@@ -16,3 +16,6 @@ benchmarks:
 performance:
   label: Performance
   description: Jactl performance topics
+design:
+  label: Design
+  description: Design topics
