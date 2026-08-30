@@ -226,16 +226,94 @@ There is a corresponding Jactl mechanism that the application can use to resume 
 See [Checkpointing Proof of Concept](2023-11-10-checkpoint-poc.md) for more details and a description
 of a proof-of-concept implementation of checkpointing for application redundancy.
 
+## Benchmarks
+
+I created a benchmark using the [JMH](https://github.com/openjdk/jmh) library to show how the continuation mechanism impacts peformance.
+The [SuspendResumeBenchmark](https://github.com/jaccomoc/jactl-vertx/blob/main/src/jmh/java/io/jactl/vertx/benchmark/SuspendResumeBenchmark.java)
+uses [Vert.x](https://vertx.io/) for the event scheduling and execution and
+benchmarks a Jactl script that processes batches of 200 orders.
+
+<details>
+<summary>The script</summary>
+
+```groovy
+var totals    = [:]
+var itemCount = 0
+var grandTotal = 0.0
+var topCategory = ''
+var topAmount = -1.0
+var slept = 0
+
+def checkInventory(widget, count) {
+  sleep(0) if slept++ < sleepCount
+  return true
+}
+
+def processOrder(order) {
+  var price    = order.price
+  var qty      = order.quantity
+  var category = order.category
+
+  return unless checkInventory(order.category, order.quantity)
+
+  var discount = 0.0
+  if      (qty >= 100) { discount = 0.20 }
+  else if (qty >=  50) { discount = 0.10 }
+  else if (qty >=  20) { discount = 0.05 }
+
+  var lineTotal = price * qty * (1.0 - discount)
+
+  if (totals[category] == null) {
+    totals[category] = 0.0
+  }
+  totals[category] = totals[category] + lineTotal
+  grandTotal       = grandTotal + lineTotal
+  itemCount        = itemCount + 1
+
+  if (totals[category] > topAmount) {
+    topAmount   = totals[category]
+    topCategory = category
+  }
+}
+
+for (order in orders) {
+  processOrder(order)
+}
+
+'Processed ' + itemCount + ' orders. Grand total: ' + grandTotal + '. Top category: ' + topCategory
+```                                                                                                                                   
+
+</details>
+
+For each batch `processOrder()` is called for each order which then
+invokes `checkInventory()` (which always returns true) for each item in the order.
+The `checkInventory()` function invokes `sleep(0)` up to `n` times so we can then measure the overhead of suspending
+and resuming a script from inside a nested call stack.
+The call to `sleep(0)` will suspend the script by throwing a `Continuation` as described but will then immediately
+resume execution since the sleep time is 0.
+
+The benchmark measures performance for when the script performs 0, 1, 2, 5, and 10 calls to `sleep(0)`.
+Here are the results:
+
+<img src="/charts/suspend_resume_chart.svg" alt="Throughput vs number of suspend/resume operations" />
+
+As the chart shows, the impact of each suspend/resume is quite small in this benchmark. 
+In a real world scenario, the relative impact will be based on how much work the script is doing, how
+nested the stack is, and the number of local variables (including parameters) there are at each level
+of the stack.
+Note that the overhead measured also includes the Vert.x scheduler overhead involved in scheduling and
+executing both the scripts and the resume events.
+
 ## Conclusion
 
 For reactive applications that need to run on older versions of Java, the Jactl continuation based mechanism for
-handling blocking operations provides a convenient way for applications to offer customisation via scripting
+handling blocking operations provides a convenient and efficient way for applications to offer customisation via scripting
 without having to worry about scripts blocking event-loop threads.
 Scripts can be written with inlined blocking operations in a natural manner without having to pollute the code
 with `async/await` or having to deal with `Futures` or `Promises` or other mechanisms that programming languages
 have used to deal with asynchronous code in the past.
 
-From a script point of view, Jactl provides the equivalent programming model as VirtualThreads in Java 21 provides
+From a script point of view, Jactl provides the equivalent programming model as VirtualThreads in Java 21 provide
 to Java programs.
 
 With modern versions of Java, the Jactl continuation based approach can be disabled and VirtualThreads can be
