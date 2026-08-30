@@ -2,8 +2,8 @@
 title:      "Jactl Continuations and Virtual Threads in Java 8"
 date:       2026-08-28T11:27:00+01:00
 authors:    [james]
-tags:       [jvm, design]
-description: "Design of Jactl's continuation based mechanism for simulating Virtual Threads."
+tags:       [jvm, design, benchmarks]
+description: "Design of Jactl's continuation based mechanism for simulating Virtual Threads along with some benchmarks showing their performance impact."
 ---
 
 ## Introduction
@@ -16,7 +16,7 @@ were performed.
 
 <!-- truncate -->
 
-When I began developing Jactl, Java 21 and VirtualThreads did not exist, and event-driven,
+When I began developing Jactl, Java 21 and Virtual Threads did not exist, and event-driven,
 reactive applications (such as ones based on [Vert.x](https://vertx.io/)) were the way in which
 high-throughput Java applications were written.
 I also had a need for a scripting language that would work on applications still stuck on Java 8
@@ -24,7 +24,7 @@ or Java 11.
 
 :::note
 Now, with the later versions of Java, Java applications that want to use
-VirtualThreads rather than adopting an event-based architecture can choose not to use
+Virtual Threads rather than adopting an event-based architecture can choose not to use
 the built-in Jactl async mechanism described here by configuring the [JactlContext.async(false)](/docs/integration-guide/jactl-context#asyncboolean-enabled) flag.
 :::
 
@@ -41,7 +41,7 @@ performed any blocking operation, it would somehow save its state and return, fr
 thread to process further events.
 When the result of the long-running operation was available the script would be resumed from the
 point where it left off and continue with its processing.
-In Java 21 and later, VirtualThreads provide the same functionality - they preserve the call stack
+In Java 21 and later, Virtual Threads provide the same functionality - they preserve the call stack
 with all the local variables and allow the thread to continue performing other work and when the
 blocking operation is complete the call stack is restored and the program continues from where it
 left off.
@@ -313,8 +313,8 @@ Scripts can be written with inlined blocking operations in a natural manner with
 with `async/await` or having to deal with `Futures` or `Promises` or other mechanisms that programming languages
 have used to deal with asynchronous code in the past.
 
-From a script point of view, Jactl provides the equivalent programming model as VirtualThreads in Java 21 provide
+From a script point of view, Jactl provides the equivalent programming model as Virtual Threads in Java 21 provide
 to Java programs.
 
-With modern versions of Java, the Jactl continuation based approach can be disabled and VirtualThreads can be
+With modern versions of Java, the Jactl continuation based approach can be disabled and Virtual Threads can be
 used instead.
