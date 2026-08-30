@@ -319,7 +319,7 @@ executing both the scripts and the resume events.
 For reactive applications that need to run on older versions of Java, the Jactl continuation based mechanism for
 handling blocking operations provides a convenient and efficient way for applications to offer customisation via scripting,
 without needint to be concerned about scripts blocking event-loop threads.
-Scripts can be written with inlined blocking operations in a natural manner: there is no need
+Scripts can be written with inlined blocking operations in a natural manner - there is no need
 to pollute the code with `async/await` or deal with `Futures` or `Promises` or other
 mechanisms that programming languages have used to deal with asynchronous behaviour in the
 past.
