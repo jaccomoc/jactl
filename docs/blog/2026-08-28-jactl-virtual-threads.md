@@ -53,20 +53,15 @@ event-loop thread and a completion callback will be invoked once the script
 finishes that calls back into the Java application with the script result.
 The callback provided by the application can hold onto any state that the application needs.
 
-:::note
-To save having to write method/function everywhere, I will just refer to functions, but
-everywhere I talk about a function, the same would also apply to a method call.
-:::
-
 ## Continuations
 
 In Java 8, of course, there is no way to preserve the call stack, either in Java or in JVM
 bytecode, so I had to use a different mechanism to achieve the same end.
 
-Imagine that we have a script that needs to invoke a function that performs a long-running
-operation.
-For the sake of the example, let's assume that it needs to perform `sleep()` for some period
-of time before it does something else.
+Imagine that we have a script that needs to invoke a function (or method) that performs a
+long-running operation.
+For the sake of the example, let's assume that the function needs to perform `sleep()` for some
+period of time before it does something else.
 There will be a Java call stack with a stack frame for each nested method call and then the rest
 of the stack will be Jactl stack frames, one for each nested Jactl function call, with
 the topmost stack frame being the stack frame for the `sleep()` function itself.
@@ -318,7 +313,7 @@ executing both the scripts and the resume events.
 
 For reactive applications that need to run on older versions of Java, the Jactl continuation based mechanism for
 handling blocking operations provides a convenient and efficient way for applications to offer customisation via scripting,
-without needint to be concerned about scripts blocking event-loop threads.
+without needing to be concerned about scripts blocking event-loop threads.
 Scripts can be written with inlined blocking operations in a natural manner - there is no need
 to pollute the code with `async/await` or deal with `Futures` or `Promises` or other
 mechanisms that programming languages have used to deal with asynchronous behaviour in the
@@ -326,5 +321,14 @@ past.
 From a script point of view, Jactl provides the equivalent programming model as Virtual Threads in Java 21 provide
 to Java programs.
 
-With modern versions of Java, the Jactl continuation based approach can be disabled and Virtual Threads can be
-used instead.
+With modern versions of Java, the Jactl continuation based approach can be disabled and Jactl can take advantage
+of Virtual Threads to provide support for blocking operations that don't block the carrier thread.
+
+## Postscript
+
+I later became aware of other libraries that use a similar mechanism to implement continuations for
+arbitrary Java code (see for example [Apache Javaflow](https://commons.apache.org/sandbox/commons-javaflow/) and 
+[Java Continuations Library](https://github.com/oltolm/continuations) - no longer maintained).
+They rely on bytecode instrumentation to insert the appropriate instructions into the codebase.
+I haven't looked at the implementation of these to know how closely they match the Jactl approach, but they
+appear to use the same idea of throwing exceptions and then catching them at each stack frame to record local state.
