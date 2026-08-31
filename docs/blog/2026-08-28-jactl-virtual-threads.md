@@ -24,8 +24,9 @@ or Java 11.
 
 :::note
 Now, with the later versions of Java, Java applications that want to use
-Virtual Threads rather than adopting an event-based architecture can choose not to use
-the built-in Jactl async mechanism described here by configuring the [JactlContext.async(false)](/docs/integration-guide/jactl-context#asyncboolean-enabled) flag.
+Virtual Threads rather than adopting an event-based architecture can choose to disable
+the built-in Jactl async mechanism described here by configuring
+the [JactlContext.async(false)](/docs/integration-guide/jactl-context#asyncboolean-enabled) flag.
 :::
 
 A reactive application is one where a pool of event-loop threads process events from a queue.
