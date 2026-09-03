@@ -26,7 +26,8 @@ Jactl provides a way to disable this mechanism for applications running on more 
 wanting to take advantage of the built-in Virtual Threads in Java.
 I wanted to compare the performance of the two approaches.
 
-This article discusses the benchmark and presents the results from running on both Java 21 and Java 25. 
+This article showcases a new benchmark that compares the Jactl/Vert.x approach with Jactl/Virtual Threads
+and presents the results from running on both Java 21 and Java 25. 
 
 <!-- truncate -->
 
