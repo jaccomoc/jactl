@@ -147,7 +147,7 @@ The more calls to `sleep()` there are, the more pronounced the advantage of the 
 virtual threads version.
 By the time there are 10 calls to `sleep()`, the Jactl/Vert.x version has 2.5x the throughput.
 
-## Java 25
+### Java 25
 
 When the benchmark is run on a more recent Java 25 version of Java we get these results:
 
