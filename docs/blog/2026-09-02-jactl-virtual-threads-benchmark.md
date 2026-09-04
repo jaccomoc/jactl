@@ -6,6 +6,8 @@ tags:       [jvm, benchmarks]
 description: "Comparing performance of Jactl code that blocks when using Virtual Threads as opposed to Vert.x event loops"
 ---
 
+> Edited to add Postscript section after feedback.
+
 ## Introduction
 
 In the article about [Jactl Continuations and Virtual Threads in Java 8](/blog/2026/08/28/jactl-virtual-threads),
@@ -180,3 +182,13 @@ Jactl scripts don't change whether the Java application is a reactive event-loop
 or whether it is using virtual threads.
 The choice about whether to use virtual threads should be more about the advantages of being able to write
 Java code without having to deal with futures and callbacks.
+
+## Postscript
+
+It appears that the performance improvement between Java 21 and Java 25 actually comes from improvements to how
+`sleep()` itself works with virtual threads.
+This highlights the risk of benchmarks not actually measuring the thing that they think they are measuring.
+A more realistic test would be to replace the `sleep()` calls with a real web service call but that would mean
+that the web server performance would contaminate the test results or would mean running it on a separate server
+in which case the tests are no longer self-contained.
+
