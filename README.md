@@ -15,6 +15,10 @@ running.
 :star: Please consider giving this project a star as a way to encourage me to continue making improvements
 to Jactl.
 
+### Try it Online
+
+Head to the online [Playground](https://jactl.io/playground) to write and run Jactl code in your browser.
+
 ### Why Another JVM Language?
 
 I wanted a language that was a joy to code in, was easy for Java programmers to pick up, 
