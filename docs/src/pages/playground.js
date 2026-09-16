@@ -1,11 +1,14 @@
-import React, {useState, useCallback, useRef} from 'react';
+import React, {useState, useCallback, useMemo, useRef} from 'react';
 import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import {useColorMode} from '@docusaurus/theme-common';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
+import CodeMirror from '@uiw/react-codemirror';
+import {keymap} from '@codemirror/view';
+import {Prec} from '@codemirror/state';
 import styles from './playground.module.css';
-import {registerJactlLanguage, configureMonacoLoader} from './_playground/monacoJactl';
+import {jactlLanguage, jactlLightTheme, jactlDarkTheme} from './_playground/codemirrorJactl';
 
 // Curated starter snippets. These are inlined (rather than reusing the
 // homepage example files) so every one is guaranteed to compile, run, and
@@ -69,49 +72,27 @@ function clsxError(timedOut) {
 
 function PlaygroundEditor({code, onChange, onRun}) {
   const {colorMode} = useColorMode();
-  const theme = colorMode === 'dark' ? 'jactl-dark' : 'jactl-light';
-  const monacoRef = useRef(null);
+  const theme = colorMode === 'dark' ? jactlDarkTheme : jactlLightTheme;
 
-  // Apply the theme explicitly on colour-mode change. Relying on the `theme`
-  // prop alone doesn't reliably switch a live editor across the BrowserOnly
-  // boundary, so drive monaco.editor.setTheme directly once mounted.
-  React.useEffect(() => {
-    if (monacoRef.current) {
-      monacoRef.current.editor.setTheme(theme);
-    }
-  }, [theme]);
+  // Prec.highest so this wins over @codemirror/commands' defaultKeymap,
+  // which already binds Mod-Enter to insertBlankLine.
+  const runKeymap = useMemo(
+    () => Prec.highest(keymap.of([{key: 'Mod-Enter', run: () => { onRun(); return true; }}])),
+    [onRun],
+  );
+  const extensions = useMemo(() => [jactlLanguage, runKeymap], [runKeymap]);
 
   return (
     <BrowserOnly fallback={<div className={styles.editorLoading}>Loading editor…</div>}>
-      {() => {
-        const Monaco = require('@monaco-editor/react');
-        const Editor = Monaco.default;
-        configureMonacoLoader(Monaco.loader);
-        return (
-          <Editor
-            height="100%"
-            language="jactl"
-            theme={theme}
-            value={code}
-            onChange={(v) => onChange(v ?? '')}
-            beforeMount={registerJactlLanguage}
-            onMount={(editor, monaco) => {
-              monacoRef.current = monaco;
-              editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, onRun);
-            }}
-            options={{
-              minimap: {enabled: false},
-              fontSize: 14,
-              fontFamily: "'JetBrains Mono', monospace",
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              tabSize: 2,
-              lineNumbersMinChars: 3,
-              padding: {top: 12, bottom: 12},
-            }}
-          />
-        );
-      }}
+      {() => (
+        <CodeMirror
+          height="100%"
+          value={code}
+          theme={theme}
+          extensions={extensions}
+          onChange={onChange}
+        />
+      )}
     </BrowserOnly>
   );
 }

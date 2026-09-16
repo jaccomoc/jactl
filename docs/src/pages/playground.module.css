@@ -1,6 +1,12 @@
 /* Styles for the "Try it now" Jactl playground page. */
 
 .page {
+  /* Without an explicit width, this shrinks to fit its content instead of
+     filling the flex parent Docusaurus's layout wraps it in, so its actual
+     rendered width would depend on how wide the editor/output content
+     happens to be (e.g. widening once the CodeMirror editor or output text
+     has a long unwrapped line) instead of staying fixed. */
+  width: 100%;
   max-width: 1180px;
   margin: 0 auto;
   padding: 2rem 1rem 4rem;
@@ -32,6 +38,12 @@
 
 .runButton {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Fits the "Running…" label (longer than "► Run") so switching between
+     them doesn't resize the button and push the rest of the toolbar. */
+  min-width: 7.5rem;
   border: none;
   border-radius: 6px;
   background: var(--ifm-color-primary);
@@ -133,6 +145,10 @@
   overflow: auto;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.875rem;
+  /* Disable JetBrains Mono's ligatures (e.g. `->` rendering as a single
+     arrow glyph) so printed output matches the characters produced. */
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
 }
 
 .outputPlaceholder {
