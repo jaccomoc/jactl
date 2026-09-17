@@ -9,7 +9,7 @@ description: "Introducing camel-jactl, an Apache Camel language module for Jactl
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-[camel-jactl](https://camel.apache.org/components/next/languages/jactl-language.html) is a new [Apache Camel](https://camel.apache.org)
+[`camel-jactl`](https://camel.apache.org/components/next/languages/jactl-language.html) is a new [Apache Camel](https://camel.apache.org)
 language module that lets you use [Jactl](https://jactl.io) as the scripting language inside Camel for things such as
 filter predicates, content-based routing rules, and message transformations.
 
@@ -36,6 +36,14 @@ typically appear in Camel applications, from single predicate evaluations up to 
 order-processing route, with a plain-Java route as the no-scripting baseline.
 
 <!-- truncate -->
+
+:::note Update (2026-09-17): Improvements to Camel-Groovy
+Since these benchmarks were done, it was discovered that the `camel-groovy` library had some serious
+shortcomings from a performance point of view.
+A fix to the built-in `camel-groovy` will be included in the next Apache Camel release (4.23).
+I have rerun the benchmarks against the new version and added an [Addendum](#addendum) section
+with the updated results.
+:::
 
 ## Jactl in Camel
 
@@ -465,6 +473,8 @@ The table below shows throughput relative to the slowest language in each benchm
 (labelled _baseline_).
 The higher the multiplier, the faster the language.
 
+<div className="scrollable-table">
+
 | Benchmark                      |      Jactl |     Groovy |     Simple |     Java |
 |--------------------------------|-----------:|-----------:|-----------:|---------:|
 | Map body predicate             |  **57.7x** |       3.6x | _baseline_ |        - |
@@ -479,15 +489,43 @@ The higher the multiplier, the faster the language.
 | Order route (200 items)        |       4.1x | _baseline_ |          - | **5.9x** |
 | Compile + first evaluation     |   **9.3x** | _baseline_ |          - |        - |
 
-### Conclusion
+</div>
+
+## Conclusion
 
 Jactl has both good runtime performance and compilation performance and provides the benefits of
 compiled code with the flexibility of a scripting language along with a configurable security
 sandbox model that allows the application to control what scripts can and cannot do.
 
-### Further Reading
+## Addendum
 
-The official camel-jactl documentation is on the [Apache Camel](https://camel.apache.org/) site here: [camel-jactl](https://camel.apache.org/components/next/languages/jactl-language.html)
+With the updated `camel-groovy` library in the forthcoming Apache Camel 4.23 release, there
+are significant improvments to the Groovy benchmark results:
+
+<div className="scrollable-table">
+
+| Benchmark                        | Groovy (unfixed) | Groovy (fixed) | Fix speedup   | Jactl            | Jactl/Groovy (unfixed → fixed) |
+|-----------------------------------|------------------:|----------------:|:--------------|------------------:|:--------------------------------|
+| Header predicate                  | 5.81M ops/s         | 44.09M ops/s    | 7.6x          | 99.1M ops/s       | 17.1x → 2.2x                    |
+| Map predicate                     | 5.83M ops/s        | 36.78M ops/s    | 6.3x          | 94.5M ops/s       | 16.2x → 2.6x                    |
+| Value expression                  | 5.96M ops/s        | 40.62M ops/s    | 6.8x          | 76.1M ops/s       | 12.8x → 1.9x                    |
+| Compile + first evaluation        | 3.21K ops/s        | 2,905 ops/s     | ~flat (noise) | 29.8K ops/s       | 9.3x → 10.3x                    |
+| Filter route (end-to-end)         | 734K ops/s         | 1.15M ops/s     | 1.6x          | 1.25M ops/s       | 1.7x → 1.09x                    |
+| Order route (10 items)            | 200K ops/s          | 262.6K ops/s    | 1.3x          | 552K ops/s        | 2.8x → 2.10x                    |
+| Order route (200 items)           | 25.5K ops/s         | 26.0K ops/s     | ~flat         | 105K ops/s        | 4.1x → 4.0x                     |
+| Express predicate (10 items)      | 1.25M ops/s         | 1.49M ops/s     | 1.2x          | 8.82M ops/s       | 7.0x → 5.9x                     |
+| Express predicate (200 items)     | 92.3K ops/s         | 94.3K ops/s     | ~flat         | 466K ops/s        | 5.0x → 4.9x                     |
+| Summary script (10 items)         | 723K ops/s          | 852K ops/s      | 1.2x          | 2.64M ops/s       | 3.7x → 3.1x                     |
+| Summary script (200 items)        | 48.2K ops/s         | 46.8K ops/s     | ~flat (noise) | 240K ops/s        | 5.0x → 5.1x                     |
+
+</div>
+
+The `camel-groovy` fix has made a significant improvement to most of the Groovy results, but Jactl still
+leads in each of the benchmarks.
+
+## Further Reading
+
+The official `camel-jactl` documentation is on the [Apache Camel](https://camel.apache.org/) site here: [camel-jactl](https://camel.apache.org/components/next/languages/jactl-language.html)
 
 There is a comparison of Jactl and Groovy here: [Groovy vs Jactl](https://jactl.io/blog/2026/03/16/groovy-vs-jactl).
 

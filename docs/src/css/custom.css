@@ -181,6 +181,22 @@ pre,
   overflow: hidden;
 }
 
+/* Wrap a table in <div className="scrollable-table"> to let it scroll
+ * horizontally instead of squashing its columns on narrow viewports. */
+.markdown .scrollable-table {
+  overflow-x: auto;
+}
+
+.markdown .scrollable-table table {
+  width: auto;
+  min-width: 100%;
+}
+
+.markdown .scrollable-table th,
+.markdown .scrollable-table td {
+  white-space: nowrap;
+}
+
 .markdown table thead {
   background: var(--ifm-color-emphasis-100);
 }
