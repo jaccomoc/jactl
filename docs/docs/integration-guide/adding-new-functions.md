@@ -226,7 +226,7 @@ public class ExampleFunctions {
       ...
     }
     catch (Exception e) {
-      throw new RuntimeException("Error invoking exampleMethod", source, offset, e);
+      throw new RuntimeError("Error invoking exampleMethod", source, offset, e);
     }
   }
 }
