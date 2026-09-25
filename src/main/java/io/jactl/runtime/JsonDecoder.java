@@ -33,7 +33,7 @@ public class JsonDecoder {
   static final int                      CHAR_BUF_SIZE = 1024;
   static final ThreadLocal<JsonDecoder> threadDecoder = ThreadLocal.withInitial(JsonDecoder::new);
   static final ThreadLocal<char[]>      threadCharBuf = ThreadLocal.withInitial(() -> new char[CHAR_BUF_SIZE]);
-  String json;
+  String json = null;
   int    length;
   int    offset = 0;
   String source;
@@ -41,8 +41,14 @@ public class JsonDecoder {
 
   public static final MethodRef DECODE_JACTL_OBJ_METHOD = Utils.getMethod(JsonDecoder.class, "decodeJactlObj", String.class, String.class, int.class, JactlObject.class);
   
+  private JsonDecoder() {}
+  
   public static JsonDecoder get(String json, String source, int sourceOffset) {
     JsonDecoder decoder = threadDecoder.get();
+    if (decoder.json != null) {
+      // Already decoding JSON somewhere so create a new one
+      decoder = new JsonDecoder();
+    }
     decoder.offset = 0;
     decoder.json = json;
     decoder.length = json.length();
@@ -51,11 +57,15 @@ public class JsonDecoder {
     return decoder;
   }
 
+  public void reset() {
+    json = null;
+  }
+  
   public Object decode() {
     Object result = _decode();
     skipWhitespace();
     if (offset != length) {
-      throw new RuntimeError("Offset " + offset + ": Extra data found at end of json", source, offset);
+      throw new RuntimeError("Offset " + offset + ": Extra data found at end of json", source, sourceOffset);
     }
     return result;
   }
@@ -65,10 +75,21 @@ public class JsonDecoder {
     try {
       // Return flags indicating which optional fields still need to be initialised or null if
       // JSON decode has null value
-      return obj._$j$readJson(decoder);
+      long[] flags = obj._$j$readJson(decoder);
+      if (decoder.offset != json.length()) {
+        for (int i = decoder.offset; i < json.length(); i++) {
+          if (!Character.isWhitespace(json.charAt(i))) {
+            throw new RuntimeError("Unexpected extra JSON data at offset " + decoder.offset, decoder.source, decoder.sourceOffset);
+          }
+        }
+      }
+      return flags;
     }
     catch (Continuation e) {
       throw new RuntimeError("Async field initialisation detected during JSON decode", source, sourceOffset);
+    }
+    finally {
+      decoder.reset();
     }
   }
 
@@ -156,9 +177,10 @@ public class JsonDecoder {
       c = nextChar();
       if (c != ':') error("Expected ':' but found " + quoted(c) + " while decoding map");
       Object value = _decode();
-      if (map.put(field, value) != null) {
+      if (map.containsKey(field)) {
         error("Duplicate field '" + field + "' when decoding json", fieldOffset);
       }
+      map.put(field, value);
     }
     return map;
   }
@@ -167,6 +189,7 @@ public class JsonDecoder {
   static int  MAXINT_REM_10 = Integer.MAX_VALUE % 10;
   static long MAX_DIV_10    = Long.MAX_VALUE / 10;
   static long MAX_REM_10    = Long.MAX_VALUE % 10;
+  static BigDecimal decimalLongMinValue = BigDecimal.valueOf(Long.MIN_VALUE);
 
   Number decodeNumber(char startChar) {
     int     startOffset = offset - 1;
@@ -209,7 +232,13 @@ public class JsonDecoder {
                   i--;
                 case EOS:
                   offset = i;
-                  return isNegative ? -longResult : longResult;
+                  longResult *= isNegative ? -1 : 1;
+                  // Special case for Integer.MIN_VALUE because it falls through to here
+                  // given that -Integer.MIN_VALUE is Integer.MAX_VALUE + 1
+                  if (longResult == Integer.MIN_VALUE) {
+                    return Integer.MIN_VALUE;
+                  }
+                  return longResult;
               }
               c = i < length ? json.charAt(i++) : EOS;
             }
@@ -231,6 +260,7 @@ public class JsonDecoder {
           }
           // Fall through
         case ',': case '}': case ']':
+          if (i == offset) error("Missing digits for number");
           i--;
           // Fall through
         case EOS:
@@ -246,7 +276,7 @@ public class JsonDecoder {
       c = json.charAt(i++);
       switch (c) {
         case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
-        case 'e': case 'E': case '.':
+        case 'e': case 'E': case '.': case '+': case '-':
           break;
         default:
           i--;
@@ -257,7 +287,11 @@ public class JsonDecoder {
     String numberStr = json.substring(startOffset, i);
     try {
       offset = i;
-      return new BigDecimal(numberStr);
+      BigDecimal decimal = new BigDecimal(numberStr);
+      if (decimal.compareTo(decimalLongMinValue) == 0) {
+        return Long.MIN_VALUE;
+      }
+      return decimal;
     }
     catch (NumberFormatException e) {
       error("Illegally formatted number: " + numberStr + ": " + e.getMessage());
@@ -301,6 +335,11 @@ public class JsonDecoder {
       buf[i] = json.charAt(start + i);
     }
     for (int i = offset; i < length; ) {
+      if (strSize + 2 >= buf.length) {
+        char[] newBuf = new char[buf.length * 2];
+        System.arraycopy(buf, 0, newBuf, 0, strSize);
+        buf = newBuf;
+      }
       char c = json.charAt(i++);
       if (c == '"') {
         offset = i;
@@ -311,11 +350,6 @@ public class JsonDecoder {
           error("Unexpected end of JSON decoding escape sequence");
         }
         c = json.charAt(i++);
-        if (strSize + 2 >= buf.length) {
-          char[] newBuf = new char[buf.length * 2];
-          System.arraycopy(buf, 0, newBuf, 0, strSize);
-          buf = newBuf;
-        }
         switch (c) {
           case '"':  break;
           case '\\': break;
@@ -324,12 +358,14 @@ public class JsonDecoder {
           case 'n': c = '\n'; break;
           case 'r': c = '\r'; break;
           case 't': c = '\t'; break;
+          case '/': c = '/';  break;   // special case for JSON
           case 'u':
             if (offset > length - 4) {
               error("Unexpected end of JSON decoding escape \\u sequence");
             }
             c = 0;
             for (int j = 0; j < 4; j++) {
+              if (i >= length) error("Missing digits for \\u escape sequence");
               char hexDigit = json.charAt(i++);
               if (hexDigit > 256) error("Bad hex digit " + hexDigit);
               int hex = hexValue[(hexDigit & 0xff)];
@@ -338,9 +374,7 @@ public class JsonDecoder {
             }
             break;
           default:
-            // Leave unchanged if unrecognised escape sequence
-            buf[strSize++] = '\\';
-            break;
+            error("Illegal escape sequence '\\" + c + "'");
         }
       }
       buf[strSize++] = c;
@@ -469,9 +503,17 @@ public class JsonDecoder {
     int start = offset - 1;
     Number num = decodeNumber(c);
     if (num instanceof BigDecimal) {
-      error("Floating point number where long required while parsing json", start);
+      if (num.longValue() == Long.MIN_VALUE) {
+        // Special case for Long.MIN_VALUE because -Long.MIN_VALUE is Long.MAX_VALUE + 1
+        // and it makes the parsing easier because we parse the '-' separately to the actual
+        // numeric value
+        num = Long.MIN_VALUE;
+      }
+      else {
+        error("Floating point number where long required while parsing json", start);
+      }
     }
-    if (num == null) {
+    else if (num == null) {
       error("Long value cannot be null", start);
     }
     return num.longValue();

@@ -27,7 +27,12 @@ public class Json {
 
   public static Object fromJson(String str, String source, int offset) {
     JsonDecoder decoder = JsonDecoder.get(str, source, offset);
-    return decoder.decode();
+    try {
+      return decoder.decode();
+    }
+    finally {
+      decoder.reset();
+    }
   }
 
 }

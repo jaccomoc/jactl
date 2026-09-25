@@ -884,9 +884,17 @@ public class BuiltinFunctionTests2 extends BaseTest {
     testError("def nan = 0.0D/0.0D; nan.toJson()", "cannot encode double value");
     testError("def infinity = 1.0D/0.0D; infinity.toJson()", "cannot encode double value");
     testError("def infinity = -1.0D/0.0D; infinity.toJson()", "cannot encode double value");
+    test("class X { byte i = 200 }; new X().toJson()", "{\"i\":200}" );
+    test("def x = -" + Integer.MAX_VALUE + " - 1; x.toJson()", "" + Integer.MIN_VALUE);
+    test("int x = -" + Integer.MAX_VALUE + " - 1; x.toJson()", "" + Integer.MIN_VALUE);
+    test("def x = -" + Long.MAX_VALUE + "L - 1; x.toJson()", "" + Long.MIN_VALUE);
+    test("long x = -" + Long.MAX_VALUE + "L - 1; x.toJson()", "" + Long.MIN_VALUE);
   }
 
   @Test public void fromJson() {
+    test("'\"\\\\/\"'.fromJson()", "/");
+    test("'\"\\\\t\"'.fromJson()", "\t");
+    testError("'\"\\\\q\"'.fromJson()", "illegal escape sequence");
     test("\"[1]\".fromJson()", Utils.listOf(1));
     test("'\"\\\\\\\\\"'.fromJson()", "\\");
     test("'\"\\\\\"\"'.fromJson()", "\"");
@@ -951,6 +959,17 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("'\"\\\\u0001\"'.fromJson().toJson()", "\"\\u0001\"");
     test("def s = 0x5c.asChar(); s.toJson().fromJson() == s", true);
     test("def s = 127.map{ it.asChar() }.join(); s.toJson().fromJson() == s", true);
+    test("0.00001D.toJson().fromJson()", "#0.000010");
+    test("'1E+5'.fromJson()", "#1E+5");
+    test("'1E-5'.fromJson()", "#1E-5");
+    test("('\\n'+'y'*1030).toJson().fromJson()", "\n" + Utils.repeat("y", 1030));
+    testError("'\"\\\\u12'.fromJson()", "missing digits");
+    testError("def x = '{\"a\":123}xxx'; x.fromJson()", "extra data");
+    testError("'{\"a\":null,\"a\":1}'.fromJson()", "duplicate field");
+    test("'" + Integer.MIN_VALUE + "'.fromJson()", Integer.MIN_VALUE);
+    test("'" + Integer.MAX_VALUE + "'.fromJson()", Integer.MAX_VALUE);
+    test("'" + Long.MIN_VALUE + "'.fromJson()", Long.MIN_VALUE);
+    test("'" + Long.MAX_VALUE + "'.fromJson()", Long.MAX_VALUE);
   }
 
   @Test public void classFromJson() {
@@ -1002,6 +1021,33 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("class X { int i1=1,i2=1,i3=1,i4=1,i5=1,i6=1,i7=1,i8=1,i9=1,i10=1,i11=1,i12=1,i13=1,i14=1,i15=1,i16=1,i17=1,i18=1,i19=1,i20=1,i21=1,i22=1,i23=1,i24=1,i25=1,i26=1,i27=1,i28=1,i29=1,i30=1,i31=1,i32=1,i33=1,i34=1,i35=1,i36=1,i37=1,i38=1,i39=1,i40=1,\n" +
          "i41=1,i42=1,i43=1,i44=1,i45=1,i46=1,i47=1,i48=1,i49=1,i50=1,i51=1,i52=1,i53=1,i54=1,i55=1,i56=1,i57=1,i58=1,i59=1,i60=1,i61=1,i62=1,i63=1,i64=1; int[] arr = [1,2,3] }\n" +
          "def x = new X(); def json = x.toJson(); def y = X.fromJson(json); x.arr", new int[]{1,2,3});
+    
+    testError("class X { int i }; X.fromJson('{\"i\":1} junk').toString()", "unexpected extra json data");
+    test("class X { int i = '123'.fromJson(); int j }; X.fromJson('{\"j\":3}').toString()", "[i:123, j:3]");
+    testError("class X { int i; long l; double d; Decimal dec; int[] arr }; X.fromJson('{\"i\":,\"l\":,\"d\":,\"dec\":,\"arr\":[,,]}').toString()","missing digits");
+    testError("class X { int i; long l; double d; Decimal dec; int[] arr }; X.fromJson('{\"i\":123,\"l\":,\"d\":,\"dec\":,\"arr\":[,,]}').toString()","missing digits");
+    testError("class X { int i; long l; double d; Decimal dec; int[] arr }; X.fromJson('{\"i\":123,\"l\":,\"d\":1.233,\"dec\":,\"arr\":[,,]}').toString()","missing digits");
+    testError("class X { int i; long l; double d; Decimal dec; int[] arr }; X.fromJson('{\"i\":123,\"l\":,\"d\":1.233,\"dec\":1.2,\"arr\":[,,]}').toString()","missing digits");
+    
+    test("class Inner { int x; int y = '[1,2,3]'.fromJson().size() }\n" +
+         "class Outer { Inner inner; int z }\n" +
+         "def obj = Outer.fromJson('{\"inner\":{\"x\":1},\"z\":5}')\n" +
+         "die unless obj instanceof Outer\n" +
+         "obj.toString()", "[inner:[x:1, y:3], z:5]");
+    
+    testError("class Q { int q }\n" +
+         "class Inner { int x; Q y = Q.fromJson('{\"q\":1},\"z\":42}') }\n" +
+         "class Outer { Inner inner; int z }\n" +
+         "Outer.fromJson('{\"inner\":{\"x\":1},\"z\":5}')\n","unexpected extra json data");
+
+    test("class Q { int q }\n" +
+         "class Inner { int x; Q y = Q.fromJson('{\"q\":1}') }\n" +
+         "class Outer { Inner inner; int z }\n" +
+         "Outer.fromJson('{\"inner\":{\"x\":1},\"z\":5}').toString()\n", "[inner:[x:1, y:[q:1]], z:5]");
+    
+    test("class X { int i }; X.fromJson('{\"i\":-2147483648}').toString()", "[i:-2147483648]");
+    test("class X { long i }; X.fromJson('{\"i\":-9223372036854775808}').toString()", "[i:-9223372036854775808]");
+    testError("class X { String a }; X.fromJson('{\"a\":null,\"a\":\"abc\"}').toString()", "appears multiple times");
   }
 
   @Test public void fromJsonMissingFields() {
@@ -1114,6 +1160,21 @@ public class BuiltinFunctionTests2 extends BaseTest {
     testError("class Y { long j1,j2 }\n" +
               "class X extends Y { int i1,i2,i3,i4,i5,i6,i7,i8,i9,i10,i11,i12,i13,i14,i15,i16,i17,i18,i19,i20,i21,i22,i23,i24,i25,i26,i27,i28,i29,i30,i31,i32,i33,i34,i35,i36,i37,i38,i39,i40 }\n" +
               "X.fromJson('''{'j1':1,'i1':1,'i2':2,'i3':3,'i4':4,'i5':5,'i6':6,'i7':7,'i8':8,'i9':9,'i10':10,'i11':11,'i12':12,'i13':13,'i14':14,'i15':15,'i16':16,'i17':17,'i18':18,'i19':19,'i20':1,'i21':1,'i22':1,'i23':1,'i24':1,'i25':1,'i26':1,'i27':1,'i28':1,'i29':1,'i30':1,'i31':1,'i32':1,'i33':1,'i34':1,'i35':1,'i36':1,'i37':1,'i38':1,'i39':1,'i40':1}''' =~ s/'/\"/rg).i32", "missing mandatory field");
+
+    testError("class A { int a }\n" +
+              "class B extends A { int b }\n" +
+              "class C extends B { int c }\n" +
+              "C.fromJson('{\"b\":2,\"c\":3}')\n", "missing mandatory field(s): a");
+    
+    testError("class A { int a }\n" +
+              "class B extends A { int b }\n" +
+              "class C extends B { int c }\n" +
+              "C.fromJson('{\"a\":1,\"c\":3}')\n", "missing mandatory field(s): b");
+
+    testError("class A { int a }\n" +
+              "class B extends A { int b }\n" +
+              "class C extends B { int c }\n" +
+              "C.fromJson('{\"a\":1,\"b\":2}')\n", "missing mandatory field(s): c");
   }
 
   @Test public void arrayFieldsToJson() {

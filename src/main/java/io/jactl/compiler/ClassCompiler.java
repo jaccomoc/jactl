@@ -785,7 +785,7 @@ public class ClassCompiler {
     final int ARR_IDX_SLOT = arraySlots;
     final int ARR_SLOT     = arraySlots + 1;
     switch (type.getType()) {
-      case BYTE:
+      case BYTE:    invoke.accept("writeInt", byte.class);          break;
       case INT:     invoke.accept("writeInt", int.class);           break;
       case BOOLEAN: invoke.accept("writeBoolean", boolean.class);   break;
       case LONG:    invoke.accept("writeLong", long.class);         break;

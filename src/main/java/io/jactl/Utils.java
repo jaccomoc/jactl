@@ -1109,7 +1109,7 @@ public class Utils {
     if (clss.getSuperclass() != null) {
       fields.addAll(getFields(clss.getSuperclass()));
     }
-    fields.addAll(Arrays.stream(clss.getFields())
+    fields.addAll(Arrays.stream(clss.getDeclaredFields())
                         .filter(f -> !Modifier.isStatic(f.getModifiers()))
                         .collect(Collectors.toList()));
     return fields;

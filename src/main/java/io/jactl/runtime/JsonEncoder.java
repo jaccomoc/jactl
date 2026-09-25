@@ -102,7 +102,7 @@ public class JsonEncoder {
       writeInt((byte)obj & 0xff);
       return;
     }
-    if (obj instanceof Byte || obj instanceof Integer || obj instanceof Long) {
+    if (obj instanceof Integer || obj instanceof Long) {
       writeLong(((Number)obj).longValue());
       return;
     }
@@ -115,7 +115,7 @@ public class JsonEncoder {
       return;
     }
     if (obj instanceof Boolean) {
-      writeString(((boolean) obj) ? "true" : "false", false);
+      writeString(Boolean.toString((boolean) obj), false);
       return;
     }
     if (obj instanceof List) {
@@ -260,6 +260,7 @@ public class JsonEncoder {
   private static int      thousandsLength = thousands.length;
   private static byte[][] numLessThan1000 = new byte[1000][];
   private static byte[][] numLessThan1000NoLeadZeros = new byte[1000][];
+  private static byte[]   longMinValue = Long.toString(Long.MIN_VALUE).getBytes();
   static {
     for (int i = 0; i < 1000; i++) {
       numLessThan1000[i] = String.format("%03d", i).getBytes();
@@ -269,6 +270,11 @@ public class JsonEncoder {
   public void writeLong(long n) {
     ensureCapacity(20);
     if (n < 0) {
+      if (n == Long.MIN_VALUE) {
+        System.arraycopy(longMinValue, 0, bytes, offset, longMinValue.length);
+        offset += longMinValue.length;
+        return;
+      }
       bytes[offset++] = '-';
       n = -n;
     }
@@ -295,6 +301,10 @@ public class JsonEncoder {
     }
   }
 
+  public void writeInt(byte n) {
+    writeInt(n & 0xff);
+  }
+  
   public void writeInt(int n) {
     writeLong(n);
   }
