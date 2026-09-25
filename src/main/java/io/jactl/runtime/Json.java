@@ -21,7 +21,7 @@ public class Json {
 
   public static String toJson(Object obj, String source, int offset) {
     JsonEncoder buf = JsonEncoder.get(source, offset);
-    buf.writeObj(obj, source, offset);
+    buf.writeObj(obj);
     return buf.finalise();
   }
 

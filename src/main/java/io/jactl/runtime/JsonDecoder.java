@@ -102,7 +102,7 @@ public class JsonDecoder {
     }
     switch (c) {
       case EOS:
-        return null;
+        error("Empty JSON string");
       case '-':
       case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
         return decodeNumber(c);
@@ -200,12 +200,16 @@ public class JsonDecoder {
       if (startChar < '0' || startChar > '9') error("Unexpected character '" + startChar + "' while decoding number");
     }
     int result = 0;
+    if (startChar == '.') error("Unexpected character '.' while decoding number");
     char c      = startChar;
     int  i      = offset;
    WHILE:
     while (true) {
       switch (c) {
         case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+          if (i > offset && startChar == '0') {
+            error("Malformed number (leading 0)");
+          }
           int digit = c - '0';
           if (result < MAXINT_DIV_10 || result == MAXINT_DIV_10 && digit <= MAXINT_REM_10) {
             result = 10 * result + digit;
@@ -226,7 +230,10 @@ public class JsonDecoder {
                     break WHILE;
                   }
                   break;
-                case 'e': case 'E': case '.':
+                case 'e': case 'E':
+                  break WHILE;
+                case '.':
+                  if (i == length || !Character.isDigit(json.charAt(i))) error("Malformed number: must be digit after '" + c + "'");
                   break WHILE;
                 default:
                   i--;
@@ -244,7 +251,10 @@ public class JsonDecoder {
             }
           }
           break;
-        case 'e': case 'E': case '.':
+        case 'e': case 'E':
+          break WHILE;
+        case '.':
+          if (i == length || !Character.isDigit(json.charAt(i))) error("Malformed number: must be digit after '" + c + "'");
           break WHILE;
 
         // All the following cases fall through to the last case (if no errors)
@@ -270,21 +280,26 @@ public class JsonDecoder {
       c = i < length ? json.charAt(i++) : EOS;
     }
 
-    // Number became too large or had exponent of decimal place
-    WHILE:
+    // Number became too large or had exponent or decimal place
+   WHILE:
     while (i < length) {
       c = json.charAt(i++);
       switch (c) {
         case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
-        case 'e': case 'E': case '.': case '+': case '-':
-          break;
+        case '.': case 'e': case 'E': case '+': case '-':
+          continue WHILE;
         default:
           i--;
           break WHILE;
       }
     }
-
+    
     String numberStr = json.substring(startOffset, i);
+    char end = numberStr.charAt(numberStr.length() - 1);
+    switch (end) {
+      case 'E': case 'e': case '.': case '+': case '-':
+        error("Malformed number (expecting digits after '" + end + "')");
+    }
     try {
       offset = i;
       BigDecimal decimal = new BigDecimal(numberStr);
@@ -520,16 +535,26 @@ public class JsonDecoder {
   }
 
   public double getDouble() {
-    char c = nextChar();
+    char startChar = nextChar();
     int start = offset - 1;
-    Number num = decodeNumber(c);
-    if (num instanceof Long) {
-      return Double.valueOf((long)num);
+    Number num    = decodeNumber(startChar);
+    double result = 0;
+    if (num instanceof Integer) {
+      result = Double.valueOf((int)num);
     }
-    if (num == null) {
+    else if (num instanceof Long) {
+      result = Double.valueOf((long)num);
+    }
+    else if (num == null) {
       error("Double value cannot be null", start);
     }
-    return num.doubleValue();
+    else {
+      result = num.doubleValue();
+    }
+    if (startChar == '-' && result == 0D) {
+      result = -result;
+    }
+    return result;
   }
 
   public BigDecimal getDecimal() {

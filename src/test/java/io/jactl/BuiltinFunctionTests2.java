@@ -889,6 +889,16 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("int x = -" + Integer.MAX_VALUE + " - 1; x.toJson()", "" + Integer.MIN_VALUE);
     test("def x = -" + Long.MAX_VALUE + "L - 1; x.toJson()", "" + Long.MIN_VALUE);
     test("long x = -" + Long.MAX_VALUE + "L - 1; x.toJson()", "" + Long.MIN_VALUE);
+    testError("class X { List t = [{ -> 3 }] }; new X().toJson()", "not supported for type function");
+    testError("def l = [{ -> 3 }]; l.toJson()", "not supported for type function");
+    testError("double d = 1.0D / 0.0D; d.toJson()", "cannot encode double value");
+    testError("double d = 0.0D / 0.0D; d.toJson()", "cannot encode double value");
+    testError("double d = -1.0D / 0.0D; d.toJson()", "cannot encode double value");
+    testError("double d = -0.0D / 0.0D; d.toJson()", "cannot encode double value");
+    testError("class X { double d = 1.0D / 0.0D }; new X().toJson()", "cannot encode double value");
+    testError("class X { double d = 0.0D / 0.0D }; new X().toJson()", "cannot encode double value");
+    testError("class X { double d = -1.0D / 0.0D }; new X().toJson()", "cannot encode double value");
+    testError("class X { double d = -0.0D / 0.0D }; new X().toJson()", "cannot encode double value");
   }
 
   @Test public void fromJson() {
@@ -970,6 +980,39 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("'" + Integer.MAX_VALUE + "'.fromJson()", Integer.MAX_VALUE);
     test("'" + Long.MIN_VALUE + "'.fromJson()", Long.MIN_VALUE);
     test("'" + Long.MAX_VALUE + "'.fromJson()", Long.MAX_VALUE);
+    test("'0E0'.fromJson()", "#0");
+    testError("'00E0'.fromJson()", "malformed number");
+    test("'-0E0'.fromJson()", "#0");
+    test("'-0E-0'.fromJson()", "#0");
+    test("'0E-0'.fromJson()", "#0");
+    test("'0E-1'.fromJson()", "#0.0");
+    test("'0E+1'.fromJson()", "#0E+1");
+    test("'0E1'.fromJson()", "#0E1");
+    testError("'01'.fromJson()", "malformed number (leading 0)");
+    testError("'-01'.fromJson()", "malformed number (leading 0)");
+    testError("'.5'.fromJson()", "unexpected character");
+    testError("'-.5'.fromJson()", "unexpected character");
+    testError("'1.'.fromJson()", "malformed number");
+    testError("'-1.'.fromJson()", "malformed number");
+    testError("'1E'.fromJson()", "malformed number");
+    testError("'-1E'.fromJson()", "malformed number");
+    testError("'[01]'.fromJson()", "malformed number");
+    testError("'[-01]'.fromJson()", "malformed number");
+    testError("'[.5]'.fromJson()", "unexpected character");
+    testError("'[-.5]'.fromJson()", "unexpected character");
+    testError("'[1.]'.fromJson()", "malformed number");
+    testError("'[-1.]'.fromJson()", "malformed number");
+    testError("class X { double d }; X.fromJson('{\"d\":01}')", "malformed number");
+    testError("class X { double d }; X.fromJson('{\"d\":-01}')", "malformed number");
+    testError("class X { double d }; X.fromJson('{\"d\":.5}')", "unexpected character");
+    testError("class X { double d }; X.fromJson('{\"d\":-.5}')", "unexpected character");
+    testError("class X { double d }; X.fromJson('{\"d\":1.}')", "malformed number");
+    testError("class X { double d }; X.fromJson('{\"d\":-1.}')", "malformed number");
+    test("class X { double d }; X.fromJson('{\"d\":-0}').toString()", "[d:-0.0]");
+    test("class X { double d }; X.fromJson('{\"d\":-0.0}').toString()", "[d:-0.0]");
+    testError("''.fromJson()", "empty json string");
+    testError("'1.e3'.fromJson()", "malformed number");
+    testError("'{\"a\":null,\"a\":1}'.fromJson()", "duplicate field 'a'");
   }
 
   @Test public void classFromJson() {

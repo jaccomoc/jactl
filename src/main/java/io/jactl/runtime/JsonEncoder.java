@@ -82,10 +82,6 @@ public class JsonEncoder {
   }
 
   public void writeObj(Object obj) {
-    writeObj(obj, null, 0);
-  }
-  
-  public void writeObj(Object obj, String source, int offset) {
     if (obj == null) {
       writeString("null", false);
       return;
@@ -107,11 +103,7 @@ public class JsonEncoder {
       return;
     }
     if (obj instanceof Double) {
-      double d = (double)obj;
-      if (Double.isInfinite(d) || Double.isNaN(d)) {
-        throw new RuntimeError("Cannot encode double value '" + d + "'", source, offset);
-      }
-      writeString(Double.toString((double)obj), false);
+      writeDouble((double)obj);
       return;
     }
     if (obj instanceof Boolean) {
@@ -125,7 +117,7 @@ public class JsonEncoder {
         if (i > 0) {
           writeByte(',');
         }
-        writeObj(list.get(i), source, offset);
+        writeObj(list.get(i));
       }
       writeByte(']');
       return;
@@ -145,7 +137,7 @@ public class JsonEncoder {
         Object                    value = entry.getValue();
         writeString(entry.getKey(), true);
         writeByte(':');
-        writeObj(value, source, offset);
+        writeObj(value);
       }
       writeByte('}');
       return;
@@ -154,7 +146,7 @@ public class JsonEncoder {
       ((JactlObject)obj)._$j$writeJson(this);
       return;
     }
-    throw new RuntimeError("toJson() not supported for type " + RuntimeUtils.className(obj), source == null ? "UNKNOWN" : source, offset);
+    throw new RuntimeError("toJson() not supported for type " + RuntimeUtils.className(obj), source, sourceOffset);
   }
 
   private static byte[] hex = new byte[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
@@ -317,8 +309,11 @@ public class JsonEncoder {
     writeString(((BigDecimal) n).toPlainString(), false);
   }
 
-  public void writeDouble(double n) {
-    writeString(Double.toString(n), false);
+  public void writeDouble(double d) {
+    if (Double.isInfinite(d) || Double.isNaN(d)) {
+      throw new RuntimeError("Cannot encode double value '" + d + "'", source, sourceOffset);
+    }
+    writeString(Double.toString(d), false);
   }
 
   public void writeNull() {
