@@ -21,9 +21,9 @@ import io.jactl.JactlContext;
 import io.jactl.JactlType;
 import io.jactl.Pair;
 
-import java.io.PrintWriter;
+import java.io.Reader;
+import java.io.Writer;
 import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.util.*;
@@ -66,11 +66,15 @@ public class Restorer {
   }
 
   public static Object restore(JactlContext context, byte[] buf) {
+    return restore(context, buf, null, null);
+  }
+
+  public static Object restore(JactlContext context, byte[] buf, Reader input, Writer output) {
     Restorer restorer = get(context, buf);
     // We checkpoint a three element list (globals, continuation, scriptContext) so
     // restore the globals and scriptContext and return the continuation
     List restored = (List)restorer.restore();
-    RuntimeState.setState(context, (Map<String, Object>)restored.get(0), null, (PrintWriter)null, restored.size() > 2 ? restored.get(2) : null);
+    RuntimeState.setState(context, (Map<String, Object>)restored.get(0), input, output, restored.size() > 2 ? restored.get(2) : null);
     return restored.get(1);
   }
 
