@@ -77,7 +77,7 @@ test {
     systemProperty 'jactl.async', 'true'
 }
 
-tasks.register('testSync', Test) {
+tasks.register('testAll', Test) {
     useJUnitPlatform()
     maxParallelForks = 18
     systemProperty 'jactl.async', 'false'
