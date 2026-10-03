@@ -20,16 +20,15 @@ package io.jactl;
 import io.jactl.runtime.*;
 import org.junit.jupiter.api.Test;
 
+import java.io.*;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 
 import io.jactl.compiler.Compiler;
 
@@ -1315,6 +1314,42 @@ public class BuiltinFunctionTests2 extends BaseTest {
       CompletableFuture result = new CompletableFuture();
       context.recoverCheckpoint(checkpoints.values().iterator().next(), value -> result.complete(value));
       assertEquals(123, result.get());
+    }
+  }
+
+  @Test public void _checkpointWithIO() throws ExecutionException, InterruptedException {
+    if (isAsync) {
+      Map<UUID, byte[]> checkpoints = new HashMap<>();
+      jactlEnv = new DefaultEnv() {
+        @Override
+        public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Object result, Consumer<Object> resumer) {
+          checkpoints.put(id, checkpoint);
+          resumer.accept(result);
+        }
+      };
+      JactlContext context = getJactlContext(false);
+
+      JactlScript scriptOut = Jactl.compileScript("print 'foo'; _checkpoint(null); print 'bar'", Utils.mapOf(), context);
+      StringWriter writerBefore = new StringWriter();
+      StringWriter writerAfter = new StringWriter();
+      scriptOut.eval(Utils.mapOf(), null, writerBefore, null);
+      context.recoverCheckpoint(checkpoints.values().iterator().next(), value -> { }, null, writerAfter);
+      checkpoints.clear();
+
+      JactlScript scriptIn = Jactl.compileScript("nextLine(); _checkpoint(null); nextLine()", Utils.mapOf(), context);
+      StringReader readerBefore = new StringReader("Hello\nWorld!");
+      StringReader readerAfter = new StringReader("Jactl!");
+      String first = (String) scriptIn.eval(Utils.mapOf(), readerBefore, null, null);
+      CompletableFuture result = new CompletableFuture();
+      context.recoverCheckpoint(checkpoints.values().iterator().next(), result::complete, readerAfter, null);
+      String second = (String) result.get();
+      checkpoints.clear();
+
+      assertEquals("foobar", writerBefore.toString());
+      assertEquals("bar", writerAfter.toString());
+
+      assertEquals("World!", first);
+      assertEquals("Jactl!", second);
     }
   }
 

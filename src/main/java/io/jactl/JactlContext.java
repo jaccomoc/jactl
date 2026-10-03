@@ -22,9 +22,7 @@ import io.jactl.compiler.JactlClassLoader;
 import io.jactl.resolver.Imports;
 import io.jactl.runtime.*;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
@@ -659,7 +657,19 @@ public class JactlContext {
    * @param resultHandler  handler to be invoked with final script result
    */
   public void recoverCheckpoint(byte[] checkpoint, Consumer<Object> resultHandler) {
-    Continuation cont = (Continuation)Restorer.restore(this, checkpoint);
+    recoverCheckpoint(checkpoint, resultHandler, null, null);
+  }
+
+  /**
+   * Restore checkpoint and run script from where it had been checkpointed.
+   * Invoke result handler with final result once script has finished.
+   * @param checkpoint     the checkpointed state of a script
+   * @param resultHandler  handler to be invoked with final script result
+   * @param input          Reader with input for the script (if it uses nextLine()) (can be null)
+   * @param output         Writer where print/println output will go (can be null)
+   */
+  public void recoverCheckpoint(byte[] checkpoint, Consumer<Object> resultHandler, Reader input, Writer output) {
+    Continuation cont = (Continuation)Restorer.restore(this, checkpoint, input, output);
     // If two args then we have commit closure and recovery closure so return recovery closure on recover
     Object result = cont.localObjects.length == 1 ? cont.localObjects[0] : cont.localObjects[1];
     RuntimeState state = RuntimeState.getState();
