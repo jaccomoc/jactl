@@ -132,7 +132,7 @@ public class HostClassTests extends BaseTest {
     test("def x = new io.jactl.HostClassTests.NewType[1]; x[0] = new io.jactl.HostClassTests.NewType('newprefix'); x[0].staticMethod()", "static");
     test("io.jactl.HostClassTests.NewType[] x = new io.jactl.HostClassTests.NewType[1]; x[0] = new io.jactl.HostClassTests.NewType('newprefix'); x[0].staticMethod()", "static");
     test("io.jactl.HostClassTests.NewType[] x = new io.jactl.HostClassTests.NewType[1]; x[0] = new io.jactl.HostClassTests.NewType('newprefix'); def y = x[0]; y.staticMethod()", "static");
-    testError("class X extends io.jactl.HostClassTests.NewType { }", "cannot extend host classes (io.jactl.HostClassTests$NewType)");
+    testError("class X extends io.jactl.HostClassTests.NewType { }", "cannot extend host classes");
     test("switch (new io.jactl.HostClassTests.NewType('pre')) { io.jactl.HostClassTests.NewType -> 'NewType' }", "NewType");
     testError("([:] as io.jactl.HostClassTests.NewType).process('abc')", "cannot convert from type map");
     testError("def x = [:]; (x as io.jactl.HostClassTests.NewType).process('abc')", "map cannot be cast");
@@ -146,6 +146,16 @@ public class HostClassTests extends BaseTest {
     testError("io.jactl.HostClassTests.NewType x = new io.jactl.HostClassTests.NewType('abc'); x.process()", "could not find public method");
     testError("def x = new io.jactl.HostClassTests.NewType('abc'); x.process()", "could not find public method");
     testError("def x = new io.jactl.HostClassTests.NewType(); x.process('abc')", "could not find public constructor");
+    test("io.jactl.HostClassTests.NewType f(io.jactl.HostClassTests.NewType t) { t }; f(new io.jactl.HostClassTests.NewType('pre')).process('abc')", "pre: abc");
+    test("io.jactl.HostClassTests.NewType f(io.jactl.HostClassTests.NewType t) { def x = t; x }; f(new io.jactl.HostClassTests.NewType('pre')).process('abc')", "pre: abc");
+    test("def f(io.jactl.HostClassTests.NewType t) { t }; f(new io.jactl.HostClassTests.NewType('pre')).process('abc')", "pre: abc");
+    test("class X { io.jactl.HostClassTests.NewType f(io.jactl.HostClassTests.NewType t) { t } }; new X().f(new io.jactl.HostClassTests.NewType('pre')).process('abc')", "pre: abc");
+    test("class X { io.jactl.HostClassTests.NewType f }; new X(new io.jactl.HostClassTests.NewType('pre')).f.process('abc')", "pre: abc");
+    testError("class X { io.jactl.HostClassTests.NewType f }; new X(new io.jactl.HostClassTests.NewType('pre')).toJson()", "not available for host class");
+    testError("class X { io.jactl.HostClassTests.NewType f }; new X(null).toJson()", "not available for host class");
+    testError("class X { io.jactl.HostClassTests.NewType f }; X.fromJson('{\"f\":null}')", "not available for host class");
+    testError("new io.jactl.HostClassTests.NewType('pre').toJson()", "could not find public method");
+    testError("io.jactl.HostClassTests.NewType.fromJson('\"\"')", "could not find static public method");
 
     NewType.throwException = true;
     NewBaseType.throwException = true;
@@ -169,6 +179,9 @@ public class HostClassTests extends BaseTest {
     testError("io.jactl.HostClassTests.NewType.staticMethod()", "error invoking host class method");
     testError("def f = io.jactl.HostClassTests.NewType.staticMethod; f()", "error invoking host class method");
     testError("def f = io.jactl.HostClassTests.NewType.staticMethod2; f('abc')", "error invoking host class method");
+    
+    testError("class X { io.jactl.HostClassTests.NewType t }; new X(new io.jactl.HostClassTests.NewType('pre')).toJson()", "not available for host class");
+    testError("io.jactl.HostClassTests.NewType f(io.jactl.HostClassTests.NewType t) { t }; f(new io.jactl.HostClassTests.NewType('pre')).toJson()", "could not find public method");
   }
 
   @Test public void baseClassAccess() {

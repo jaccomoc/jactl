@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import java.time.chrono.ChronoLocalDate;
 import java.time.chrono.ChronoPeriod;
 import java.time.chrono.Chronology;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.Temporal;
 import java.time.temporal.TemporalField;
 import java.time.temporal.TemporalUnit;
@@ -49,6 +50,7 @@ public class RegisterClassTests extends BaseTest {
     @Override public long until(Temporal endExclusive, TemporalUnit unit) { return 0; }
     @Override public ChronoPeriod until(ChronoLocalDate endDateExclusive) { return null; }
     @Override public long getLong(TemporalField field) { return 0; }
+    @Override public String toString() { return date.format(DateTimeFormatter.ISO_LOCAL_DATE); }
   }
   
   @Test public void basicTestWithAutoImported() throws NoSuchMethodException {
@@ -70,6 +72,8 @@ public class RegisterClassTests extends BaseTest {
            checkpointer.writeCInt(d.getDayOfMonth());
          })
          .restore(restorer -> MyLocalDate1.of(restorer.readCInt(), restorer.readCInt(), restorer.readCInt()))
+         .toJson((encoder,obj) -> encoder.writeString(obj.toString()))
+         .fromJson(decoder -> MyLocalDate1.parse(decoder.getString()))
          .register();
     
     test("test.jactl.time.LocalDate1.now().lengthOfYear() in [365, 366]", true);
@@ -96,7 +100,6 @@ public class RegisterClassTests extends BaseTest {
     test("LocalDate1 now = LocalDate1.now(); def f = now.now; f().lengthOfYear() in [365,366]", true);
     
     test("LocalDate1.now().className()", "LocalDate1");
-    testError("LocalDate1.now().toJson()", "not supported");
     testError("[a:1] as LocalDate1", "cannot convert");
     testError("def m = [a:1]; m as LocalDate1", "cannot be cast");
     testError("LocalDate1.now() as Map", "cannot coerce");
@@ -105,8 +108,34 @@ public class RegisterClassTests extends BaseTest {
     JactlContext context = JactlContext.create().replMode(true).build();
     assertTrue((boolean)Jactl.eval("LocalDate1 now = LocalDate1.now(); def f = now.now; f().lengthOfYear() in [365,366]", new HashMap<>(), context));
     
-    testError("class X extends LocalDate1 { int i }", "built-in type and cannot be extended");
-    testError("class X extends LocalDate1 { int i }; X x = new X()", "built-in type and cannot be extended");
+    testError("new LocalDate1()", "does not have a constructor");
+    testError("class X extends LocalDate1 { int i }", "cannot extend built-in type");
+    testError("class X extends LocalDate1 { int i }; X x = new X()", "cannot extend built-in type");
+    
+    test("def tomorrow(LocalDate1 d) { d.plusDays(1) }; LocalDate1 d = LocalDate1.now(); tomorrow(d).isAfter(d)", true);
+    test("LocalDate1 tomorrow(LocalDate1 d) { d.plusDays(1) }; LocalDate1 d = LocalDate1.now(); tomorrow(d).isAfter(d)", true);
+    test("class X { LocalDate1 d = LocalDate1.now() }; new X().d.getYear() == LocalDate1.now().getYear()", true);
+    
+    test("LocalDate1 d = LocalDate1.parse('2026-01-02'); d.toJson()", "\"2026-01-02\"");
+    test("LocalDate1 d = LocalDate1.parse('2026-01-02'); LocalDate1.fromJson(d.toJson()).toString()", "2026-01-02");
+    test("LocalDate1 d = LocalDate1.parse('2026-01-02'); LocalDate1.fromJson(json:d.toJson()).toString()", "2026-01-02");
+    test("LocalDate1 d = LocalDate1.parse('2026-01-02'); def f = LocalDate1.fromJson; f(d.toJson()).toString()", "2026-01-02");
+    test("LocalDate1 d = LocalDate1.parse('2026-01-02'); def f = LocalDate1.fromJson; f(json:d.toJson()).toString()", "2026-01-02");
+    test("class X { LocalDate1 d = LocalDate1.now() }; def x = new X().toJson(); X.fromJson(x).d.getYear() == LocalDate1.now().getYear()", true);
+    test("class X { LocalDate1 d = LocalDate1.now() }; def x = new X().toJson(); def f = X.fromJson; f(x).d.getYear() == LocalDate1.now().getYear()", true);
+    test("class X { LocalDate1 d }; def x = new X(LocalDate1.parse('2026-01-02')); x.d.getYear()", 2026);
+    test("class X { String d }; def x = new X('2026-01-02'); x.toJson()", "{\"d\":\"2026-01-02\"}");
+    test("class X { String d }; def x = new X('2026-01-02'); def f = x.toJson; f()", "{\"d\":\"2026-01-02\"}");
+    test("class X { LocalDate1 d }; def x = new X(LocalDate1.parse('2026-01-02')); x.toJson()", "{\"d\":\"2026-01-02\"}");
+    test("class X { LocalDate1 d }; def x = new X(d:LocalDate1.parse('2026-01-02')); x.toJson()", "{\"d\":\"2026-01-02\"}");
+    test("class X { LocalDate1 d = LocalDate1.now() }; def x = new X(d:LocalDate1.parse('2026-01-02')); x.toJson()", "{\"d\":\"2026-01-02\"}");
+    testError("class X { String d }; def x = new X('2026-01-02'); X.toJson()", "no static method 'toJson'");
+    test("class X { LocalDate1[] d = [LocalDate1.now()] }; new X().d[0].getYear() == LocalDate1.now().getYear()", true);
+    test("class X { LocalDate1[][] d = [[LocalDate1.parse('2026-01-02')]] }; new X().d[0][0].getYear() == 2026", true);
+    test("class X { LocalDate1[][] d = [[LocalDate1.parse('2026-01-02')]] }; new X().d[0][0].getYear() == 2026", true);
+    test("class X { LocalDate1[][] d = [[LocalDate1.now()]] }; new X().d[0][0].getYear() == LocalDate1.now().getYear()", true);
+    test("def now = LocalDate1.now().toString(); class X { LocalDate1[][] d = [[LocalDate1.now()]] }; new X().d[0][0].toJson() == \"\\\"$now\\\"\"", true);
+    test("def now = LocalDate1.now().toString(); class X { LocalDate1[][] d = [[LocalDate1.now()]] }; def f = new X().d[0][0].toJson; f() == \"\\\"$now\\\"\"", true);
   }
 
   public static class MyLocalDate2 implements ChronoLocalDate {
@@ -271,6 +300,8 @@ public class RegisterClassTests extends BaseTest {
     catch (IllegalStateException e) {
       assertTrue(e.getMessage().contains("has not been configured to have its own built-ins"));
     }
+    
+    assertEquals("\"2026-01-28\"", Jactl.eval("LocalDate.parse('2026-01-28').toJson()", new HashMap<>(), context));
   }
 
   public static class MyLocalDate5 implements ChronoLocalDate {

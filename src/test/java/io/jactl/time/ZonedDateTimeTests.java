@@ -634,4 +634,32 @@ public class ZonedDateTimeTests extends BaseTest {
     test("def f = ZonedDateTime.parse('2026-02-18T12:13:14Z').toString; f()", "2026-02-18T12:13:14Z");
   }
 
+  @Test public void jsonTests() {
+    test("ZonedDateTime.fromJson('\"2026-04-05T03:30+10:00[Australia/Sydney]\"')", ZonedDateTime.parse("2026-04-05T03:30+10:00[Australia/Sydney]"));
+    testError("ZonedDateTime.fromJson('\"PT51H4Mxxx5S\"')", "could not be parsed");
+    test("def f = ZonedDateTime.fromJson; f('\"2026-04-05T03:30+10:00[Australia/Sydney]\"')", ZonedDateTime.parse("2026-04-05T03:30+10:00[Australia/Sydney]"));
+    test("ZonedDateTime.fromJson(json:'\"2026-04-05T03:30+10:00[Australia/Sydney]\"')", ZonedDateTime.parse("2026-04-05T03:30+10:00[Australia/Sydney]"));
+    test("def f = ZonedDateTime.fromJson; f(json:'\"2026-04-05T03:30+10:00[Australia/Sydney]\"')", ZonedDateTime.parse("2026-04-05T03:30+10:00[Australia/Sydney]"));
+    test("ZonedDateTime.parse('2026-04-05T03:30+10:00[Australia/Sydney]').toJson()", "\"2026-04-05T03:30+10:00[Australia/Sydney]\"");
+    test("def f = ZonedDateTime.parse('2026-04-05T03:30+10:00[Australia/Sydney]').toJson; f()", "\"2026-04-05T03:30+10:00[Australia/Sydney]\"");
+  }
+
+  @Test public void classTests() {
+    test("class X { ZonedDateTime f(ZonedDateTime t) { t }; ZonedDateTime t }; X x = new X(ZonedDateTime.parse('2026-04-05T03:30+10:00[Australia/Sydney]')); x.f(x.t).toJson()",  "\"2026-04-05T03:30+10:00[Australia/Sydney]\"");
+    test("class X { ZonedDateTime f(ZonedDateTime t) { t }; ZonedDateTime t }; X x = new X(ZonedDateTime.parse('2026-04-05T03:30+10:00[Australia/Sydney]')); def f = x.f(x.t).toJson; f()",  "\"2026-04-05T03:30+10:00[Australia/Sydney]\"");
+    test("class X { ZonedDateTime t }; X x = X.fromJson('{\"t\":\"2026-04-05T03:30+10:00[Australia/Sydney]\"}'); x.toJson()",  "{\"t\":\"2026-04-05T03:30+10:00[Australia/Sydney]\"}");
+    test("class X { ZonedDateTime t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"2026-04-05T03:30+10:00[Australia/Sydney]\"}'); x.toJson()",  "{\"t\":\"2026-04-05T03:30+10:00[Australia/Sydney]\"}");
+    testError("class X { ZonedDateTime t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"P2DT3Hxxx4M5S\"}'); x.toJson()",  "could not be parsed");
+    test("class X { ZonedDateTime t }; def f = X.fromJson; X x = f('{\"t\":\"2026-04-05T03:30+10:00[Australia/Sydney]\"}'); x.toJson()",  "{\"t\":\"2026-04-05T03:30+10:00[Australia/Sydney]\"}");
+    test("class X { ZonedDateTime t }; def f = X.fromJson; X x = f(json:'{\"t\":\"2026-04-05T03:30+10:00[Australia/Sydney]\"}'); def g = x.toJson; g()",  "{\"t\":\"2026-04-05T03:30+10:00[Australia/Sydney]\"}");
+    test("class X { ZonedDateTime t }; X x = new X(null); x.toJson()",  "{\"t\":null}");
+    test("class X { ZonedDateTime t }; X.fromJson('{\"t\":null}').toString()",  "[t:null]");
+  }
+
+  @Test public void returnAndParameterType() {
+    test("ZonedDateTime f(ZonedDateTime t) { t }; f(ZonedDateTime.parse('2026-04-05T03:30+10:00[Australia/Sydney]')).toJson()",  "\"2026-04-05T03:30+10:00[Australia/Sydney]\"");
+    test("ZonedDateTime f(ZonedDateTime t) { t }; def g = f; g(ZonedDateTime.parse('2026-04-05T03:30+10:00[Australia/Sydney]')).toJson()",  "\"2026-04-05T03:30+10:00[Australia/Sydney]\"");
+    test("ZonedDateTime f(int i, ZonedDateTime t = ZonedDateTime.parse('2026-04-05T03:30+10:00[Australia/Sydney]')) { t.plusDays(i) }; f(1)", ZonedDateTime.parse("2026-04-06T03:30+10:00[Australia/Sydney]"));
+  }
+
 }

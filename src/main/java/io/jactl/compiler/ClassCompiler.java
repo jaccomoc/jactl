@@ -34,7 +34,7 @@ import java.util.stream.Stream;
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.DOUBLE;
 import static io.jactl.JactlType.LONG;
-import static io.jactl.Utils.JACTL_PREFIX;
+import static io.jactl.Utils.*;
 import static org.objectweb.asm.Opcodes.*;
 
 public class ClassCompiler {
@@ -498,26 +498,15 @@ public class ClassCompiler {
   protected void compileJactlObjectFunctions() {
     // Only generate Json and Checkpoint functions if there are no fields that are hosts classes since we
     // have no access to fields for host class types
-    if (!context.allowHostAccess || noHostClass(classDescriptor.getAllFields())) {
-      compileToJsonFunction();
-      compileReadJsonFunction();
-      if (context.isAsync) {
-        compileCheckpointFunction();
-        compileRestoreFunction();
-      }
+    compileToJsonFunction();
+    compileFromJsonFunction();
+    if (!classDescriptor.hasHostClassFields() && context.isAsync) {
+      compileCheckpointFunction();
+      compileRestoreFunction();
     }
     compileInitNoAsync();
     compileEqualsFunction();
     compileHashCodeFunction();
-  }
-
-  private boolean noHostClass(Map<String,JactlType> fields) {
-    for (Map.Entry<String, JactlType> entry : fields.entrySet()) {
-      if (entry.getValue().isHostClass()) {
-        return false;
-      }
-    }
-    return true;
   }
 
   private void compileEqualsFunction() {
@@ -765,7 +754,7 @@ public class ClassCompiler {
       mv.visitVarInsn(ALOAD, BUFF_SLOT);
       mv.visitVarInsn(ALOAD, THIS_SLOT);
       mv.visitFieldInsn(GETFIELD, internalName, field, type.descriptor());
-      writeField(mv, type, invoke, ARR_SLOT_START);
+      writeField(field, mv, type, invoke, ARR_SLOT_START);
       first = false;
     }
     mv.visitVarInsn(ALOAD, BUFF_SLOT);
@@ -778,7 +767,7 @@ public class ClassCompiler {
   }
 
   // Expect on stack: ...JsonEncoder,fieldValue
-  private void writeField(MethodVisitor mv, JactlType type, BiConsumer<String, Class> invoke, int arraySlots) {
+  private void writeField(String field, MethodVisitor mv, JactlType type, BiConsumer<String, Class> invoke, int arraySlots) {
     final int THIS_SLOT    = 0;
     final int BUFF_SLOT    = 1;
     final int FIRST_SLOT   = 2;
@@ -799,6 +788,34 @@ public class ClassCompiler {
         break;
       }
       case INSTANCE: {
+        if (type.isHostClass()) {
+          mv.visitInsn(POP);
+          Utils.loadConst(mv, "Field " + field + ": toJson() not available for host class " + type.getJavaClass().getName(), context);
+          mv.visitMethodInsn(INVOKEVIRTUAL, JSON_ENCODER_INTERNAL, "error", Type.getMethodDescriptor(Utils.VOID_TYPE, Utils.STRING_TYPE), false);
+          break;
+        }
+        if (type.isRegisteredType()) {
+          // if toJson() registered...
+          String     fullClassName = type.getJactlClassDescriptor().getJavaPackagedName();
+          JactlClass jactlClass    = context.getRegisteredClasses().getJactlClass(fullClassName);
+          if (jactlClass != null && jactlClass.jsonEncoder != null) {
+            // Invoke the registered BiFunction for encoding, passing it jsonEncoder,fieldValue
+            String internalHelperName = jactlClass.helperClassName.replaceAll("\\.", "/");
+            mv.visitFieldInsn(GETSTATIC, internalHelperName, Utils.JACTL_TO_JSON_HANDLER, Utils.BICONSUMER_DESCRIPTOR);
+            // move toJson BiConsumer to before encoder/field
+            mv.visitInsn(DUP_X2);
+            mv.visitInsn(POP);
+            // Invoke BiConsumer.accept()
+            mv.visitMethodInsn(INVOKEINTERFACE, Utils.BICONSUMER_INTERNAL, "accept", Type.getMethodDescriptor(Utils.VOID_TYPE, Utils.OBJECT_TYPE, Utils.OBJECT_TYPE), true);
+          }
+          else {
+            mv.visitInsn(POP);
+            Utils.loadConst(mv, "Field " + field + ": toJson() not available for registered type " + fullClassName, context);
+            mv.visitMethodInsn(INVOKEVIRTUAL, JSON_ENCODER_INTERNAL, "error", Type.getMethodDescriptor(Utils.VOID_TYPE, Utils.STRING_TYPE), false);
+          }
+          break;
+        }
+        
         Label NULL_VAL = new Label();
         Label NEXT     = new Label();
         mv.visitInsn(DUP);
@@ -845,7 +862,7 @@ FIRST:  mv.visitLabel(FIRST);
         mv.visitVarInsn(ALOAD, ARR_SLOT);
         mv.visitVarInsn(ILOAD, ARR_IDX_SLOT);
         Utils.loadArrayElement(mv, type.getArrayElemType(), context);
-        writeField(mv, type.getArrayElemType(), invoke, arraySlots + 2);
+        writeField(field, mv, type.getArrayElemType(), invoke, arraySlots + 2);
         mv.visitIincInsn(ARR_IDX_SLOT, 1);
         mv.visitJumpInsn(GOTO, LOOP);
 END_LOOP: mv.visitLabel(END_LOOP);
@@ -866,7 +883,7 @@ NEXT:   mv.visitLabel(NEXT);
     }
   }
 
-  private void compileReadJsonFunction() {
+  private void compileFromJsonFunction() {
     final int THIS_SLOT      = 0;
     final int DECODER_SLOT   = 1;
     final int FIRST_SLOT     = 2;   // Records whether we are decoding first field
@@ -1160,6 +1177,37 @@ MISSING_FLAGS: mv.visitLabel(MISSING_FLAGS);
                            Type.getMethodDescriptor(type.descriptorType()), false);
         break;
       case INSTANCE:
+        if (type.isHostClass()) {
+          mv.visitVarInsn(ALOAD, DECODER_SLOT);
+          Utils.loadConst(mv, "Field " + fieldName + ": fromJson() not available for host class " + type.getJavaClass().getName(), context);
+          mv.visitMethodInsn(INVOKEVIRTUAL, JSON_DECODER_INTERNAL, "error", Type.getMethodDescriptor(Utils.VOID_TYPE, Utils.STRING_TYPE), false);
+          mv.visitInsn(ACONST_NULL);
+          mv.visitInsn(ARETURN);
+          break;
+        }
+        if (type.isRegisteredType()) {
+          // if fromJson() registered...
+          String     fullClassName = type.getJactlClassDescriptor().getJavaPackagedName();
+          JactlClass jactlClass    = context.getRegisteredClasses().getJactlClass(fullClassName);
+          if (jactlClass != null && jactlClass.jsonDecoder != null) {
+            // Invoke the registered BiFunction for encoding, passing it jsonEncoder,fieldValue
+            String internalHelperName = jactlClass.helperClassName.replaceAll("\\.", "/");
+            mv.visitFieldInsn(GETSTATIC, internalHelperName, Utils.JACTL_FROM_JSON_HANDLER, Utils.FUNCTION_DESCRIPTOR);
+            mv.visitVarInsn(ALOAD, DECODER_SLOT);
+            // Invoke Function.apply()
+            mv.visitMethodInsn(INVOKEINTERFACE, Utils.FUNCTION_INTERNAL, "apply", Type.getMethodDescriptor(Utils.OBJECT_TYPE, Utils.OBJECT_TYPE), true);
+            Utils.checkCast(mv, type);
+          }
+          else {
+            mv.visitVarInsn(ALOAD, DECODER_SLOT);
+            Utils.loadConst(mv, "Field " + fieldName + ": fromJson() not available for registered type " + fullClassName, context);
+            mv.visitMethodInsn(INVOKEVIRTUAL, JSON_DECODER_INTERNAL, "error", Type.getMethodDescriptor(Utils.VOID_TYPE, Utils.STRING_TYPE), false);
+            mv.visitInsn(ACONST_NULL);
+            mv.visitInsn(ARETURN);
+          }
+          break;
+        }
+
         mv.visitVarInsn(ALOAD, DECODER_SLOT);
         mv.visitTypeInsn(NEW, type.getInternalName());
         mv.visitInsn(DUP);

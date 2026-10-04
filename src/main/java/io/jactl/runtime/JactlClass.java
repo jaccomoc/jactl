@@ -25,6 +25,7 @@ import io.jactl.compiler.JactlClassLoader;
 import io.jactl.compiler.JactlClassWriter;
 import org.objectweb.asm.*;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
@@ -44,9 +45,12 @@ public class JactlClass {
   private boolean      autoImport;                         // whether scripts automatically import this class by default
   private int          debugLevel = Integer.getInteger("jactl.debug.leval", 0);
   private JactlContext jactlContext = null;
-  private BiConsumer<Checkpointer,Object> checkpoint = null;
-  private Function<Restorer,Object>       restore = null;
-  
+  private BiConsumer<Checkpointer,Object> checkpoint  = null;
+  private Function<Restorer,Object>       restore     = null;
+  public BiConsumer<JsonEncoder,Object>   jsonEncoder = null;
+  public Function<JsonDecoder,Object>     jsonDecoder = null;
+  public String                           helperClassName;
+
   private Map<Class,Class> mappedTypes = new HashMap() {{
     // Always map CharSequence to String until we add proper support for CharSequence
     put(CharSequence.class, String.class);
@@ -198,6 +202,27 @@ public class JactlClass {
     return this;
   }
 
+  public JactlClass toJson(BiConsumer<JsonEncoder,Object> encoder) {
+    this.jsonEncoder = encoder;
+    return this;
+  }
+
+  public JactlClass fromJson(Function<JsonDecoder,Object> decoder) {
+    this.jsonDecoder = dec -> {
+      try {
+        return decoder.apply(dec);
+      }
+      catch (RuntimeError e) {
+        throw e;
+      }
+      catch (RuntimeException e) {
+        dec.error(e);
+        return null;
+      }
+    };
+    return this;
+  }
+  
   /**
    * If level is more than 0 then we dump the compiled helper class and run the class checker
    * over it.
@@ -212,9 +237,12 @@ public class JactlClass {
   /**
    * Register the class with the Jactl ecosystem.
    * @return the JactlClass instance
-   * @throws IllegalStateException if a problem occurs during the registration of the class
    */
-  public JactlType register()  {
+  public JactlType register() {
+    if (jsonEncoder != null && jsonDecoder == null || jsonDecoder != null && jsonEncoder == null) {
+      throw new IllegalStateException((jsonEncoder != null ? "toJson()" : "fromJson()") + " declared but " + (jsonEncoder != null ? "fromJson()" : "toJson()") + " not declared");
+    }
+
     // We need to build a ClassDescriptor and register it. We do this by using reflection to find all the
     // methods and add them to the ClassDescriptor.
     String               jactlClass      = Utils.pkgPathOf(jactlPackage, jactlClassName);
@@ -228,8 +256,19 @@ public class JactlClass {
     }
     getRegisteredClasses().registerClassByJavaName(Type.getInternalName(javaClass), javaClass);
     JactlType       classType       = JactlType.createClass(classDescriptor);
-    String          helperClassName = Utils.pkgPathOf(Utils.JACTL_PKG, jactlPackage, Utils.JACTL_PREFIX + jactlClassName + "Helper");
+    helperClassName = Utils.pkgPathOf(Utils.JACTL_PKG, jactlPackage, Utils.JACTL_PREFIX + jactlClassName + "Helper");
     Class helperClass = compileWrapperHandlesClass(helperClassName);
+    
+    if (jsonDecoder != null) {
+      // Note that compileWrapperHandleClass has already created the method and implementation for fromJson
+      try {
+        _method(false, helperClass, Utils.JACTL_FROM_JSON, Utils.JACTL_FROM_JSON, true, "json", String.class);
+      }
+      catch (NoSuchMethodException e) {
+        throw new IllegalStateException(e);
+      }
+    }
+
     methods.forEach(m -> {
       String wrapperHandleField = Utils.staticHandleName(m.name);
       FunctionDescriptor funcDesc = m;
@@ -249,7 +288,7 @@ public class JactlClass {
         m.init(mappedTypes);
       }
       classDescriptor.addMethod(funcDesc.name, funcDesc);
-      Functions.INSTANCE.registerFunction(funcDesc);
+      getFunctions().registerFunction(funcDesc);
     });
     if (autoImport) {
       getRegisteredClasses().addAutoImported(jactlClassName, classDescriptor);
@@ -263,14 +302,23 @@ public class JactlClass {
     if (restore != null) {
       getRegisteredClasses().registerRestorer(javaClass, restore);
     }
+    getRegisteredClasses().registerJactlClass(classDescriptor.getJavaPackagedName(), this);
     return classType;
   }
 
   //////////////////////////////////////////////////////////////////////
 
   private JactlClass _method(boolean canThrow, String jactlName, String javaName, Object... namesAndTypes) throws NoSuchMethodException {
+    return _method(canThrow, javaClass, jactlName, javaName, false, namesAndTypes);
+  }
+  
+  private JactlClass _method(boolean canThrow, Class<?> javaClass, String jactlName, String javaName, boolean needsLocation, Object... namesAndTypes) throws NoSuchMethodException {
     RegisteredClassMethod jactlMethod = new RegisteredClassMethod(javaClass, jactlContext).name(jactlName);
     List<Class> paramTypes = new ArrayList<>();
+    if (needsLocation) {
+      paramTypes.add(String.class);
+      paramTypes.add(int.class);
+    }
     for (int i = 0; i < namesAndTypes.length; i += 2) {
       String paramName;
       if (namesAndTypes[i] instanceof String) {
@@ -287,16 +335,23 @@ public class JactlClass {
       }
       jactlMethod.param(paramName);
     }
+    if (javaClass != null) {
     jactlMethod.impl(javaClass.getMethod(javaName, paramTypes.toArray(new Class[0])));
     if (canThrow) {
       jactlMethod.canThrow(true);
     }
+    }
+    jactlMethod.needsLocation = needsLocation;
     methods.add(jactlMethod);
     return this;
   }
 
   private RegisteredClasses getRegisteredClasses() {
     return jactlContext == null ? RegisteredClasses.INSTANCE : jactlContext.getRegisteredClasses();
+  }
+
+  private Functions getFunctions() {
+    return jactlContext == null ? Functions.INSTANCE : jactlContext.getFunctions();
   }
 
   private Class compileWrapperHandlesClass(String helperClassName) {
@@ -310,7 +365,6 @@ public class JactlClass {
     // Add MethodHandle fields
     methods.forEach(m -> {
       FieldVisitor handleVar = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, Utils.staticHandleName(m.name), JactlMethodHandle.TYPE_DESCRIPTOR, null, null);
-      //FieldVisitor handleVar = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, Utils.staticHandleName(m.name), JactlType.OBJECT_TYPE_DESCRIPTOR, null, null);
       handleVar.visitEnd();
       if (m.canThrow) {
         // Synthesise a method that will capture any runtime exceptions and wrap them in a RuntimeError with
@@ -323,9 +377,54 @@ public class JactlClass {
       }
     });
 
+    // Create handles for toJson() and fromJson() 
+    if (jsonEncoder != null && jsonDecoder != null) {
+      // create static handle fromJson$sh that will point to our constructed fromJson method
+      FieldVisitor handleVar = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, Utils.staticHandleName(Utils.JACTL_FROM_JSON), JactlMethodHandle.TYPE_DESCRIPTOR, null, null);
+      handleVar.visitEnd();
+
+      // create fields for the fromJson BiFunction and the toJson Function objects
+      handleVar = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, Utils.JACTL_TO_JSON_HANDLER, Utils.BICONSUMER_DESCRIPTOR, null, null);
+      handleVar.visitEnd();
+      handleVar = cv.visitField(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, Utils.JACTL_FROM_JSON_HANDLER, Utils.FUNCTION_DESCRIPTOR, null, null);
+      handleVar.visitEnd();
+      
+      // Create the fromJson() method
+      MethodVisitor methodVisitor = cv.visitMethod(ACC_PUBLIC | ACC_STATIC | ACC_SYNTHETIC, Utils.JACTL_FROM_JSON, Type.getMethodDescriptor(Type.getType(javaClass), Utils.STRING_TYPE, Utils.INT_TYPE, Utils.STRING_TYPE), null, null);
+      methodVisitor.visitCode();
+      methodVisitor.visitFieldInsn(GETSTATIC, internalHelperClassName, Utils.JACTL_FROM_JSON_HANDLER, Utils.FUNCTION_DESCRIPTOR);
+      methodVisitor.visitVarInsn(ALOAD, 2);    // JSON String
+      methodVisitor.visitVarInsn(ALOAD, 0);    // source
+      methodVisitor.visitVarInsn(ILOAD, 1);    // offset
+      methodVisitor.visitMethodInsn(INVOKESTATIC, JsonDecoder.INTERNAL_NAME, "get", Type.getMethodDescriptor(Type.getType(JsonDecoder.class), Utils.STRING_TYPE, Utils.STRING_TYPE, Utils.INT_TYPE), false);
+      methodVisitor.visitInsn(DUP);
+      methodVisitor.visitVarInsn(ASTORE, 3);   // JsonDecoder
+      methodVisitor.visitMethodInsn(INVOKEINTERFACE, Utils.FUNCTION_INTERNAL, "apply", Type.getMethodDescriptor(Utils.OBJECT_TYPE, Utils.OBJECT_TYPE), true);
+      methodVisitor.visitTypeInsn(CHECKCAST, Type.getInternalName(javaClass));
+      methodVisitor.visitVarInsn(ALOAD, 3);   // JsonDecoder
+      methodVisitor.visitMethodInsn(INVOKEVIRTUAL, JsonDecoder.INTERNAL_NAME, "close", Type.getMethodDescriptor(Utils.VOID_TYPE), false);
+      methodVisitor.visitInsn(ARETURN);
+      methodVisitor.visitMaxs(0, 0);
+      methodVisitor.visitEnd();
+    }
+    
     cv.visitEnd();
     byte[] bytes = cw.toByteArray();
-    return JactlClassLoader.defineClass(helperClassName, bytes);
+    Class<?> clss = JactlClassLoader.defineClass(helperClassName, bytes);
+
+    if (jsonEncoder != null && jsonDecoder != null) {
+      try {
+        Field field = clss.getDeclaredField(Utils.JACTL_TO_JSON_HANDLER);
+        field.set(null, jsonEncoder);
+        field = clss.getDeclaredField(Utils.JACTL_FROM_JSON_HANDLER);
+        field.set(null, jsonDecoder);
+      }
+      catch (NoSuchFieldException | IllegalAccessException e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    return clss;
   }
 
   /**

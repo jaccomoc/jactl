@@ -2536,7 +2536,7 @@ public class RuntimeUtils {
       throw new RuntimeError("Incompatible types. Cannot convert " + className(obj) + " to " + RuntimeState.getState().getContext().typeFromClass(clss), source, offset);
     }
     if (!isCast && clss == String.class)       { return toStringOrNull(obj); }
-    if (clss.isAssignableFrom(obj.getClass())) { return obj; }
+    if (obj == null || clss.isAssignableFrom(obj.getClass())) { return obj; }
     throw new RuntimeError("Incompatible types. Cannot convert " + className(obj) + " to " + RuntimeState.getState().getContext().typeFromClass(clss), source, offset);
   }
 

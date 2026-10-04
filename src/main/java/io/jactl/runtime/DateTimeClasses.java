@@ -27,6 +27,8 @@ import java.time.chrono.ChronoLocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.*;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static io.jactl.runtime.JactlFunction.MANDATORY;
@@ -115,6 +117,8 @@ public class DateTimeClasses {
                                        checkpointer.writeLong(d.toNanoOfDay());
                                      })
                                      .restore(restorer -> LocalTime.ofNanoOfDay(restorer.readLong()))
+                                     .toJson(JsonEncoder::writeObjToString)
+                                     .fromJson(decoder -> { String str = decoder.getString(); return str == null ? null : LocalTime.parse(str);})
                                      .register();
 
       Jactl.method(localTimeType).name("format").param("format").impl(DateTimeClasses.class, "localTimeFormat").register();
@@ -190,6 +194,8 @@ public class DateTimeClasses {
                                        checkpointer.writeCInt(d.getDayOfMonth());
                                      })
                                      .restore(restorer -> LocalDate.of(restorer.readCInt(), restorer.readCInt(), restorer.readCInt()))
+                                     .toJson(JsonEncoder::writeObjToString)
+                                     .fromJson(decoder -> { String str = decoder.getString(); return str == null ? null : LocalDate.parse(str);})
                                      .register();
 
       Jactl.method(localDateType).name("getDayOfWeek").impl(DateTimeClasses.class, "localDateGetDayOfWeek").register();
@@ -282,6 +288,8 @@ public class DateTimeClasses {
              })
              .restore(r -> LocalDateTime.of(r.readCInt(), r.readCInt(), r.readCInt(),
                                             r.readCInt(), r.readCInt(), r.readCInt(), r.readCInt()))
+             .toJson(JsonEncoder::writeObjToString)
+             .fromJson(decoder -> { String str = decoder.getString(); return str == null ? null : LocalDateTime.parse(str);})
              .register();
       Jactl.method(localDateTimeType).name("getDayOfWeek").impl(DateTimeClasses.class, "localDateTimeGetDayOfWeek").register();
       Jactl.method(localDateTimeType).name("getMonth").impl(DateTimeClasses.class, "localDateTimeGetMonth").register();
@@ -317,6 +325,8 @@ public class DateTimeClasses {
                                   .methodCanThrow("systemDefault", "systemDefault")
                                   .checkpoint((checkpointer, obj) -> checkpointer.writeObject(((ZoneId) obj).getId()))
                                   .restore(restorer -> ZoneId.of((String) restorer.readObject()))
+                                  .toJson(JsonEncoder::writeObjToString)
+                                  .fromJson(decoder -> { String str = decoder.getString(); return str == null ? null : ZoneId.of(str);})
                                   .register();
       Jactl.method(zoneIdType).name("of").isStatic(true).param("zone").impl(DateTimeClasses.class, "zoneIdOf").register();
       Jactl.method(zoneIdType).name("isValid").isStatic(true).param("zone").impl(DateTimeClasses.class, "zoneIdIsValid").register();
@@ -368,6 +378,8 @@ public class DateTimeClasses {
              checkpointer.writeCInt(p.getDays());
            })
            .restore(restorer -> Period.of(restorer.readCInt(), restorer.readCInt(), restorer.readCInt()))
+           .toJson(JsonEncoder::writeObjToString)
+           .fromJson(decoder -> { String str = decoder.getString(); return str == null ? null : Period.parse(str);})
            .register();
 
       // Duration
@@ -405,7 +417,6 @@ public class DateTimeClasses {
                .methodCanThrow("ofNanos", "ofNanos", "nanos", long.class)
                .methodCanThrow("ofSeconds", "ofSeconds", "seconds", long.class)
                .methodCanThrow("ofSecondsAndNanos", "ofSeconds", "seconds", long.class, "nanos", long.class)
-               .methodCanThrow("parse", "parse", "text", CharSequence.class)
                //.method("plus", "plus", "arg1", long.class, "arg2", TemporalUnit.class)
                .methodCanThrow("plus", "plus", "other", Duration.class)
                .methodCanThrow("plusDays", "plusDays", "days", long.class)
@@ -428,8 +439,11 @@ public class DateTimeClasses {
                  checkpointer.writeLong(d.getNano());
                })
                .restore(restorer -> Duration.ofSeconds(restorer.readLong(), restorer.readLong()))
+               .toJson(JsonEncoder::writeObjToString)
+               .fromJson(decoder -> { String str = decoder.getString(); return str == null ? null : durationParse(decoder.source, decoder.sourceOffset, str); })
                .register();
       Jactl.method(durationType).name("between").isStatic(true).param("start").param("end").impl(DateTimeClasses.class, "durationBetween").register();
+      Jactl.method(durationType).name("parse").isStatic(true).param("text").impl(DateTimeClasses.class, "durationParse").register();
 
       // Instant
 
@@ -479,6 +493,8 @@ public class DateTimeClasses {
                checkpointer.writeCInt(instant.getNano());
              })
              .restore(restorer -> Instant.ofEpochSecond(restorer.readLong(), restorer.readCInt()))
+             .toJson(JsonEncoder::writeObjToString)
+             .fromJson(decoder -> { String str = decoder.getString(); return str == null ? null : Instant.parse(str);})
              .register();
       Jactl.method(instantType).name("ofEpochSecond").isStatic(true)
            .param("second").param("nano", 0)
@@ -582,6 +598,8 @@ public class DateTimeClasses {
                                                                    r.readCInt(), r.readCInt(), r.readCInt(), r.readCInt()),
                                                  ZoneOffset.ofTotalSeconds(r.readCInt()),
                                                  ZoneId.of((String)r.readObject())))
+             .toJson(JsonEncoder::writeObjToString)
+             .fromJson(decoder -> { String str = decoder.getString(); return str == null ? null : ZonedDateTime.parse(str);})
              .register();
       Jactl.method(zonedDateTimeType).name("format").param("format")
            .impl(DateTimeClasses.class, "zonedDateTimeFormat").register();
@@ -939,6 +957,39 @@ public class DateTimeClasses {
   //////////////////////////////////////
   
   // Duration
+
+    
+  private static final boolean DURATION_PARSE_BROKEN = !Duration.parse("PT-0.5S").isNegative();
+  private static final Pattern NEGATIVE_FRACTIONAL_SECONDS = Pattern.compile("-0+[.,]([0-9]+)S", Pattern.CASE_INSENSITIVE);
+  
+  /**
+   * Implement our own parse wrapper to get around Java8 bug where PT-0.001234S is parsed incorrectly.
+   * Any seconds value that starts with '-0.xxx' has the sign ignored.
+   * @param source the source code
+   * @param offset the offset where the method is being called
+   * @param text   the text to parse
+   * @return the Duration object
+   */
+  public static Duration durationParse(String source, int offset, String text) {
+    try {
+      text = text.trim();
+      Duration duration = Duration.parse(text);
+      if (DURATION_PARSE_BROKEN) {
+        Matcher m = NEGATIVE_FRACTIONAL_SECONDS.matcher(text);
+        if (m.find()) {
+          String fraction = m.group(1);
+          // Pad with 0 and then take first 9 digits
+          long nanos = Long.parseLong((fraction + "000000000").substring(0, 9));
+          duration = text.charAt(0) == '-' ? duration.plusNanos(nanos * 2)
+                                           : duration.minusNanos(nanos * 2);
+        }
+      }
+      return duration;
+    }
+    catch (DateTimeException e) {
+      throw new RuntimeError("Error parsing", source, offset, e);
+    }
+  }
   
   public static Duration durationBetween(String source, int offset, Temporal start, Temporal end) {
     if (!start.isSupported(ChronoUnit.SECONDS)) {

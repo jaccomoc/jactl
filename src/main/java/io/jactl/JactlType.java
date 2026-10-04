@@ -148,6 +148,7 @@ public class JactlType extends JactlUserDataHolder {
   // Used for INSTANCE and CLASS types
   private Class   javaClass   = null;
   private boolean isHostClass = false;  // true if allowHostClass is true and this is a host class
+  private boolean isRegisteredType = false;
   private String          internalName    = null;
   private ClassDescriptor classDescriptor = null;
   private List<Expr>      classNameExprs  = null;  // Unresolved className which resolves to classDescriptor
@@ -212,6 +213,18 @@ public class JactlType extends JactlUserDataHolder {
     return isHostClass;
   }
 
+  public void isRegisteredType(boolean value) {
+    isRegisteredType = value;
+  }
+  
+  public boolean isRegisteredType() {
+    return isRegisteredType;
+  }
+  
+  public boolean isJactlObject() {
+    return is(INSTANCE) && !isHostClass() && !isRegisteredType();
+  }
+  
   /**
    * Create instance type from class type
    * @param descriptor  the ClassDescriptor for the class
@@ -223,6 +236,9 @@ public class JactlType extends JactlUserDataHolder {
     type.internalName    = descriptor == null ? null : type.classDescriptor.getInternalName();
     if (descriptor instanceof HostClassDescriptor) {
       type.isHostClass = true;
+    }
+    else if (descriptor.isRegisteredClass()) {
+      type.isRegisteredType = true;
     }
     return type;
   }
@@ -263,7 +279,11 @@ public class JactlType extends JactlUserDataHolder {
     if (!is(CLASS)) {
       throw new IllegalStateException("Internal error: unexpected type " + this);
     }
-    return createInstanceType(getClassDescriptor());
+    JactlType type = createInstanceType(getClassDescriptor());
+    if (isRegisteredType()) {
+      type.isRegisteredType(true);
+    }
+    return type;
   }
 
   public static JactlType createClass(ClassDescriptor descriptor) {
@@ -1045,6 +1065,9 @@ public class JactlType extends JactlUserDataHolder {
     if (descriptor instanceof HostClassDescriptor) {
       isHostClass = true;
       this.javaClass = ((HostClassDescriptor)descriptor).getHostClass();
+    }
+    else if (descriptor != null && descriptor.isRegisteredClass()) {
+      this.isRegisteredType(true);
     }
   }
 

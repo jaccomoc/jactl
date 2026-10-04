@@ -629,4 +629,30 @@ public class LocalDateTimeTests extends BaseTest {
     test("LocalDateTime.parse('2026-02-18T12:13:14').toString()", "2026-02-18T12:13:14");
     test("def f = LocalDateTime.parse('2026-02-18T12:13:14').toString; f()", "2026-02-18T12:13:14");
   }
+  
+  @Test public void jsonTests() {
+    test("LocalDateTime.fromJson('\"2026-02-18T12:13:14\"')", LocalDateTime.parse("2026-02-18T12:13:14"));
+    test("def f = LocalDateTime.fromJson; f('\"2026-02-18T12:13:14\"')", LocalDateTime.parse("2026-02-18T12:13:14"));
+    test("LocalDateTime.fromJson(json:'\"2026-02-18T12:13:14\"')", LocalDateTime.parse("2026-02-18T12:13:14"));
+    test("def f = LocalDateTime.fromJson; f(json:'\"2026-02-18T12:13:14\"')", LocalDateTime.parse("2026-02-18T12:13:14"));
+    test("LocalDateTime.parse('2026-02-18T12:13:14').toJson()", "\"2026-02-18T12:13:14\"");
+    test("def f = LocalDateTime.parse('2026-02-18T12:13:14').toJson; f()", "\"2026-02-18T12:13:14\"");
+  }
+
+  @Test public void classTests() {
+    test("class X { LocalDateTime f(LocalDateTime t) { t }; LocalDateTime t }; X x = new X(LocalDateTime.parse('2026-02-18T12:13:14')); x.f(x.t).toJson()",  "\"2026-02-18T12:13:14\"");
+    test("class X { LocalDateTime f(LocalDateTime t) { t }; LocalDateTime t }; X x = new X(LocalDateTime.parse('2026-02-18T12:13:14')); def f = x.f(x.t).toJson; f()",  "\"2026-02-18T12:13:14\"");
+    test("class X { LocalDateTime t }; X x = X.fromJson('{\"t\":\"2026-02-18T12:13:14\"}'); x.toJson()",  "{\"t\":\"2026-02-18T12:13:14\"}");
+    test("class X { LocalDateTime t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"2026-02-18T12:13:14\"}'); x.toJson()",  "{\"t\":\"2026-02-18T12:13:14\"}");
+    test("class X { LocalDateTime t }; def f = X.fromJson; X x = f('{\"t\":\"2026-02-18T12:13:14\"}'); x.toJson()",  "{\"t\":\"2026-02-18T12:13:14\"}");
+    test("class X { LocalDateTime t }; def f = X.fromJson; X x = f(json:'{\"t\":\"2026-02-18T12:13:14\"}'); def g = x.toJson; g()",  "{\"t\":\"2026-02-18T12:13:14\"}");
+    test("class X { LocalDateTime t }; X x = new X(null); x.toJson()",  "{\"t\":null}");
+    test("class X { LocalDateTime t }; X.fromJson('{\"t\":null}').toString()",  "[t:null]");
+  }
+  
+  @Test public void returnAndParameterType() {
+    test("LocalDateTime f(LocalDateTime t) { t }; f(LocalDateTime.parse('2026-02-18T12:13:14')).toJson()",  "\"2026-02-18T12:13:14\"");
+    test("LocalDateTime f(LocalDateTime t) { t }; def g = f; g(LocalDateTime.parse('2026-02-18T12:13:14')).toJson()",  "\"2026-02-18T12:13:14\"");
+    test("LocalDateTime f(int i, LocalDateTime t = LocalDateTime.parse('2026-02-18T12:13:14')) { t.plusDays(i) }; f(1)", LocalDateTime.parse("2026-02-19T12:13:14"));
+  }
 }

@@ -19,10 +19,9 @@ package io.jactl.runtime;
 
 import io.jactl.Utils;
 import io.jactl.compiler.MethodRef;
+import org.objectweb.asm.Type;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -40,6 +39,7 @@ public class JsonDecoder {
   int    sourceOffset;
 
   public static final MethodRef DECODE_JACTL_OBJ_METHOD = Utils.getMethod(JsonDecoder.class, "decodeJactlObj", String.class, String.class, int.class, JactlObject.class);
+  public static final String INTERNAL_NAME = Type.getInternalName(JsonDecoder.class);
   
   private JsonDecoder() {}
   
@@ -65,7 +65,7 @@ public class JsonDecoder {
     Object result = _decode();
     skipWhitespace();
     if (offset != length) {
-      throw new RuntimeError("Offset " + offset + ": Extra data found at end of json", source, sourceOffset);
+      error("Offset " + offset + ": Extra data found at end of json");
     }
     return result;
   }
@@ -79,14 +79,15 @@ public class JsonDecoder {
       if (decoder.offset != json.length()) {
         for (int i = decoder.offset; i < json.length(); i++) {
           if (!Character.isWhitespace(json.charAt(i))) {
-            throw new RuntimeError("Unexpected extra JSON data at offset " + decoder.offset, decoder.source, decoder.sourceOffset);
+            decoder.error("Unexpected extra JSON data at offset " + decoder.offset);
           }
         }
       }
       return flags;
     }
     catch (Continuation e) {
-      throw new RuntimeError("Async field initialisation detected during JSON decode", source, sourceOffset);
+      decoder.error("Async field initialisation detected during JSON decode");
+      return null;
     }
     finally {
       decoder.reset();
@@ -399,6 +400,11 @@ public class JsonDecoder {
     return null;
   }
 
+  public void close() {
+    if (offset < length) {
+      error("Extra data at end of JSON string");
+    }
+  }
 
   public void error(String error, char c) {
     error(error + quoted(c), offset - 1);
@@ -410,6 +416,10 @@ public class JsonDecoder {
 
   public void error(String error, int errOffset) {
     throw new RuntimeError("At JSON offset " + errOffset + ": " + error, source, sourceOffset);
+  }
+  
+  public void error(Throwable err) {
+    throw new RuntimeError("At JSON offset " + offset, source, sourceOffset, err);
   }
 
   public void missingFields(int flag, long value, JactlObject obj) {

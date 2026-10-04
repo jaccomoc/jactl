@@ -385,6 +385,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (!classDecl.isScriptClass()) {
       classDecl.fieldVars.values().forEach(varDecl -> {
         if (varDecl.isField) {
+          resolve(varDecl.type);
           String fieldName = varDecl.name.getStringValue();
           if (jactlContext.getFunctions().lookupMethod(ANY, fieldName) != null) {
             error("Field name '" + fieldName + "' clashes with built-in method of same name", varDecl.name);
@@ -485,10 +486,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     String previousBaseClass = null;
     Set<JactlType> seen = new HashSet<>();
     for (JactlType baseClass = classDecl.baseClass; baseClass != null; baseClass = ((JactlClassDescriptor)baseClass.getClassDescriptor()).getBaseClassType(true)) {
-      if (baseClass.isHostClass()) {
+      if (baseClass.isHostClass() || baseClass.isRegisteredType()) {
         classDecl.baseClass = null;
         classDescriptor.resetBaseClass();
-        error("Classes cannot extend host classes (" + baseClass.getJavaClass().getName() + ")", classDecl.baseClassToken);
+        error("Classes cannot extend " + (baseClass.isHostClass() ? "host classes" : "built-in type") + " (" + baseClass + ")", classDecl.baseClassToken);
         break;
       }
       if (baseClass.getClassDescriptor() == null) {
@@ -2120,7 +2121,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       
       FunctionDescriptor descriptor = lookupMethod(parentType, expr.methodName);
       if (descriptor != null) {
-        if (parentType.is(CLASS) && !descriptor.isStaticImplementation) {
+        if (parentType.is(CLASS) && !descriptor.isStaticMethod) {
           error("No static method '" + expr.methodName + "' exists for " + parentType, expr.location);
         }
         expr.methodDescriptor = descriptor;
@@ -2137,7 +2138,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         JactlType fieldType = classDescriptor.getField(expr.methodName);
         if (fieldType == null || !fieldType.is(FUNCTION,ANY)) {
           if (expr.methodName.equals(Utils.JACTL_INIT)) {
-            error("Class " + parentType.getPackagedName() + " is a built-in type and cannot be extended", expr.parent.location);
+            error("Class " + parentType.getPackagedName() + " does not have a constructor", expr.parent.location);
           }
           else {
             error("No such method/field '" + expr.methodName + "' for object of type " + parentType, expr.methodNameLocation);

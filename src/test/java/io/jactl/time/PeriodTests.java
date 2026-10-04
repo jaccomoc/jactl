@@ -289,4 +289,32 @@ public class PeriodTests extends BaseTest {
     test("Period.of(1,2,3).toString()", "P1Y2M3D");
     test("def f = Period.of(1,2,3).toString; f()", "P1Y2M3D");
   }
+
+  @Test public void jsonTests() {
+    test("Period.fromJson('\"P1Y2M3D\"')", Period.parse("P1Y2M3D"));
+    testError("Period.fromJson('\"PT51H4Mxxx5S\"')", "cannot be parsed");
+    test("def f = Period.fromJson; f('\"P1Y2M3D\"')", Period.parse("P1Y2M3D"));
+    test("Period.fromJson(json:'\"P1Y2M3D\"')", Period.parse("P1Y2M3D"));
+    test("def f = Period.fromJson; f(json:'\"P1Y2M3D\"')", Period.parse("P1Y2M3D"));
+    test("Period.parse('P1Y2M3D').toJson()", "\"P1Y2M3D\"");
+    test("def f = Period.parse('P1Y2M3D').toJson; f()", "\"P1Y2M3D\"");
+  }
+
+  @Test public void classTests() {
+    test("class X { Period f(Period t) { t }; Period t }; X x = new X(Period.parse('P1Y2M3D')); x.f(x.t).toJson()",  "\"P1Y2M3D\"");
+    test("class X { Period f(Period t) { t }; Period t }; X x = new X(Period.parse('P1Y2M3D')); def f = x.f(x.t).toJson; f()",  "\"P1Y2M3D\"");
+    test("class X { Period t }; X x = X.fromJson('{\"t\":\"P1Y2M3D\"}'); x.toJson()",  "{\"t\":\"P1Y2M3D\"}");
+    test("class X { Period t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"P1Y2M3D\"}'); x.toJson()",  "{\"t\":\"P1Y2M3D\"}");
+    testError("class X { Period t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"P2DT3Hxxx4M5S\"}'); x.toJson()",  "cannot be parsed");
+    test("class X { Period t }; def f = X.fromJson; X x = f('{\"t\":\"P1Y2M3D\"}'); x.toJson()",  "{\"t\":\"P1Y2M3D\"}");
+    test("class X { Period t }; def f = X.fromJson; X x = f(json:'{\"t\":\"P1Y2M3D\"}'); def g = x.toJson; g()",  "{\"t\":\"P1Y2M3D\"}");
+    test("class X { Period t }; X x = new X(null); x.toJson()",  "{\"t\":null}");
+    test("class X { Period t }; X.fromJson('{\"t\":null}').toString()",  "[t:null]");
+  }
+
+  @Test public void returnAndParameterType() {
+    test("Period f(Period t) { t }; f(Period.parse('P1Y2M3D')).toJson()",  "\"P1Y2M3D\"");
+    test("Period f(Period t) { t }; def g = f; g(Period.parse('P1Y2M3D')).toJson()",  "\"P1Y2M3D\"");
+    test("Period f(int i, Period t = Period.parse('P1Y2M3D')) { t.plusDays(i) }; f(1)", Period.parse("P1Y2M4D"));
+  }
 }

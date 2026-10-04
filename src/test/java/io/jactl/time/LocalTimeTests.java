@@ -403,4 +403,31 @@ public class LocalTimeTests extends BaseTest {
     test("def f = LocalTime.parse('12:13:14').toString; f()", "12:13:14");
   }
 
+  @Test public void jsonTests() {
+    test("LocalTime.fromJson('\"12:13:14\"')", LocalTime.parse("12:13:14"));
+    testError("LocalTime.fromJson('\"PT51H4Mxxx5S\"')", "could not be parsed");
+    test("def f = LocalTime.fromJson; f('\"12:13:14\"')", LocalTime.parse("12:13:14"));
+    test("LocalTime.fromJson(json:'\"12:13:14\"')", LocalTime.parse("12:13:14"));
+    test("def f = LocalTime.fromJson; f(json:'\"12:13:14\"')", LocalTime.parse("12:13:14"));
+    test("LocalTime.parse('12:13:14').toJson()", "\"12:13:14\"");
+    test("def f = LocalTime.parse('12:13:14').toJson; f()", "\"12:13:14\"");
+  }
+
+  @Test public void classTests() {
+    test("class X { LocalTime f(LocalTime t) { t }; LocalTime t }; X x = new X(LocalTime.parse('12:13:14')); x.f(x.t).toJson()",  "\"12:13:14\"");
+    test("class X { LocalTime f(LocalTime t) { t }; LocalTime t }; X x = new X(LocalTime.parse('12:13:14')); def f = x.f(x.t).toJson; f()",  "\"12:13:14\"");
+    test("class X { LocalTime t }; X x = X.fromJson('{\"t\":\"12:13:14\"}'); x.toJson()",  "{\"t\":\"12:13:14\"}");
+    test("class X { LocalTime t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"12:13:14\"}'); x.toJson()",  "{\"t\":\"12:13:14\"}");
+    testError("class X { LocalTime t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"P2DT3Hxxx4M5S\"}'); x.toJson()",  "could not be parsed");
+    test("class X { LocalTime t }; def f = X.fromJson; X x = f('{\"t\":\"12:13:14\"}'); x.toJson()",  "{\"t\":\"12:13:14\"}");
+    test("class X { LocalTime t }; def f = X.fromJson; X x = f(json:'{\"t\":\"12:13:14\"}'); def g = x.toJson; g()",  "{\"t\":\"12:13:14\"}");
+    test("class X { LocalTime t }; X x = new X(null); x.toJson()",  "{\"t\":null}");
+    test("class X { LocalTime t }; X.fromJson('{\"t\":null}').toString()",  "[t:null]");
+  }
+
+  @Test public void returnAndParameterType() {
+    test("LocalTime f(LocalTime t) { t }; f(LocalTime.parse('12:13:14')).toJson()",  "\"12:13:14\"");
+    test("LocalTime f(LocalTime t) { t }; def g = f; g(LocalTime.parse('12:13:14')).toJson()",  "\"12:13:14\"");
+    test("LocalTime f(int i, LocalTime t = LocalTime.parse('12:13:14')) { t.plusMinutes(i) }; f(1)", LocalTime.parse("12:14:14"));
+  }
 }

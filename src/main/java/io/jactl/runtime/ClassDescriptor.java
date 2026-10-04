@@ -128,4 +128,8 @@ public interface ClassDescriptor extends JactlUserDataGetter {
   default <T> T getUserData(Class<T> cls) {
     return null;
   }
+  
+  default boolean isRegisteredClass() {
+    return false;
+  }
 }

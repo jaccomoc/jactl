@@ -189,7 +189,7 @@ public class RegisteredClassMethod extends FunctionDescriptor {
 
 
   @Override
-  public Class getImplentingClass() {
+  public Class getImplementingClass() {
     return implementingClass; 
   }
 
@@ -210,7 +210,9 @@ public class RegisteredClassMethod extends FunctionDescriptor {
       }
       return type;
     };
+    int reservedParams = needsLocation ? 2 : 0;
     return Arrays.stream(method.getParameterTypes())
+                 .skip(reservedParams)
                  .map(type -> mappedTypes.getOrDefault(type, type))
                  .map(getType)
                  .collect(Collectors.toList());
@@ -225,9 +227,13 @@ public class RegisteredClassMethod extends FunctionDescriptor {
     if (args.length == 1 && args[0] instanceof NamedArgsMap) {
       Map<String,Object> argMap = new LinkedHashMap<>((Map)args[0]);
       int i = 0;
-      args = new Object[argCount + (isStaticImplementation ? 0 : 1)];
+      args = new Object[argCount + (isStaticImplementation ? 0 : 1) + (needsLocation ? 2 : 0)];
       if (isInstanceMethod()) {
         args[i++] = obj;
+      }
+      if (needsLocation) {
+        args[i++] = source;
+        args[i++] = offset;
       }
       for (int p = 0; p < paramNamesArr.length; p++) {
         String paramName = paramNamesArr[p];
@@ -259,10 +265,14 @@ public class RegisteredClassMethod extends FunctionDescriptor {
       validateArgCount(args, source, offset);
 
       // Check types and fill in any missing default values where value not supplied
-      Object[] argVals = new Object[Math.max(argCount, args.length + (isStaticImplementation ? 0 : 1))];
+      Object[] argVals = new Object[Math.max(argCount, args.length + (isStaticImplementation ? 0 : 1) + (needsLocation ? 2 : 0))];
       int i = 0;
       if (!isStaticImplementation) {
         argVals[i++] = obj;
+      }
+      if (needsLocation) {
+        argVals[i++] = source;
+        argVals[i++] = offset;
       }
       for (int p = 0; p < Math.min(args.length, paramClassesArr.length); p++) {
         argVals[i++] = RuntimeUtils.castTo(paramClassesArr[p], args[p], true, source, offset);

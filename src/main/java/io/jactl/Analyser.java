@@ -449,7 +449,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // If return type not same as expression type then we might need to cast and if instance
     // type has async initialisers then we are therefore potentially async...
     if (expr.expr != null && !expr.expr.isNull() && !expr.expr.type.is(expr.returnType)) {
-      if (expr.returnType.is(INSTANCE) && expr.expr.type.isCastableTo(expr.returnType)) {
+      if (expr.returnType.is(INSTANCE) && expr.expr.type.isCastableTo(expr.returnType) && expr.returnType.isJactlObject()) {
         FunctionDescriptor initMethod = expr.returnType.getJactlClassDescriptor().getMethod(Utils.JACTL_INIT);
         if (initMethod.isAsync()) {
           async(expr);
@@ -563,7 +563,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // If converting to an instance then we are async if initialiser is async
     JactlType varType = expr.varType;
-    if (varType.is(INSTANCE) && !varType.isHostClass()) {
+    if (varType.isJactlObject()) {
       FunctionDescriptor initMethod = varType.getJactlClassDescriptor().getInitMethod();
       if (initMethod.isAsync == null) {
         assert isFirstPass;

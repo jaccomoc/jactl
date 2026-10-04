@@ -255,6 +255,18 @@ public class DurationTests extends BaseTest {
     test("Duration.parse(text:'P1D')", Duration.ofDays(1));
     test("def f = Duration.parse; f('P1D')", Duration.ofDays(1));
     test("def f = Duration.parse; f(text:'P1D')", Duration.ofDays(1));
+    test("Duration.parse('P-0DT1H').toString()", "PT1H");
+    test("Duration.parse('P-1D').toString()", "PT-24H");
+    test("Duration.parse('PT-24H').toString()", "PT-24H");
+    test("Duration.parse('P0DT-1M').toString()", "PT-1M");
+    test("Duration.parse('P0DT1M-0.5S').toString()", "PT59.5S");
+    test("Duration.parse('P0DT-0.5S').toString()", "PT-0.5S");
+    test("Duration.parse('P0DT-0,5S').toString()", "PT-0.5S");
+    test("Duration.parse('PT-0.5S').toString()", "PT-0.5S");
+    test("Duration.parse('PT-00.5S').toString()", "PT-0.5S");
+    test("Duration.parse('pt-00.5s').toString()", "PT-0.5S");
+    test("Duration.parse('PT-1.5S').toString()", "PT-1.5S");
+    test("Duration.parse('-PT-0.5S').toString()", "PT0.5S");
   }
 
   @Test public void plus() {
@@ -382,5 +394,38 @@ public class DurationTests extends BaseTest {
     test("Duration.ofSeconds(1).toString()", "PT1S");
     test("Duration.ofSecondsAndNanos(1,2).toString()", "PT1.000000002S");
     test("def f = Duration.ofSecondsAndNanos(1,2).toString; f()", "PT1.000000002S");
+    test("Duration.ofNanos(-1).toString()", "PT-0.000000001S");
+  }
+
+  @Test public void jsonTests() {
+    test("Duration.ofNanos(-1).toJson()", "\"PT-0.000000001S\"");
+    test("Duration.fromJson('\"P2DT3H4M5S\"')", Duration.parse("P2DT3H4M5S"));
+    test("Duration.fromJson('\"PT51H4M5S\"')", Duration.parse("PT51H4M5S"));
+    testError("Duration.fromJson('\"PT51H4Mxxx5S\"')", "text cannot be parsed");
+    test("def f = Duration.fromJson; f('\"P2DT3H4M5S\"')", Duration.parse("P2DT3H4M5S"));
+    test("Duration.fromJson(json:'\"P2DT3H4M5S\"')", Duration.parse("P2DT3H4M5S"));
+    test("def f = Duration.fromJson; f(json:'\"P2DT3H4M5S\"')", Duration.parse("P2DT3H4M5S"));
+    test("Duration.parse('PT51H4M5S').toJson()", "\"PT51H4M5S\"");
+    test("def f = Duration.parse('PT51H4M5S').toJson; f()", "\"PT51H4M5S\"");
+    test("Duration.ofNanos(-1).toJson()", "\"PT-0.000000001S\"");
+    test("Duration.fromJson(Duration.ofNanos(-1).toJson()).toString()", "PT-0.000000001S");
+  }
+
+  @Test public void classTests() {
+    test("class X { Duration f(Duration t) { t }; Duration t }; X x = new X(Duration.parse('PT51H4M5S')); x.f(x.t).toJson()",  "\"PT51H4M5S\"");
+    test("class X { Duration f(Duration t) { t }; Duration t }; X x = new X(Duration.parse('PT51H4M5S')); def f = x.f(x.t).toJson; f()",  "\"PT51H4M5S\"");
+    test("class X { Duration t }; X x = X.fromJson('{\"t\":\"PT51H4M5S\"}'); x.toJson()",  "{\"t\":\"PT51H4M5S\"}");
+    test("class X { Duration t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"PT51H4M5S\"}'); x.toJson()",  "{\"t\":\"PT51H4M5S\"}");
+    test("class X { Duration t }; X x = new X(null); x.toJson()",  "{\"t\":null}");
+    test("class X { Duration t }; X.fromJson('{\"t\":null}').toString()",  "[t:null]");
+    testError("class X { Duration t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"P2DT3Hxxx4M5S\"}'); x.toJson()",  "text cannot be parsed");
+    test("class X { Duration t }; def f = X.fromJson; X x = f('{\"t\":\"PT51H4M5S\"}'); x.toJson()",  "{\"t\":\"PT51H4M5S\"}");
+    test("class X { Duration t }; def f = X.fromJson; X x = f(json:'{\"t\":\"PT51H4M5S\"}'); def g = x.toJson; g()",  "{\"t\":\"PT51H4M5S\"}");
+  }
+
+  @Test public void returnAndParameterType() {
+    test("Duration f(Duration t) { t }; f(Duration.parse('PT51H4M5S')).toJson()",  "\"PT51H4M5S\"");
+    test("Duration f(Duration t) { t }; def g = f; g(Duration.parse('PT51H4M5S')).toJson()",  "\"PT51H4M5S\"");
+    test("Duration f(int i, Duration t = Duration.parse('PT51H4M5S')) { t.plusDays(i) }; f(1)", Duration.parse("PT75H4M5S"));
   }
 }

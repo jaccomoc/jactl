@@ -17,8 +17,10 @@
 
 package io.jactl.runtime;
 
+import io.jactl.JactlType;
 import org.objectweb.asm.Type;
 
+import java.lang.invoke.MethodHandle;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -37,9 +39,10 @@ public class RegisteredClasses {
   private Map<String, JactlClassDescriptor> registeredClassesByJactlName        = new HashMap<>();  // name in '.' form
   private Set<String>                       registeredJactlPackages             = new HashSet<>();  // name in '.' form
   private Map<String, JactlClassDescriptor> autoImportedClasses                 = new HashMap<>();  // Jactl class name (no pkg)
+  private Map<String,JactlClass>            registeredJactlClasses              = new HashMap<>();  // JactlClass objects keyed on full Java class name
   
   private Map<Class<?>, BiConsumer<Checkpointer,Object>> checkpointers = new HashMap<>();
-  private Map<Class<?>, Function<Restorer,Object>>       restorers     = new HashMap<>();
+  private Map<Class<?>, Function<Restorer,Object>>        restorers    = new HashMap<>();
 
   private RegisteredClasses parent = null;
   
@@ -119,6 +122,7 @@ public class RegisteredClasses {
     String               jactlClassName = jactlClass.replaceAll("^.*\\.", "");
     String               jactlPackage   = jactlClass.replaceAll("\\.[^.]*$", "");
     JactlClassDescriptor desc           = registeredClassesByJactlName.computeIfAbsent(jactlClass, n -> new JactlClassDescriptor(jactlClassName, false, "", jactlPackage, null, null, true, javaClass));
+    desc.isRegisteredClass(true);
     registeredClassesByJavaName.putIfAbsent(javaClass, desc);
     registeredClassesByInternalJavaName.putIfAbsent(javaClass.replace('.','/'), desc);
     registeredJactlPackages.add(jactlPackage);
@@ -175,4 +179,31 @@ public class RegisteredClasses {
   public void registerRestorer(Class<?> javaClass, Function<Restorer, Object> restorer) {
     restorers.put(javaClass, restorer);
   }
+  
+  public void registerJactlClass(String javaClassName, JactlClass jactlClass) {
+    registeredJactlClasses.put(javaClassName, jactlClass);
+  }
+  
+  public JactlClass getJactlClass(String javaClassName) {
+    for (RegisteredClasses rc = this; rc != null; rc = rc.parent) {
+      JactlClass jclss = rc.registeredJactlClasses.get(javaClassName);
+      if (jclss != null) {
+        return jclss;
+      }
+    }
+    return null;
+  }
+  
+  public JactlClass getJactlClass(Class<?> javaClass) {
+    for (Class<?> clss = javaClass; clss != null; clss = clss.getSuperclass()) {
+      for (RegisteredClasses rc = this; rc != null; rc = rc.parent) {
+        JactlClass jactlClass = rc.registeredJactlClasses.get(clss.getName());
+        if (jactlClass != null) {
+          return jactlClass;
+        }
+      }
+    }
+    return null;
+  }
+  
 }

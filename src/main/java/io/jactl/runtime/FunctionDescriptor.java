@@ -162,7 +162,7 @@ public class FunctionDescriptor {
     return firstArgtype != null;
   }
   
-  public Class getImplentingClass() {
+  public Class getImplementingClass() {
     return null;
   }
 

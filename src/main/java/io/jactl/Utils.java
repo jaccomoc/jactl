@@ -25,8 +25,6 @@ import org.objectweb.asm.Type;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -34,6 +32,7 @@ import java.math.BigDecimal;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -80,6 +79,8 @@ public class Utils {
   public static final String JACTL_WRITE_JSON                   = JACTL_PREFIX + "writeJson";
   public static final String JACTL_FROM_JSON                    = "fromJson";
   public static final String JACTL_READ_JSON                    = JACTL_PREFIX + "readJson";
+  public static final String JACTL_TO_JSON_HANDLER              = "toJsonHandler";
+  public static final String JACTL_FROM_JSON_HANDLER            = "fromJsonHandler";
   public static final String JACTL_INIT_MISSING                 = JACTL_PREFIX + "initMissingFields";
   public static final String JACTL_CHECKPOINT_FN                = JACTL_PREFIX + "checkpoint";
   public static final String JACTL_RESTORE_FN                   = JACTL_PREFIX + "restore";
@@ -203,6 +204,10 @@ public class Utils {
   public static final String STRING_BUILDER_INTERNAL        = Type.getInternalName(StringBuilder.class);
   public static final String NAMED_ARGS_MAP_INTERNAL        = Type.getInternalName(NamedArgsMap.class);
   public static final String NAMED_ARGS_MAP_COPY_INTERNAL   = Type.getInternalName(NamedArgsMapCopy.class);
+  public static final String BICONSUMER_INTERNAL            = Type.getInternalName(BiConsumer.class);
+  public static final String BICONSUMER_DESCRIPTOR          = Type.getDescriptor(BiConsumer.class);
+  public static final String FUNCTION_INTERNAL              = Type.getInternalName(Function.class);
+  public static final String FUNCTION_DESCRIPTOR            = Type.getDescriptor(Function.class);
 
   static TokenType[] fieldAccessOp = new TokenType[] {DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE };
 
@@ -310,6 +315,10 @@ public class Utils {
     return methodName+"$sh";
   }
 
+  public static String helperClassName(String jactlClassName) {
+    return Utils.JACTL_PREFIX + jactlClassName + "Helper";
+  }
+  
   /**
    * Get the name of the instance field that will contain the handle for a given method
    * that has been bound to the instance
@@ -1435,5 +1444,24 @@ public class Utils {
       return isIdentPart[c];
     }
     return Character.isJavaIdentifierPart(c);
+  }
+
+  /**
+   * Throw a RuntimeError with an exception cause
+   * @param mv         the MethodVisitor
+   * @param errMsg     the error for the exception
+   * @param causeSlot  the slot where the cause exception is stored
+   * @param sourceSlot the slot where the source ref is stored
+   * @param offsetSlot the slot where the source offset is stored
+   */
+  public static void throwRuntimeErrorWithCause(MethodVisitor mv, String errMsg, int causeSlot, int sourceSlot, int offsetSlot) {
+    mv.visitTypeInsn(NEW, "io/jactl/runtime/RuntimeError");
+    mv.visitInsn(DUP);
+    loadConst(mv, errMsg, null);
+    mv.visitVarInsn(ALOAD, sourceSlot);
+    mv.visitVarInsn(ILOAD, offsetSlot);
+    mv.visitVarInsn(ALOAD, causeSlot);
+    mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;ILjava/lang/Throwable;)V", false);
+    mv.visitInsn(ATHROW);
   }
 }

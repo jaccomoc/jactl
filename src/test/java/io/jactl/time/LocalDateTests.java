@@ -34,6 +34,7 @@ import java.time.*;
 public class LocalDateTests extends BaseTest {
 
   @Test public void instanceOfTest() {
+    testError("new LocalDate()", "does not have a constructor");
     test("LocalDate.parse('2026-01-28') instanceof LocalDate", true);
     test("def d = LocalDate.parse('2026-01-28'); d instanceof LocalDate", true);
     test("LocalDate d = LocalDate.parse('2026-01-28'); d instanceof LocalDate", true);
@@ -444,4 +445,37 @@ public class LocalDateTests extends BaseTest {
     test("def f = LocalDate.parse('2026-01-22').toString; f()", "2026-01-22");
   }
 
+  @Test public void jsonTests() {
+    test("LocalDate.fromJson('\"2026-02-18\"')", LocalDate.parse("2026-02-18"));
+    testError("LocalDate.fromJson('\"PT51H4Mxxx5S\"')", "could not be parsed");
+    test("def f = LocalDate.fromJson; f('\"2026-02-18\"')", LocalDate.parse("2026-02-18"));
+    test("LocalDate.fromJson(json:'\"2026-02-18\"')", LocalDate.parse("2026-02-18"));
+    test("def f = LocalDate.fromJson; f(json:'\"2026-02-18\"')", LocalDate.parse("2026-02-18"));
+    test("LocalDate.parse('2026-02-18').toJson()", "\"2026-02-18\"");
+    test("def f = LocalDate.parse('2026-02-18').toJson; f()", "\"2026-02-18\"");
+    testError("LocalDate.fromJson('\"2026-02-18\" xxx')", "extra data at end of JSON string");
+    test("LocalDate.fromJson('null')", null);
+  }
+
+  @Test public void classTests() {
+    test("class X { LocalDate f(LocalDate t) { t }; LocalDate t }; X x = new X(LocalDate.parse('2026-02-18')); x.f(x.t).toJson()",  "\"2026-02-18\"");
+    test("class X { LocalDate f(LocalDate t) { t }; LocalDate t }; X x = new X(LocalDate.parse('2026-02-18')); def f = x.f(x.t).toJson; f()",  "\"2026-02-18\"");
+    test("class X { LocalDate t }; X x = X.fromJson('{\"t\":\"2026-02-18\"}'); x.toJson()",  "{\"t\":\"2026-02-18\"}");
+    test("class X { LocalDate t }; X x = new X(null); x.toJson()",  "{\"t\":null}");
+    test("class X { LocalDate t }; X.fromJson('{\"t\":null}').toString()",  "[t:null]");
+    test("class X { LocalDate t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"2026-02-18\"}'); x.toJson()",  "{\"t\":\"2026-02-18\"}");
+    testError("class X { LocalDate t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"P2DT3Hxxx4M5S\"}'); x.toJson()",  "could not be parsed");
+    test("class X { LocalDate t }; def f = X.fromJson; X x = f('{\"t\":\"2026-02-18\"}'); x.toJson()",  "{\"t\":\"2026-02-18\"}");
+    test("class X { LocalDate t }; def f = X.fromJson; X x = f(json:'{\"t\":\"2026-02-18\"}'); def g = x.toJson; g()",  "{\"t\":\"2026-02-18\"}");
+    test("class X { LocalDate t }; X x = new X(null); x.toJson()",  "{\"t\":null}");
+    testError("class X { LocalDate t }; def f = X.fromJson; X x = f(json:'{\"t\":\"xxx\"}'); def g = x.toJson; g()",  "could not be parsed");
+    test("class X { LocalDate t }; X x = X.fromJson(json:'{\"t\":null}'); x.toString()",  "[t:null]");
+    test("class X { LocalDate[] t }; X x = new X([null] as LocalDate[]); x.toJson()",  "{\"t\":[null]}");
+  }
+
+  @Test public void returnAndParameterType() {
+    test("LocalDate f(LocalDate t) { t }; f(LocalDate.parse('2026-02-18')).toJson()",  "\"2026-02-18\"");
+    test("LocalDate f(LocalDate t) { t }; def g = f; g(LocalDate.parse('2026-02-18')).toJson()",  "\"2026-02-18\"");
+    test("LocalDate f(int i, LocalDate t = LocalDate.parse('2026-02-18')) { t.plusDays(i) }; f(1)", LocalDate.parse("2026-02-19"));
+  }
 }

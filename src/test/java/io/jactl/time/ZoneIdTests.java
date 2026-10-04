@@ -94,4 +94,34 @@ public class ZoneIdTests extends BaseTest {
     test("ZoneId.of('Australia/Sydney').toString()", "Australia/Sydney");
     test("def f = ZoneId.of('Australia/Sydney').toString; f()", "Australia/Sydney");
   }
+
+  @Test public void jsonTests() {
+    test("ZoneId.fromJson('\"Australia/Sydney\"')", ZoneId.of("Australia/Sydney"));
+    testError("ZoneId.fromJson('\"PT51H4Mxxx5S\"')", "unknown time-zone");
+    test("def f = ZoneId.fromJson; f('\"Australia/Sydney\"')", ZoneId.of("Australia/Sydney"));
+    test("ZoneId.fromJson(json:'\"Australia/Sydney\"')", ZoneId.of("Australia/Sydney"));
+    test("def f = ZoneId.fromJson; f(json:'\"Australia/Sydney\"')", ZoneId.of("Australia/Sydney"));
+    test("ZoneId.of('Australia/Sydney').toJson()", "\"Australia/Sydney\"");
+    test("def f = ZoneId.of('Australia/Sydney').toJson; f()", "\"Australia/Sydney\"");
+  }
+
+  @Test public void classTests() {
+    test("class X { ZoneId f(ZoneId t) { t }; ZoneId t }; X x = new X(ZoneId.of('Australia/Sydney')); x.f(x.t).toJson()",  "\"Australia/Sydney\"");
+    test("class X { ZoneId f(ZoneId t) { t }; ZoneId t }; X x = new X(ZoneId.of('Australia/Sydney')); def f = x.f(x.t).toJson; f()",  "\"Australia/Sydney\"");
+    test("class X { ZoneId t }; X x = X.fromJson('{\"t\":\"Australia/Sydney\"}'); x.toJson()",  "{\"t\":\"Australia/Sydney\"}");
+    test("class X { ZoneId t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"Australia/Sydney\"}'); x.toJson()",  "{\"t\":\"Australia/Sydney\"}");
+    testError("class X { ZoneId t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"P2DT3Hxxx4M5S\"}'); x.toJson()",  "unknown time-zone");
+    test("class X { ZoneId t }; def f = X.fromJson; X x = f('{\"t\":\"Australia/Sydney\"}'); x.toJson()",  "{\"t\":\"Australia/Sydney\"}");
+    test("class X { ZoneId t }; def f = X.fromJson; X x = f(json:'{\"t\":\"Australia/Sydney\"}'); def g = x.toJson; g()",  "{\"t\":\"Australia/Sydney\"}");
+    test("class X { ZoneId t }; X x = new X(null); x.toJson()",  "{\"t\":null}");
+    test("class X { ZoneId t }; X.fromJson('{\"t\":null}').toString()",  "[t:null]");
+  }
+
+  @Test public void returnAndParameterType() {
+    test("ZoneId f(ZoneId t) { t }; f(ZoneId.of('Australia/Sydney')).toJson()",  "\"Australia/Sydney\"");
+    test("ZoneId f(ZoneId t) { t }; def g = f; g(ZoneId.of('Australia/Sydney')).toJson()",  "\"Australia/Sydney\"");
+    test("ZoneId f(String tz, ZoneId t = ZoneId.of(tz)) { t }; f('Australia/Sydney')", ZoneId.of("Australia/Sydney"));
+    test("ZoneId f(String tz, ZoneId t = ZoneId.of(tz)) { t }; f('Australia/Sydney', ZoneId.of('UTC'))", ZoneId.of("UTC"));
+  }
+
 }

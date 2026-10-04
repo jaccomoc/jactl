@@ -285,4 +285,32 @@ public class InstantTests extends BaseTest {
     test("def f = Instant.parse('2026-02-18T12:13:14.00Z').toString; f()", "2026-02-18T12:13:14Z");
   }
 
+  @Test public void jsonTests() {
+    test("Instant.fromJson('\"2026-02-18T12:13:14.123456789Z\"')", Instant.parse("2026-02-18T12:13:14.123456789Z"));
+    testError("Instant.fromJson('\"PT51H4Mxxx5S\"')", "could not be parsed");
+    test("def f = Instant.fromJson; f('\"2026-02-18T12:13:14.123456789Z\"')", Instant.parse("2026-02-18T12:13:14.123456789Z"));
+    test("Instant.fromJson(json:'\"2026-02-18T12:13:14.123456789Z\"')", Instant.parse("2026-02-18T12:13:14.123456789Z"));
+    test("def f = Instant.fromJson; f(json:'\"2026-02-18T12:13:14.123456789Z\"')", Instant.parse("2026-02-18T12:13:14.123456789Z"));
+    test("Instant.parse('2026-02-18T12:13:14.123456789Z').toJson()", "\"2026-02-18T12:13:14.123456789Z\"");
+    test("def f = Instant.parse('2026-02-18T12:13:14.123456789Z').toJson; f()", "\"2026-02-18T12:13:14.123456789Z\"");
+  }
+
+  @Test public void classTests() {
+    test("class X { Instant f(Instant t) { t }; Instant t }; X x = new X(Instant.parse('2026-02-18T12:13:14.123456789Z')); x.f(x.t).toJson()",  "\"2026-02-18T12:13:14.123456789Z\"");
+    test("class X { Instant f(Instant t) { t }; Instant t }; X x = new X(Instant.parse('2026-02-18T12:13:14.123456789Z')); def f = x.f(x.t).toJson; f()",  "\"2026-02-18T12:13:14.123456789Z\"");
+    test("class X { Instant t }; X x = X.fromJson('{\"t\":\"2026-02-18T12:13:14.123456789Z\"}'); x.toJson()",  "{\"t\":\"2026-02-18T12:13:14.123456789Z\"}");
+    test("class X { Instant t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"2026-02-18T12:13:14.123456789Z\"}'); x.toJson()",  "{\"t\":\"2026-02-18T12:13:14.123456789Z\"}");
+    testError("class X { Instant t }; class Y extends X {}; X x = Y.fromJson('{\"t\":\"P2DT3Hxxx4M5S\"}'); x.toJson()",  "could not be parsed");
+    test("class X { Instant t }; def f = X.fromJson; X x = f('{\"t\":\"2026-02-18T12:13:14.123456789Z\"}'); x.toJson()",  "{\"t\":\"2026-02-18T12:13:14.123456789Z\"}");
+    test("class X { Instant t }; def f = X.fromJson; X x = f(json:'{\"t\":\"2026-02-18T12:13:14.123456789Z\"}'); def g = x.toJson; g()",  "{\"t\":\"2026-02-18T12:13:14.123456789Z\"}");
+    test("class X { Instant t }; X x = new X(null); x.toJson()",  "{\"t\":null}");
+    test("class X { Instant t }; X.fromJson('{\"t\":null}').toString()",  "[t:null]");
+
+  }
+
+  @Test public void returnAndParameterType() {
+    test("Instant f(Instant t) { t }; f(Instant.parse('2026-02-18T12:13:14.123456789Z')).toJson()",  "\"2026-02-18T12:13:14.123456789Z\"");
+    test("Instant f(Instant t) { t }; def g = f; g(Instant.parse('2026-02-18T12:13:14.123456789Z')).toJson()",  "\"2026-02-18T12:13:14.123456789Z\"");
+    test("Instant f(int i, Instant t = Instant.parse('2026-02-18T12:13:14.123456789Z')) { t.plusSeconds(i) }; f(1)", Instant.parse("2026-02-18T12:13:15.123456789Z"));
+  }
 }

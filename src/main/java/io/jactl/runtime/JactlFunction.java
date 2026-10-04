@@ -265,7 +265,7 @@ public class JactlFunction extends FunctionDescriptor {
 
   
   @Override
-  public Class getImplentingClass() {
+  public Class getImplementingClass() {
     return implementingClass;
   }
 
@@ -585,7 +585,16 @@ public class JactlFunction extends FunctionDescriptor {
   }
   
   private static AtomicInteger classCounter = new AtomicInteger(0);
-  
+
+  /**
+   * For each built-in function we create a wrapper class to hold a static JactlMethodHandle
+   * that points to the wrapper method for the function.
+   * This makes it efficient for the generated code to get the JactlMethodHandle directly
+   * without needing to do any map lookup or equivalent.
+   * The class name is _$j$Helper<b>i</b>$<b>name</b> where i is an incrementing counter and
+   * name is the name of the built-in function.
+   * @return the created wrapper class
+   */
   private Class<?> createWrapperClass() {
     String           packageName = context == null ? Utils.JACTL_PKG : context.javaPackage;
     JactlClassWriter cw = new JactlClassWriter(Utils.JACTL_PKG.replace('.', '/'));

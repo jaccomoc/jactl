@@ -19,7 +19,7 @@ package io.jactl.runtime;
 
 import io.jactl.JactlError;
 
-public class RuntimeError extends JactlError {
+public class  RuntimeError extends JactlError {
 
   /**
    * Constructor

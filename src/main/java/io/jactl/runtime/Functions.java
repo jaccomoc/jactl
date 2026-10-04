@@ -257,6 +257,6 @@ public class Functions {
       Expr.VarDecl varDecl = Utils.funcDescriptorToVarDecl(function);
       function.getAliases().forEach(alias -> globalFunDecls.put(alias, varDecl));
     }
-    BuiltinFunctions.allocateId(function.getImplentingClass());
+    BuiltinFunctions.allocateId(function.getImplementingClass());
   }
 }

@@ -25,6 +25,7 @@ public class HostClassDescriptor implements ClassDescriptor {
   private Class<?>        hostClass;
   private JactlContext    jactlContext;
   private JactlType       jactlType;
+  private boolean         isRegisteredClass;
   
   public HostClassDescriptor(Class<?> hostClass, JactlType type, JactlContext jactlContext) {
     this.hostClass    = hostClass;

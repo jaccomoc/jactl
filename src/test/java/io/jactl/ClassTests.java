@@ -154,6 +154,8 @@ public class ClassTests extends BaseTest {
     testError("class X { static int f(x){x*x} }; def g = X.ff; g(3)", "No such field or method 'ff'");
     testError("class X { int i = 0; static def f() { this } }; X.f()", "reference to 'this' in static function");
     testError("class X { int i = 0; static def f() { i } }; X.f()", "reference to non-static field in static function");
+    testError("class X { int f() { 3 } }; X.f()", "no static method 'f'");
+    testError("class X { int f() { 3 } }; X.toString()", "no static method 'toString'");
   }
 
   @Test public void staticFields() {

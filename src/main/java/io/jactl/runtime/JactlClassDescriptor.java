@@ -23,6 +23,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static io.jactl.JactlType.ARRAY;
+
 public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDescriptor {
 
   protected String                              className;     // Declared name: class Z { }
@@ -47,6 +49,9 @@ public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDe
   protected boolean                             isTopLevelClass = false;       // Whether class is a top level class in a class file
   protected boolean                             isScriptClass   = false;       // Whether class for a script
   protected Map<String, Pair<JactlType,Object>> staticFields = new LinkedHashMap<>();  // Map of name to Pair<type,value>
+  protected boolean                             hasHostClassFields = false;
+  protected boolean                             hasRegisteredTypeFields = false;
+  protected boolean                             isRegisteredClass = false;
 
   /**
    * @param name                  the Jactl class name without package prefix or outerclass prefix 
@@ -206,6 +211,14 @@ public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDe
     return isScriptClass;
   }
 
+  public boolean isRegisteredClass() {
+    return isRegisteredClass;
+  }
+
+  public void isRegisteredClass(boolean value) {
+    isRegisteredClass = value;
+  }
+  
   /**
    * Add method to this class descriptor. We allow methods to override methods of the same
    * name in a base class as long as the signatures are identical.
@@ -291,9 +304,49 @@ public class JactlClassDescriptor extends JactlUserDataHolder implements ClassDe
     if (isFinal) {
       finalFields.add(name);
     }
+    if (hasHostElemType(type)) {
+      hasHostClassFields = true;
+    }
+    if (hasRegisteredElemType(type)) {
+      hasRegisteredTypeFields = true;
+    }
     return fields.put(name, type) == null;
   }
 
+  private boolean hasHostElemType(JactlType type) {
+    if (type.isHostClass()) {
+      return true;
+    }
+    if (type.is(ARRAY)) {
+      return hasHostElemType(type.getArrayElemType());
+    }
+    return false;
+  }
+
+  private boolean hasRegisteredElemType(JactlType type) {
+    if (type.isRegisteredType()) {
+      return true;
+    }
+    if (type.is(ARRAY)) {
+      return hasRegisteredElemType(type.getArrayElemType());
+    }
+    return false;
+  }
+  
+  public boolean hasHostClassFields() {
+    if (hasHostClassFields) {
+      return true;
+    }
+    return getBaseClassDescriptor() != null && getBaseClassDescriptor().hasHostClassFields();
+  }
+  
+  public boolean hasRegisteredTypeFields() {
+    if (hasRegisteredTypeFields) {
+      return true;
+    }
+    return getBaseClassDescriptor() != null && getBaseClassDescriptor().hasRegisteredTypeFields();
+  }
+  
   public List<String> getAllFieldNames() {
     return getAllFieldsStream().map(Map.Entry::getKey).collect(Collectors.toList());
   }

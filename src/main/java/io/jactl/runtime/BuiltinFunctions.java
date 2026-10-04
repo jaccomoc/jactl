@@ -371,8 +371,8 @@ public class BuiltinFunctions {
            .register();
 
       Jactl.method(STRING)
-           .name("fromJson")
-           .impl(Json.class, "fromJson")
+           .name(Utils.JACTL_FROM_JSON)
+           .impl(Json.class, Utils.JACTL_FROM_JSON)
            .register();
 
       // byte methods

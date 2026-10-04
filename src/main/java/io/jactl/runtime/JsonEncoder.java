@@ -56,7 +56,7 @@ public class JsonEncoder {
       while (n + offset >= length && length < MAX_BUFFER_SIZE) {
         length *= 2;
         if (length > MAX_BUFFER_SIZE) {
-          throw new RuntimeError("Exceeded maximum JSON buffer size", source, sourceOffset);
+          error("Exceeded maximum JSON buffer size");
         }
       }
       byte[] buf = new byte[length];
@@ -146,13 +146,31 @@ public class JsonEncoder {
       ((JactlObject)obj)._$j$writeJson(this);
       return;
     }
-    throw new RuntimeError("toJson() not supported for type " + RuntimeUtils.className(obj), source, sourceOffset);
+    // Check for a registered class with a registered toJson encoder
+    JactlClass jactlClass = RuntimeState.getState().getContext().getRegisteredClasses().getJactlClass(obj.getClass());
+    if (jactlClass != null && jactlClass.jsonEncoder != null) {
+      jactlClass.jsonEncoder.accept(this, obj);
+      return;
+    }
+    error("toJson() not supported for type " + RuntimeUtils.className(obj));
   }
 
   private static byte[] hex = new byte[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
   public void writeString(String str) {
     writeString(str, true);
+  }
+
+  /**
+   * Write the output of obj.toString() unless obj is null, in which case write null
+   * @param obj the object
+   */
+  public void writeObjToString(Object obj) {
+    if (obj == null) {
+      writeNull();
+      return;
+    }
+    writeString(obj.toString(), true);
   }
 
   public void writeBareString(String str) {
@@ -311,7 +329,7 @@ public class JsonEncoder {
 
   public void writeDouble(double d) {
     if (Double.isInfinite(d) || Double.isNaN(d)) {
-      throw new RuntimeError("Cannot encode double value '" + d + "'", source, sourceOffset);
+      error("Cannot encode double value '" + d + "'");
     }
     writeString(Double.toString(d), false);
   }
@@ -322,5 +340,9 @@ public class JsonEncoder {
     bytes[offset++] = 'u';
     bytes[offset++] = 'l';
     bytes[offset++] = 'l';
+  }
+  
+  public void error(String msg) {
+    throw new RuntimeError(msg, source, sourceOffset);
   }
 }
