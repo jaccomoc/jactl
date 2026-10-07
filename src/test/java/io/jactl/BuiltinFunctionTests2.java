@@ -898,6 +898,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
     testError("class X { double d = 0.0D / 0.0D }; new X().toJson()", "cannot encode double value");
     testError("class X { double d = -1.0D / 0.0D }; new X().toJson()", "cannot encode double value");
     testError("class X { double d = -0.0D / 0.0D }; new X().toJson()", "cannot encode double value");
+    test("-0.0D.toJson()", "-0.0");
   }
 
   @Test public void fromJson() {
@@ -909,6 +910,8 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("'\"\\\\\"\"'.fromJson()", "\"");
     testError("'\"'.fromJson()", "unterminated string");
     test("'\"a\"'.fromJson()", "a");
+    test("'0.0'.fromJson()", "#0.0");
+    test("'-0.0'.fromJson()", "#-0.0");
     test("'1'.fromJson()", 1);
     test("'1.2'.fromJson()", "#1.2");
     test("'-1.2'.fromJson()", "#-1.2");

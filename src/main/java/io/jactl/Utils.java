@@ -481,7 +481,7 @@ public class Utils {
     else
     if (obj instanceof Double) {
       double value = (double)obj;
-      if (value == 0D) {
+      if (Double.doubleToRawLongBits(value) == 0L) {
         mv.visitInsn(DCONST_0);
       }
       else
