@@ -22,7 +22,6 @@ import io.jactl.Utils;
 import io.jactl.compiler.MethodRef;
 
 import java.io.*;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -48,6 +47,7 @@ public class RuntimeState {
   private BufferedReader      input;
   private Object              invocationContext;
   private long                loopIterationCount;
+  private long                counter;    // used to track how often we check for a timeout
   private long                endTime;
 
   private static ThreadLocal<RuntimeState> threadLocalState = ThreadLocal.withInitial(RuntimeState::new);
@@ -80,6 +80,7 @@ public class RuntimeState {
     state.input = null;
     state.invocationContext = null;
     state.loopIterationCount = 0;
+    state.counter = 0;
     state.endTime = 0;
   }
   
@@ -114,29 +115,39 @@ public class RuntimeState {
   
   public Object getInvocationContext() { return invocationContext; }
 
-  private static final int TIMEOUT_FREQ_CHECK = Integer.getInteger("jactl.loop.timeout-freq-check", 100);
+  private static final int TIMEOUT_FREQ_CHECK = Integer.getInteger("jactl.loop.timeout-freq-check", 1000);
 
   public static final String UPDATE_ITERATION_COUNT = "updateIterationCount";
   public static void updateIterationCount(String source, int offset) {
     RuntimeState state = getState();
-    long         limit = state.context.maxLoopLimit;
-    if (limit >= 0 && state.loopIterationCount >= limit) {
-      throw new TimeoutError("Loop iterations limit of " + limit + " exceeded (count=" + state.loopIterationCount + ")", source, offset);
+    state._updateIterationCount(source, offset);
+  }
+  
+  public void _updateIterationCount(String source, int offset) {
+    long limit = context.maxLoopLimit;
+    if (limit >= 0 && loopIterationCount >= limit) {
+      throw new TimeoutError("Loop iterations limit of " + limit + " exceeded (count=" + loopIterationCount + ")", source, offset);
     }
     // Increment after because we insert check just before body of loop
-    state.loopIterationCount++;
-
-    // Every 100th time check for timeout
-    if (state.loopIterationCount % TIMEOUT_FREQ_CHECK == 0) {
-      checkTimeout(source, offset);
-    }
+    loopIterationCount++;
+    
+    _checkTimeout(source, offset);
+  }
+  
+  public static boolean hasLimits() {
+    JactlContext jactlContext = getState().getContext();
+    return jactlContext != null && jactlContext.hasLimits();
   }
 
   public static final MethodRef CHECK_TIMEOUT_METHOD = Utils.getMethod(RuntimeState.class, "checkTimeout", String.class, int.class);
   public static void checkTimeout(String source, int offset) {
     RuntimeState state = getState();
-    if (state.endTime > 0 && System.nanoTime() >= state.endTime) {
-      throw new TimeoutError("Script execution exceeded max time of " + state.context.maxExecutionTimeMs + "ms", source, offset);
+    state._checkTimeout(source, offset);
+  }
+  
+  public void _checkTimeout(String source, int offset) {
+    if (endTime > 0 && ++counter % TIMEOUT_FREQ_CHECK == 0 && System.nanoTime() >= endTime) {
+      throw new TimeoutError("Script execution exceeded max time of " + context.maxExecutionTimeMs + "ms", source, offset);
     }
   }
 }

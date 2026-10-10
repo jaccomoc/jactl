@@ -71,6 +71,10 @@ public class Restorer {
 
   public static Object restore(JactlContext context, byte[] buf, Reader input, Writer output) {
     Restorer restorer = get(context, buf);
+    
+    // Create the RuntimeState object and set the JactlContext in case these are needed during restore
+    RuntimeState.setState(context, null);
+    
     // We checkpoint a three element list (globals, continuation, scriptContext) so
     // restore the globals and scriptContext and return the continuation
     List restored = (List)restorer.restore();

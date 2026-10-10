@@ -477,7 +477,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitWhile(Stmt.While stmt) {
     Runnable checkLoopLimit = () -> {
-      if (classCompiler.context.maxLoopLimit >= 0 || classCompiler.context.maxExecutionTimeMs >= 0) {
+      if (classCompiler.context.hasLimits()) {
         loadConst(stmt.getLocation().getSource());
         loadConst(stmt.getLocation().getOffset());
         invokeMethod(RuntimeState.class, RuntimeState.UPDATE_ITERATION_COUNT, String.class, int.class);

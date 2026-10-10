@@ -103,7 +103,7 @@ switch (x) {
 }
 ```
 ```groovy
-io.jactl.CompileError: Type int can never match type String @ line 4, column 3
+io.jactl.CompileError: Type int can never match pattern type String with value abc @ line 4, column 3
   'abc' -> "x=$x"
   ^
 ```
@@ -136,7 +136,7 @@ switch (x) {
 }
 ```
 ```groovy
-Switch pattern will never be evaluated (covered by previous pattern) @ line 3, column 3
+Switch pattern will never be evaluated (covered by a previous pattern) @ line 3, column 3
   1,2,String -> '1, 2, or string'
   ^
 ```

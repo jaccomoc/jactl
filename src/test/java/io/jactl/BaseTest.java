@@ -96,41 +96,33 @@ public class BaseTest {
   }
 
   protected void doTest(String code, boolean evalConsts, boolean replMode, boolean testAsync, Object expected) {
-    doTest(code, evalConsts, replMode, testAsync, false, expected);
-  }
-
-  protected void doTest(String code, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, Object expected) {
-    doTest(Utils.listOf(), code, evalConsts, replMode, testAsync, testCheckpoint, expected);
+    doTest(Utils.listOf(), code, evalConsts, replMode, testAsync, expected);
   }
 
   protected void doTest(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, boolean testAsync, Object expected) {
-    doTest(classCode, scriptCode, evalConsts, replMode, testAsync, false, expected);
+    doTest(classCode, scriptCode, null, null, evalConsts, replMode, testAsync, expected);
   }
 
   protected void doTest(List<String> classCode, String scriptCode, Object expected) {
     doTest(classCode, scriptCode, true, false, false, expected);
   }
   
-  protected void doTest(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, Object expected) {
-    doTest(classCode, scriptCode, null, null, evalConsts, replMode, testAsync, testCheckpoint, expected);
-  }
-
   protected void test(String scriptCode, String input, ByteArrayOutputStream output, Object expected) {
-    doTest(Utils.listOf(), scriptCode, input, output, true, false, false, false, expected);
+    doTest(Utils.listOf(), scriptCode, input, output, true, false, false, expected);
   }
   
-  protected void doTest(List<String> classCode, String scriptCode, String input, ByteArrayOutputStream output, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, Object expected) {
-    checkEqual(expected, doRun(classCode, scriptCode, input, output, evalConsts, replMode, testAsync, testCheckpoint, false));
+  protected void doTest(List<String> classCode, String scriptCode, String input, ByteArrayOutputStream output, boolean evalConsts, boolean replMode, boolean testAsync, Object expected) {
+    checkEqual(expected, doRun(classCode, scriptCode, input, output, evalConsts, replMode, testAsync, false));
     if (output != null) {
       output.reset();
     }
-    checkEqual(expected, doRun(classCode, scriptCode, input, output, evalConsts, replMode, testAsync, testCheckpoint, true));
+    checkEqual(expected, doRun(classCode, scriptCode, input, output, evalConsts, replMode, testAsync, true));
   }
 
-  protected Object doRun(List<String> classCode, String scriptCode, String input, ByteArrayOutputStream output, boolean evalConsts, boolean replMode, boolean testAsync, boolean testCheckpoint, boolean loopDetection) {
+  protected Object doRun(List<String> classCode, String scriptCode, String input, ByteArrayOutputStream output, boolean evalConsts, boolean replMode, boolean testAsync, boolean loopDetection) {
     testVariationCounter++;
     try {
-      JactlContext jactlContext = getJactlContext(evalConsts, replMode, testCheckpoint, loopDetection);
+      JactlContext jactlContext = getJactlContext(evalConsts, replMode, false, loopDetection);
 
       Map<String, Object> bindings = createGlobals();
 
@@ -447,7 +439,6 @@ public class BaseTest {
     }
     doTest(code, true, false, true, expected);
     if (!skipCheckpointTests) {
-      doTest(Utils.listOf(), code, true, false, true, true, expected);
       doTestCheckpoint(Utils.listOf(), code, expected);
     }
     if (replModeEnabled) {
@@ -456,9 +447,6 @@ public class BaseTest {
         doTest(code, false, true, false, expected);
       }
       doTest(code, true, true, true, expected);
-      if (!skipCheckpointTests) {
-        doTest(Utils.listOf(), code, true, true, true, true, expected);
-      }
     }
   }
   
@@ -470,7 +458,6 @@ public class BaseTest {
     }
     doTest(classCode, scriptCode, true, false, true, expected);
     if (!skipCheckpointTests) {
-      doTest(classCode, scriptCode, true, false, true, true, expected);
       doTestCheckpoint(classCode, scriptCode, expected);
     }
     if (replModeEnabled) {
@@ -479,9 +466,6 @@ public class BaseTest {
         doTest(classCode, scriptCode, false, true, false, expected);
       }
       doTest(classCode, scriptCode, true, true, true, expected);
-      if (!skipCheckpointTests) {
-        doTest(classCode, scriptCode, true, true, true, true, expected);
-      }
     }
     if (runTestsWithAllowHostAccess) {
       boolean savedAllowHostAccess = allowHostAccess;

@@ -2696,19 +2696,19 @@ public class Parser {
 
     boolean isComplexReplacement = false;
 
-    // If the replacement string has embedded expressions that need evaluating every time then we
-    // can't use the standard Java replaceAll mechanism. We check for any embedded expression that
-    // is not just a reference to an identifier. We also check for any references to capture vars
-    // greater than $9 in the replacement string since Java does not support them natively.
-    // Check that we have a simple replacement string:
-    boolean allSimpleOrLiteral = true;
+    // We allow variable and expression expansion in the replacement string.
+    // If we only have $1,..,$9 expansions we can use the simple approach of
+    // letting the regex engine handle the replacements itself. Otherwise,
+    // for $10 or $var or ${x + y} type expansions we need to handle the
+    // expansion and the string replacement ourselves in the compiler.
+    boolean allSimple = true;
     for (Expr expr1 : replace.exprList) {
       if (!isSimpleIdentOrLiteral(expr1)) {
-        allSimpleOrLiteral = false;
+        allSimple = false;
         break;
       }
     }
-    if (allSimpleOrLiteral) {
+    if (allSimple) {
       // Replace all capture vars with a String literal so that we leave them unexpanded and let
       // the Java replaceAll deal with them
       for (int i = 0; i < replace.exprList.size(); i++) {
@@ -2726,6 +2726,15 @@ public class Parser {
     else {
       // We have a more complex replacement string
       isComplexReplacement = true;
+      for (int i = 0; i < replace.exprList.size(); i++) {
+        Expr expr = replace.exprList.get(i);
+        if (expr instanceof Expr.Literal) {
+          // Remove '\' chars from '\\' and '\$' because we will re-escape them during substitution
+          Expr.Literal literal = (Expr.Literal)expr;
+          Token        value   = literal.value;
+          literal.value = value.newLiteral(value.getStringValue().replaceAll("\\\\([\\\\$])", "$1"));
+        }
+      }
     }
 
     final Expr.Identifier itVar    = new Expr.Identifier(start.newIdent(Utils.IT_VAR));
@@ -3313,7 +3322,8 @@ public class Parser {
         // Check if capture arg is greater than $9
         return name.length() <= 2;
       }
-      return true;
+      // Any other variable makes this a complex expansion
+      return false;
     }
     return false;
   }

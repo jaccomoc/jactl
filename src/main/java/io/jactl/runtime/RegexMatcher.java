@@ -21,7 +21,6 @@ import io.jactl.JactlType;
 import io.jactl.Utils;
 import io.jactl.compiler.MethodRef;
 
-import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -55,14 +54,14 @@ import java.util.regex.PatternSyntaxException;
  * this is detected at compile time.
  * </p>
  * <p>
- * We therefore keep two Matcher objects, one for 'g' patterns and one for other patterns
- * but since we support checkpointing and restoration of state, we need to be able to
+ * We therefore keep two Matcher objects, one for 'g' patterns and one for other patterns.
+ * Since we support checkpointing and restoration of state, we need to be able to
  * restore our state and continue from where we were which means we need to track our
  * matching anyway and can't rely on the Matcher internal state.
  * </p>
  */
 public class RegexMatcher implements Checkpointable {
-  private static int VERSION = 1;
+  private static final int VERSION = 2;
 
   private static final ThreadLocal<LinkedHashMap<String, Pattern>> patternCache = ThreadLocal.withInitial(
     () -> new LinkedHashMap(16, 0.75f, true) {
@@ -154,6 +153,11 @@ public class RegexMatcher implements Checkpointable {
         cache.remove(cache.keySet().iterator().next());
       }
     }
+    // If we have a maxExecution time or maxLoopIterations then wrap the string in a TimeoutCharSequence
+    // that checks for timeout/loop count limit every 100 calls to charAt()
+    if (RuntimeState.hasLimits()) {
+      return pattern.matcher(new TimeoutCharSequence(str, source, offset));
+    }
     return pattern.matcher(str);
   }
 
@@ -212,14 +216,15 @@ public class RegexMatcher implements Checkpointable {
 
   private abstract static class JactlMatcher {
     public Matcher matcher;
-    public String  str;            // String to match against
-    public String  originalStr;    // Original value before being chopped down after checkpoint/restore
-    public boolean matched;        // Result of last match
-    public int     lastStart = -1; // Last start pos (if global matching)
-    public int     lastPos;        // For global matches remembers where last match finished
-
+    public String  str;              // String to match against
+    public boolean matched;          // Result of last match
+    public int     matchStart = -1;  // start of the current match or -1 if none
+    public int     appendPos = 0;    // next position to copy from during a substitution
+    public int     lastPos;          // For global matches remembers where last match finished
     public String  regex;
     public String  modifiers;
+    public String  source;
+    public int     sourceOffset;
 
     abstract boolean regexFind(String str, String regex, String modifiers, String source, int offset);
     abstract boolean regexFindNext();
@@ -227,34 +232,40 @@ public class RegexMatcher implements Checkpointable {
     abstract void _restore(boolean haveMatcher);
 
     public void checkpoint(Checkpointer checkpointer) {
+      checkpointer.writeObject(source);
+      checkpointer.writeCInt(sourceOffset);
       checkpointer.writeObject(str);
-      checkpointer.writeObject(originalStr);
       checkpointer.writeBoolean(matched);
-      checkpointer.writeCInt(lastStart);
+      checkpointer.writeCInt(matchStart);
       checkpointer.writeCInt(lastPos);
+      checkpointer.writeCInt(appendPos);
       checkpointer.writeObject(regex);
       checkpointer.writeObject(modifiers);
       checkpointer.writeBoolean(matcher != null);
     }
 
     public void restore(Restorer restorer) {
-      str         = (String) restorer.readObject();
-      originalStr = (String) restorer.readObject();
-      matched     = restorer.readBoolean();
-      lastStart   = restorer.readCInt();
-      lastPos     = restorer.readCInt();
-      regex       = (String) restorer.readObject();
-      modifiers   = (String) restorer.readObject();
+      source       = (String) restorer.readObject();
+      sourceOffset = restorer.readCInt();
+      str          = (String) restorer.readObject();
+      matched      = restorer.readBoolean();
+      matchStart   = restorer.readCInt();
+      lastPos      = restorer.readCInt();
+      appendPos    = restorer.readCInt();
+      regex        = (String) restorer.readObject();
+      modifiers    = (String) restorer.readObject();
       boolean haveMatcher = restorer.readBoolean();
       _restore(haveMatcher);
     }
 
     protected void initMatcher(String str, String regex, String modifiers, String source, int offset) {
-      this.matcher     = getMatcher(str, regex, modifiers, source, offset);
-      this.str         = str;
-      this.originalStr = str;
-      this.regex       = regex;
-      this.modifiers   = modifiers;
+      this.matcher      = getMatcher(str, regex, modifiers, source, offset);
+      this.str          = str;
+      this.regex        = regex;
+      this.modifiers    = modifiers;
+      this.matched      = false;
+      this.source       = source;
+      this.sourceOffset = offset;
     }
 
     public Object regexGroup(int group, boolean captureAsNums) {
@@ -264,19 +275,12 @@ public class RegexMatcher implements Checkpointable {
       if (group > matcher.groupCount()) {
         return null;
       }
+      String value = matcher.group(group);
       if (!captureAsNums) {
-        try {
-          return matcher.group(group);
-        }
-        catch (IllegalStateException e) {
-          // Can happen when using $1 etc after a /xxx/g pattern
-          // has finished its matching
-          return null;
-        }
+        return value;
       }
 
       // See if we have a number we can parse
-      String value = matcher.group(group);
       if (value == null) {
         return null;
       }
@@ -298,24 +302,27 @@ public class RegexMatcher implements Checkpointable {
     }
 
     public void appendReplacement(StringBuffer sb, String replacement) {
-      matcher.appendReplacement(sb, replacement);
+      sb.append(str, appendPos, matcher.start())
+        .append(replacement);
+      appendPos = matcher.end();
     }
 
     public void appendTail(StringBuffer sb) {
-      matcher.appendTail(sb);
+      sb.append(str, appendPos, str.length());
+      appendPos = 0;      // reset since we have reached end of substitution
     }
   }
 
   private static class GlobalMatcher extends JactlMatcher {
-    @Override public boolean regexFind(String str, String regex, String modifiers, String source, int offset) {
-      if (str == null) {
+    @Override public boolean regexFind(String newStr, String regex, String modifiers, String source, int offset) {
+      if (newStr == null) {
         return false;      // null never matches anything
       }
 
-      // Check to see if the Matcher has the same source string (note we use == not .equals())
-      if (!str.equals(this.originalStr) || !regex.equals(matcher.pattern().pattern()) || lastPos == -1) {
+      // Check to see if the Matcher has the same source string
+      if (!newStr.equals(str) || !regex.equals(matcher.pattern().pattern()) || lastPos == -1) {
         lastPos = -1;
-        initMatcher(str, regex, modifiers, source, offset);
+        initMatcher(newStr, regex, modifiers, source, offset);
       }
       return regexFindNext();
     }
@@ -323,11 +330,12 @@ public class RegexMatcher implements Checkpointable {
     @Override public boolean regexFindNext() {
       matched = matcher.find();
       if (!matched) {
-        lastPos = -1;
+        matchStart = -1;
+        lastPos    = -1;
       }
       else {
-        lastStart = lastPos;
-        lastPos = matcher.end();
+        matchStart = matcher.start();
+        lastPos    = matcher.end();
       }
       return matched;
     }
@@ -335,7 +343,12 @@ public class RegexMatcher implements Checkpointable {
     @Override public String regexSubstitute(String str, String regex, String replace, String modifiers, String source, int offset) {
       initMatcher(str, regex, modifiers, source, offset);
       try {
-        return matcher.replaceAll(replace);
+        String result = matcher.replaceAll(replace);
+        lastPos = -1;
+        return result;
+      }
+      catch (RuntimeError e) {
+        throw e;
       }
       catch (Exception e) {
         throw new RuntimeError("Error during regex substitution", source, offset, e);
@@ -344,14 +357,10 @@ public class RegexMatcher implements Checkpointable {
 
     @Override void _restore(boolean haveMatcher) {
       if (haveMatcher) {
-        if (lastStart > 0) {
-          // Use shortened string if we have already matched and advanced before
-          str = str.substring(lastStart);
-          lastPos -= lastStart;
-          lastStart = -1;
+        matcher = getMatcher(str, regex, modifiers, source, sourceOffset);
+        if (matched) {
+          matched = matcher.find(matchStart);
         }
-        matcher = getMatcher(str, regex, modifiers, "", 0);
-        matcher.find();
       }
     }
   }
@@ -359,10 +368,12 @@ public class RegexMatcher implements Checkpointable {
   private static class NonGlobalMatcher extends JactlMatcher {
     @Override public boolean regexFind(String str, String regex, String modifiers, String source, int offset) {
       if (str == null) {
-        return false;       // null never matches
+        return matched = false;       // null never matches
       }
       initMatcher(str, regex, modifiers, source, offset);
-      return matched = matcher.find();
+      matched = matcher.find();
+      matchStart = matched ? matcher.start() : -1;
+      return matched;
     }
 
     @Override public boolean regexFindNext() {
@@ -374,6 +385,9 @@ public class RegexMatcher implements Checkpointable {
       try {
         return matcher.replaceFirst(replace);
       }
+      catch (RuntimeError e) {
+        throw e;
+      }
       catch (Exception e) {
         throw new RuntimeError("Error during regex substitution", source, offset, e);
       }
@@ -381,10 +395,40 @@ public class RegexMatcher implements Checkpointable {
 
     @Override void _restore(boolean haveMatcher) {
       if (haveMatcher) {
-        matcher = getMatcher(str, regex, modifiers, "", 0);
+        matcher = getMatcher(str, regex, modifiers, source, sourceOffset);
         // Repopulate match groups for capture vars
         matcher.find();
       }
+    }
+  }
+  
+  private static class TimeoutCharSequence implements CharSequence {
+    RuntimeState state = RuntimeState.getState();
+    CharSequence str;
+    String source;
+    int    sourceOffset;
+    
+    public TimeoutCharSequence(CharSequence str, String source, int sourceOffset) {
+      this.str = str;
+      this.source = source;
+      this.sourceOffset = sourceOffset;
+    }
+    
+    @Override public int length() {
+      return str.length();
+    }
+
+    @Override public char charAt(int index) {
+      state._checkTimeout(source, sourceOffset);
+      return str.charAt(index);
+    }
+
+    @Override public CharSequence subSequence(int start, int end) {
+      return new TimeoutCharSequence(str.subSequence(start, end), source, sourceOffset);
+    }
+
+    @Override public String toString() {
+      return str.toString();
     }
   }
 }

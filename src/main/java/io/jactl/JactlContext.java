@@ -463,6 +463,10 @@ public class JactlContext {
 
   //////////////////////////////////
 
+  public boolean hasLimits() {
+    return maxLoopLimit >= 0 || maxExecutionTimeMs >= 0;
+  }
+  
   public boolean globalAliases() {
     return localAliasesForGlobals && !replMode;
   }

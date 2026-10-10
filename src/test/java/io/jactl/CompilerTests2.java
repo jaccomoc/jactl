@@ -615,6 +615,23 @@ public class CompilerTests2 extends BaseTest {
     test("'ab\\\\c' =~ s/\\\\/x/gr", "abxc");
     test("def it = '=A'; it =~ /=a/i", true);
     test("def it = '='; /=/r", true);
+    test("def dir = 'C:\\\\temp'; 'X' =~ s/X/$dir/r", "C:\\temp");
+    test("def dir = 'C:\\\\temp'; 'X' =~ s/X/${dir + dir}$dir/r", "C:\\tempC:\\tempC:\\temp");
+    testError("'xxx' =~ /$", "unexpected eof");
+    test("def s='a1'; s =~ s/(xxx)/X/n; $1", null);
+    test("def s='a1'; s =~ /(\\d)/; s =~ s/(xxx)/X/; $1", null);
+    test("'a1b' =~ /(\\d)/n; String n = null; n =~ /xxx/; $1",  null);
+    test("def s='a1'; s =~ /(\\d)/; s =~ s/(xxx)/X/n; $1", null);
+    test("'a1b2' =~ /(\\d)b(\\d)/n; String n = null; n =~ /(xxx)/; $1",  null);
+    test("'a1b2' =~ /(\\d)b(\\d)/n; String n = 'zzz'; n =~ /(xxx)/; $1",  null);
+    test("'a1b2' =~ /(\\d)b(\\d)/n; String n = 'xxx'; n =~ /(xxx)/; $2",  null);
+    test("def s='a1'; s =~ s/(xxx)/X/ng; $1", null);
+    test("def s='a1'; def x; while (s =~ /(\\d)/g) { s =~ s/(xxx)/X/; x = $1 }; x", null);
+    test("def s='a1'; s =~ /(\\d)/; s =~ s/(xxx)/X/g; $1", null);
+    testError("'a1b' =~ /(\\d)/n; String n = null; n =~ s/xxx/zzz/g; $1",  "null string in regex");
+    test("def s='a1'; s =~ /(\\d)/; s =~ s/(xxx)/X/ng; $1", null);
+    test("'a1b2' =~ /(\\d)b(\\d)/n; String n = 'zzz'; n =~ s/(xxx)/zzz/g; $1",  null);
+    test("'a1b2' =~ /(\\d)b(\\d)/n; String n = 'xxx'; n =~ s/(xxx)/zzz/g; $2",  null);
   }
 
   @Test public void regexCaptureVars() {
@@ -681,8 +698,18 @@ public class CompilerTests2 extends BaseTest {
     test("def it = 'abc'; def x = ''; while (/([a-z])/gr) { x += $1; while (/([A-Z])/ig) { x += $1 } }; x", "aabcbabccabc");
     test("def it = null; def x = 'empty'; while (/([a-z])/gr) { x += $1; while (/([A-Z])/ig) { x += $1 } }; x", "empty");
     test("def x = 'abcde'; int i = 0; while (x =~ /([ace])/g) { i++; x = 'aaaa' }; i", 5);
+    test("def x = 'abcde'; int i = 0; while (x =~ /([ace])/g && x =~ /a/) { i++; x = 'aaaa' }; i", 5);
+    test("def x = '3ab4c'; int i = 0; while (x =~ /([\\d])/ng && x =~ /a/) { i++; x = '6a7a' }; i", 3);
+    test("def x = '3ab4c'; int i = 0; while (x =~ /([\\d])/ng && x =~ /a/) { i++; x = '6b7c' }; i", 1);
     test("def x = 0; def f() { '123' }; while(f() =~ /(\\d)/ng) { x+= $1 }; x", 6L);
     testError("def x = 0; int i = 0; def f() { die if i++ > 0; '123' }; while(f() =~ /(\\d)/ng) { x+= $1 }; x", "script death");
+    test("def x = 'aaa'\ndef i = 0\nwhile ({ while (false) {}; true }() && x =~ /a/g) {\ni++\n}\ni", 3);
+    test("def s='a1b2c3'; s =~ s/(\\d)/${\"<$1>\"}/g;", "a<1>b<2>c<3>");
+    test("def s='a1b2c3'; s =~ s/(\\d)/${'<' + $1 + '>'}/g;", "a<1>b<2>c<3>");
+    test("def s = 'abc xyz'; def x = []; while (s =~ /\\b(\\w)/g) { x <<= $1 }; x", Utils.listOf("a", "x"));
+    test("def s = 'xxxx'; def x = []; while (s =~ /(?<=x)(x)/g) { x <<= \"$1@${x.size()}\" }; x", Utils.listOf("x@0", "x@1", "x@2"));
+    test("def s = 'ab'; def x = []; int n = 0; while (s =~ /(x*)/g && n++ < 10) { x <<= \"[$1]\" }; x.size()", 3);
+    test("def f(x) { \"<$x>\" }; def s='abc xyz'; s =~ s/\\b(\\w)/${f($1)}/g;", "<a>bc <x>yz");
   }
 
   @Test public void regexSubstitute() {
@@ -716,6 +743,8 @@ public class CompilerTests2 extends BaseTest {
     test("def it = 'a1b2c3def4g56'; s/([0-9])/${ $1 * $1 }/rng", "a1b4c9def16g2536");
     test("def it = 'abcdef'; s/([a-z])/${ $1 + $1 }/rg", "aabbccddeeff");
     test("def it = '   *# parseScript -&gt; packageDecl? script;'; s/^.*#//; s/^ *([^ ]*) *-&gt;/${ $1.toUpperCase(1) }->/g; $1 == null", true);
+    test("def a = 'abc'; def b = 'abc'; a =~ s/a/x/g; b =~ s/b/z/g; a + b", "xbcazc");
+    test("def a = 'abc'; def b = 'abc'; a =~ s/([a-z])/<$1>/g; b=~ s/([a-z])/${'<' + $1 + $1 + '>'}/g; a + b", "<a><b><c><aa><bb><cc>");
   }
 
   @Test public void regexSubstituteExprString() {
@@ -742,7 +771,10 @@ public class CompilerTests2 extends BaseTest {
     test("def a = 'a'; def it = 'abcd'; s/(.)(.)/${a}${$1}${$2*2 + $1*2}/g", "aabbaaacddcc");
     test("def a = 'a'; def it = 'abc'; s/([a-z])/\\$a\\$1/g", "$a$1$a$1$a$1");
     test("def it = 'abc'; s/([a-z])/\\$1\\$1/g", "$1$1$1$1$1$1");
+    test("def it = 'abc'; s/([a-z])/\\$1${'xxx'}/g", "$1xxx$1xxx$1xxx");
+    test("def it = 'abc'; s/([a-z])/\\$1${$1}/g", "$1a$1b$1c");
     test("def it = 'abc'; s/([a-z])/\\$1\\$1${$1 + $1}/g", "$1$1aa$1$1bb$1$1cc");
+    test("def it = 'abc'; s/([a-z])/\\z\\$1\\$1${$1 + $1}/g", "\\z$1$1aa\\z$1$1bb\\z$1$1cc");
     testError("def root = 'abc'; def m=[:]; root =~ s/abc/\"${m{'abc'}}\"/\n", "object of type map");
     test("def x = 'This SentenCe has Capital letTErs'; x =~ s/([A-Z][a-z])/${$1 =~ /^((.*))$/; $2.toLowerCase()}/g; x", "this sentence has capital letTers");
     test("def x = 'This'; x =~ s/[a-z]/${1+2}/g; x = 'This'; x =~ s/[a-z]/${1+2}/rg; x = 'This'; x =~ s/[a-z]/${1+2}/g; x", "T333");
@@ -3013,6 +3045,7 @@ public class CompilerTests2 extends BaseTest {
     test("def x = 'ab'; def y = 2; x *= y; x", "abab");
     testError("'ab' * -1", "repeat count must be >= 0");
     testError("'ab' * -1.234", "repeat count must be >= 0");
+    test("('abcdefghij' * 10000).size()", 100000); 
   }
 
   @Test public void listAdd() {

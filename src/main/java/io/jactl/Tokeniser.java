@@ -530,6 +530,9 @@ public class Tokeniser {
     switch (c) {
       case '$': {
         // We either have an identifer following or a '{'
+        if (remaining < 2) {
+          return error("Unexpected EOF", token);
+        }
         int nextChar = charAt(1);
         if (nextChar == '{') {
           inString = false;

@@ -744,7 +744,7 @@ LocalDateTime dt8 = LocalDateTime.of(2026,2,26,10,11)               // 2026-02-2
 LocalDate d = LocalDate.of(2026,2,26)
 LocalTime t = LocalTime.of(10,11,12,123456789)
 LocalDateTime dt9 = LocalDateTime.ofDateAndTime(d, t)               // 2026-02-26T10:11:12.123456789
-LocalDateTime dt10 = LocalDateTime.ofInstant(Instant.now())
+LocalDateTime dt10 = LocalDateTime.ofInstant(Instant.now(), ZoneId.of('UTC'))
 LocalDateTime dt11 = LocalDateTime.ofEpochSecond(1, 123456789)      // 1970-01-01T00:00:01.123456789
 LocalDateTime dt12 = LocalDateTime.ofEpochSecond(1)                 // 1970-01-01T00:00:01
 
@@ -789,7 +789,7 @@ LocalTime t = LocalTime.of(10,11,12,123456789)
 ZonedDateTime zdt8 = ZonedDateTime.ofDateAndTime(d,t,ZoneId.of('UTC'))    // 2026-02-26T10:11:12.123456789Z[UTC]
 LocalDateTime ldt = LocalDateTime.parse('2026-02-26T10:11:12.123456789')
 ZonedDateTime zdt9 = ZonedDateTime.ofDateTime(ldt, ZoneId.of('UTC'))      // 2026-02-26T10:11:12.123456789Z[UTC]
-ZonedDateTime zdt10 = ZonedDateTime.ofInstant(Instant.now())
+ZonedDateTime zdt10 = ZonedDateTime.ofInstant(Instant.now(), ZoneId.of('UTC'))
 
 // Some methods
 zdt3.format("yyyy-MMM-dd HH:mm:ss.SSSxxx'['VV']'")  // 2026-Feb-26 10:11:12.123+00:00[UTC]

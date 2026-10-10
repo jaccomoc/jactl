@@ -136,14 +136,14 @@ The `modifiers` are the same as for regex matching.
 For example:
 ```groovy
 def str = 'This Example Text Is Not Complex'
-str =~ s/Example/Simple/      // true
+str =~ s/Example/Simple/
 str                           // This Simple Text Is Not Complex
 ```
 Note that the substitution is done in-place on the string variable.
 If you want to do a non-destructive substitution then use the `r` modifier:
 ```groovy
 def str = 'This Example Text Is Not Complex'
-def newStr = str =~ s/Example/Simple/r    // true
+def newStr = str =~ s/Example/Simple/r
 newStr                                    // This Simple Text Is Not Complex
 str                                       // This Example Text Is Not Complex
 ```
@@ -151,7 +151,7 @@ str                                       // This Example Text Is Not Complex
 The `g` modifier can be used to replace all occurrences of the pattern:
 ```groovy
 > def str = 'This Example Text Is Not Complex'
-str =~ s/Ex/X/ig                        // true
+str =~ s/Ex/X/ig
 str                                     // This Xample TXt Is Not ComplX
 ```
 
@@ -159,7 +159,7 @@ The replacement string can contain capture variables `$1`, `$2`, etc. to refer t
 that matched the pattern:
 ```groovy
 def str = 'This Example Text Is Not Complex'
-str =~ s/(\w+)\s+(\w+)/$2 $1/          // true
+str =~ s/(\w+)\s+(\w+)/$2 $1/
 str                                    // Example This Text Is Not Complex
 ```
 

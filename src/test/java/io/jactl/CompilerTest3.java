@@ -266,15 +266,15 @@ public class CompilerTest3 extends BaseTest {
   InputOutputTest replTest = (code, input, expectedResult, expectedOutput) -> {
     testCounter++;
     ByteArrayOutputStream output = new ByteArrayOutputStream();
-    doTest(Utils.listOf(), code, input, output, true, true, false, false, expectedResult);
+    doTest(Utils.listOf(), code, input, output, true, true, false, expectedResult);
     assertEquals(expectedOutput, output.toString());
 
     output = new ByteArrayOutputStream();
-    doTest(Utils.listOf(), code, input, output, false, true, false, false, expectedResult);
+    doTest(Utils.listOf(), code, input, output, false, true, false, expectedResult);
     assertEquals(expectedOutput, output.toString());
 
     output = new ByteArrayOutputStream();
-    doTest(Utils.listOf(), code, input, output, true, true, true, false, expectedResult);
+    doTest(Utils.listOf(), code, input, output, true, true, true, expectedResult);
     assertEquals(expectedOutput, output.toString());
   };
 
@@ -513,6 +513,7 @@ public class CompilerTest3 extends BaseTest {
     assertThrows(TimeoutError.class, () -> Jactl.eval("while (true) { for (i = 0; i < 100000; i++) {} }", new HashMap(), jactlContext));
     assertThrows(TimeoutError.class, () -> Jactl.eval("while (true) { for (i = 0; i < 100000; i++) { sleep(0,0); } }", new HashMap(), jactlContext));
     assertThrows(TimeoutError.class, () -> Jactl.eval("long x = 0; sleep(1, { while (true) { for (i = 0; i < 100; i++) { sleep(0, x++); } } }())", new HashMap(), jactlContext));
+    assertThrows(TimeoutError.class, () -> Jactl.eval("('a' * 30 + '!') =~ /^(a+)+$/", new HashMap(), jactlContext));
   }
 
   @Test public void loopAndTimeoutDetection() {

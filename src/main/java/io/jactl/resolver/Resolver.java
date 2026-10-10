@@ -889,9 +889,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // statements within body of the loop can find the right Stmt.While object
     currentFunction().whileLoops.push(stmt);
 
+    boolean savedWhileCondition = isWhileCondition;
     isWhileCondition = true;
     resolve(stmt.condition);
-    isWhileCondition = false;
+    isWhileCondition = savedWhileCondition;
     resolve(stmt.updates);
 
     resolve(stmt.body);
@@ -2411,7 +2412,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           error("String repeat count must be >= 0", expr.right.location);
         }
         else {
-          expr.constValue = Utils.repeat(lhs, (int) length);
+          String value = Utils.repeat(lhs, (int) length);
+          if (value.length() > 65535) {
+            expr.isConst = false;
+          }
+          else {
+            expr.constValue = value;
+          }
         }
       }
       return expr.type;
