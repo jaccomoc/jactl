@@ -292,6 +292,10 @@ public class Utils {
     return operatorPrecedence[type.getType().ordinal()];
   }
   
+  public static int precedence(TokenType type) {
+    return operatorPrecedence[type.ordinal()];
+  }
+  
   public static boolean isLeftAssoc(Token type) {
     return operatorIsLeftAssoc[type.getType().ordinal()];
   }

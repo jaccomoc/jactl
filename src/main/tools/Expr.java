@@ -201,7 +201,7 @@ class Expr extends JactlUserDataHolder {
     Token operator;
   }
 
-  class Cast extends Expr implements ManagesResult {
+  class Cast extends Expr {
     Token       token;
     JactlType  castType;
     Expr        expr;

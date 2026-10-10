@@ -1645,16 +1645,20 @@ public class Parser {
             // work normally since "." has higher precedence than "-". We will ignore here and deal with this
             // in primary().
             expr = primary();
-            break;
           }
-          // Fall through for unary() call
+          else {
+            advance();
+            // Use BANG because it is a unary operator at the right precedence:
+            expr = new Expr.PrefixUnary(operator, parseExpression(Utils.precedence(BANG) - 1)); 
+          }
+          break;
         case QUESTION_QUESTION: case GRAVE: case BANG:
           advance();
           expr = new Expr.PrefixUnary(operator, parseExpression(Utils.precedence(operator)));
           break;
         case MINUS_MINUS: case PLUS_PLUS:
           advance();
-          Expr term = parseExpression(Utils.precedence(operator) - 1);
+          Expr term = parseExpression(Utils.precedence(operator) - 1);   
           if (term instanceof Expr.Binary && ((Expr.Binary) term).operator.is(Utils.fieldAccessOp)) {
             // If we are acting on a field (rather than directly on a variable) then
             // we might need to create intermediate fields etc so turn the inc/dec
@@ -1714,7 +1718,9 @@ public class Parser {
         // If precedence of next operator is less than us then we return.
         // This works even if next token is not an operator since non-operators have minimum precedence
         int nextPrecedence = Utils.precedence(operator);
-        if (precedence >= nextPrecedence) {
+        if (nextPrecedence <= 0 ||
+            isLeftAssociative && precedence >= nextPrecedence || 
+            !isLeftAssociative && precedence > nextPrecedence) {
           return expr;
         }
 

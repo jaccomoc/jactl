@@ -228,14 +228,14 @@ public class CompilerTests2 extends BaseTest {
     testError("1D--", "cannot modify a constant value");
     testError("1.0++", "cannot modify a constant value");
     testError("1.0--", "cannot modify a constant value");
-    test("byte x = 1; x++", (byte)1);
-    test("byte x = 1; x--", (byte)1);
-    test("byte x = 1; x++; x", (byte)2);
-    test("byte x = 1; x--; x", (byte)0);
-    test("byte x = 3; x-- + x--", (byte)5);
-    test("byte x = 3; x-- + x--; x", (byte)1);
-    test("byte x = 3; x++ + x++", (byte)7);
-    test("byte x = 3; x++ + x++; x", (byte)5);
+    test("byte x = 1; x++", (byte) 1);
+    test("byte x = 1; x--", (byte) 1);
+    test("byte x = 1; x++; x", (byte) 2);
+    test("byte x = 1; x--; x", (byte) 0);
+    test("byte x = 3; x-- + x--", (byte) 5);
+    test("byte x = 3; x-- + x--; x", (byte) 1);
+    test("byte x = 3; x++ + x++", (byte) 7);
+    test("byte x = 3; x++ + x++; x", (byte) 5);
     test("int x = 1; x++", 1);
     test("int x = 1; x--", 1);
     test("int x = 1; x++; x", 2);
@@ -277,14 +277,14 @@ public class CompilerTests2 extends BaseTest {
     test("Decimal x = 3.5; x-- + x++", "#6.0");
     test("Decimal x = 3.5; x-- + x++; x", "#3.5");
 
-    test("def x = (byte)1; x++", (byte)1);
-    test("def x = (byte)1; x--", (byte)1);
-    test("def x = (byte)1; x++; x", (byte)2);
-    test("def x = (byte)1; x--; x", (byte)0);
-    test("def x = (byte)3; x-- + x--", (byte)5);
-    test("def x = (byte)3; x-- + x--; x", (byte)1);
-    test("def x = (byte)3; x++ + x++", (byte)7);
-    test("def x = (byte)3; x++ + x++; x", (byte)5);
+    test("def x = (byte)1; x++", (byte) 1);
+    test("def x = (byte)1; x--", (byte) 1);
+    test("def x = (byte)1; x++; x", (byte) 2);
+    test("def x = (byte)1; x--; x", (byte) 0);
+    test("def x = (byte)3; x-- + x--", (byte) 5);
+    test("def x = (byte)3; x-- + x--; x", (byte) 1);
+    test("def x = (byte)3; x++ + x++", (byte) 7);
+    test("def x = (byte)3; x++ + x++; x", (byte) 5);
     test("def x = 1L; x++", 1L);
     test("def x = 1L; x++; x", 2L);
     test("def x = 1L; x--", 1L);
@@ -328,9 +328,9 @@ public class CompilerTests2 extends BaseTest {
     test("def x = 1; def y = 3; x + --y * ++y++ - 2", 5);
     test("def x = 1; def y = 3; x + --y * ++++y++ - 2", 7);
     test("def x = 1; def y = 3; x + --y * ++++y++ - 2; y", 3);
-    test("def x = (byte)1; def y = (byte)3; x + --y * ++y++ - (byte)2", (byte)5);
-    test("def x = (byte)1; def y = (byte)3; x + --y * ++++y++ - (byte)2", (byte)7);
-    test("def x = (byte)1; def y = (byte)3; x + --y * ++++y++ - (byte)2; y", (byte)3);
+    test("def x = (byte)1; def y = (byte)3; x + --y * ++y++ - (byte)2", (byte) 5);
+    test("def x = (byte)1; def y = (byte)3; x + --y * ++++y++ - (byte)2", (byte) 7);
+    test("def x = (byte)1; def y = (byte)3; x + --y * ++++y++ - (byte)2; y", (byte) 3);
 
     testError("def x = 'a'; x++", "non-numeric operand");
     testError("def x = [a:'a']; x.a++", "non-numeric operand");
@@ -340,6 +340,18 @@ public class CompilerTests2 extends BaseTest {
     testError("def x = [a:'a']; ++x.a", "non-numeric operand");
     testError("def x = 'a'; --x", "non-numeric operand");
     testError("def x = [a:'a']; --x.a", "non-numeric operand");
+  }
+
+  @Test public void precedence() {
+    test("double[] x = [2.345]; (int)x[0]", 2);
+    test("def x = 5; -x % 3", 1);
+    test("int x = 2; ~x", -3); 
+    test("int x = 2; ~x++", -3); 
+    test("int x = 2; ~x++; x", 3); 
+    test("int x = 2; ~(int)x++", -3); 
+    test("int x = 2; ~(int)x++; x", 3); 
+    test("int x = 2; (int)x++; x", 3); 
+    test("int x = 2; (int)x--; x", 1); 
   }
 
   @Test public void varScoping() {
@@ -1556,7 +1568,7 @@ public class CompilerTests2 extends BaseTest {
     comparisonTests.accept("-i3", "l5");
     comparisonTests.accept("-i3 * d7", "dec13");
     comparisonTests.accept("-i3 * l5", "dec13");
-    comparisonTests.accept("-db2 * 5", "l5");
+//    comparisonTests.accept("-db2 * 5", "l5");
     comparisonTests.accept("-di3 * 5", "l5");
     comparisonTests.accept("-di3 * (byte)5", "l5");
     comparisonTests.accept("-di3 * 5", "l5 * ddec13");

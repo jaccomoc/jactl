@@ -248,7 +248,7 @@ public abstract class Expr extends JactlUserDataHolder {
     @Override public String toString() { return "PostfixUnary[" + "expr=" + expr + ", " + "operator=" + operator + "]"; }
   }
 
-  public static class Cast extends Expr implements ManagesResult {
+  public static class Cast extends Expr {
     public Token       token;
     public JactlType  castType;
     public Expr        expr;
