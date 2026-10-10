@@ -152,10 +152,10 @@ public class ListMapArrayTests extends BaseTest {
     test("String x = '' + [a:[1,[b:2],3]]", "[a:[1, [b:2], 3]]");
     test("['1':2].1", 2);
     test("['1':['2':3]].1.2", 3);
-    test("['1':['2':3]].(1).2", 3);
-    testError("['1':[null:['2':3]].(1).(null).2", "unexpected end-of-file");
-    testError("['1':[null:['2':3]]].(1).(null).2", "null value for field");
-    test("['1':[null:['2':3]]].(1).null.2", 3);
+    test("['1':['2':3]].('1').2", 3);
+    testError("['1':[null:['2':3]].('1').(null).2", "unexpected end-of-file");
+    testError("['1':[null:['2':3]]].('1').(null).2", "null value for field");
+    test("['1':[null:['2':3]]].('1').null.2", 3);
     test("[\"a${1+2}\":1,b:2]", Utils.mapOf("a3",1, "b", 2));
     test("[this:1, if:2, while:[if:[z:3],for:3]].while.if.z", 3);
     test("[true:[false:[null:[if:[z:3],for:3]]]].true.false.null.if.z", 3);
@@ -178,10 +178,10 @@ public class ListMapArrayTests extends BaseTest {
     test("String x = '' + {a:[1,2,3]}", "[a:[1, 2, 3]]");
     test("String x = '' + {a:[1,{b:2},3]}", "[a:[1, [b:2], 3]]");
     test("{'1':{'2':3}}.1.2", 3);
-    test("{'1':{'2':3}}.(1).2", 3);
-    testError("{'1':{null:{'2':3}}.(1).(null).2", "unexpected end-of-file");
-    testError("{'1':{null:{'2':3}}}.(1).(null).2", "null value for field");
-    test("{'1':{null:{'2':3}}}.(1).null.2", 3);
+    test("{'1':{'2':3}}.('1').2", 3);
+    testError("{'1':{null:{'2':3}}.('1').(null).2", "unexpected end-of-file");
+    testError("{'1':{null:{'2':3}}}.('1').(null).2", "null value for field");
+    test("{'1':{null:{'2':3}}}.('1').null.2", 3);
     test("{\"a${1+2}\":1,b:2}", Utils.mapOf("a3",1, "b", 2));
     test("{this:1, if:2, while:{if:{z:3},for:3}}.while.if.z", 3);
     test("{true:{false:{null:{if:{z:3},for:3}}}}.true.false.null.if.z", 3);
@@ -204,6 +204,53 @@ public class ListMapArrayTests extends BaseTest {
     test("[a:2,b:3,/=abc/:1].'=abc'", 1);
     test("[/abc/:1].abc", 1);
     test("[/=abc/:1].'=abc'", 1);
+  }
+
+  @Test public void mapFieldAccess() {
+    test("def m = [:]; m.1 = 20; m.toString()", "['1':20]");
+    test("def m = [:]; m.01 = 20; m.toString()", "['01':20]");
+    test("def m = [:]; m?.1 = 20; m.toString()", "['1':20]");
+    test("Map m = [:]; m.1 = 20; m.toString()", "['1':20]");
+    test("Map m = [:]; m?.1 = 20; m.toString()", "['1':20]");
+    test("def m = [:]; m.1.2 = 123; m", Utils.mapOf("1", Utils.mapOf("2", 123)));
+    test("def m = [:]; m.1.2 = 123; m.toString()", "['1':['2':123]]");
+    test("def m = [:]; m?.1.2 = 123; m.toString()", "['1':['2':123]]");
+    test("Map m = [:]; m?.1.2 = 123; m.toString()", "['1':['2':123]]");
+    test("def m = [:]; m?.1?.2 = 123; m.toString()", "['1':['2':123]]");
+    test("Map m = [:]; m?.1?.2 = 123; m.toString()", "['1':['2':123]]");
+    test("def m = ['1':10]; m.1 = 20; m", Utils.mapOf("1", 20));
+    test("Map m = ['1':10]; m.1 = 20; m", Utils.mapOf("1", 20));
+    test("def m = ['1':10]; m.1 = 20; m.1", 20);
+    test("Map m = [:]; m.1 = 20; m.'1'", 20);
+    test("Map m = [:]; m.01 = 20; m.'01'", 20);
+    test("Map m = [:]; m.01 = 20; m.01", 20);
+    test("Map m = [:]; m.1 = 20; m.size()", 1);
+    test("Map m = ['1':2]; m.1 += 3; m", Utils.mapOf("1", 5));
+    test("Map m = [(1):2]; m.1 += 3; m", Utils.mapOf(1, 2, "1", 3));
+    test("Map m = [(1):2]; m.'1' += 3; m", Utils.mapOf(1, 2, "1", 3));
+    test("Map m = ['1':2]; m.'1' += 3; m", Utils.mapOf("1", 5));
+    test("Map m = [:]; m.1.a = 3; m.toString()", "['1':[a:3]]");
+    test("Map m = [:]; m.(1) = 3; m.1", null);
+    test("Map m = [:]; m.(1) = 3; m[1]", 3);
+    test("Map m = [(1):3]; m.(1)", 3);
+    test("Map m = [(1):3]; m?.(1)", 3);
+    test("Map m = [:]; m.(1) = 3; m.(1)", 3);
+    test("Map m = [:]; m?.(1) = 3; m?.1", null);
+    test("Map m = [:]; m?.(1) = 3; m?[1]", 3);
+    test("Map m = [:]; m?.(1) = 3; m?.(1)", 3);
+    testError("Map m = [:]; m.1D = 3; m.toString()", "invalid value for field");
+    testError("Map m = [:]; m.1L = 3", "invalid value for field");
+    testError("Map m = [:]; m.1.3D = 3", "invalid value for field");
+    testError("Map m = [:]; m.0x123 = 3", "invalid value for field");
+    test("def f(){4}; Map m = [:]; m.(1) = f; m.(1)()", 4);
+    test("Map m = ['1':{4}]; m.1()", 4);
+    test("Map m = ['1':{4}]; m?.1()", 4);
+    test("Map m = ['1':{4}]; m['1']()", 4);
+    test("Map m = ['1':{4}]; m?['1']()", 4);
+    test("Map m = [(1):{4}]; m.(1)()", 4);
+    test("Map m = [(1):{4}]; m?.(1)()", 4);
+    test("Map m = [(1):{4}]; m[1]()", 4);
+    test("Map m = [(1):{4}]; m?[1]()", 4);
   }
 
   @Test public void nonStringMapKeys() {

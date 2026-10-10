@@ -1826,12 +1826,26 @@ public class Parser {
               expr = convertToLValue(expr, operator, rhs, false, true);
             }
             else {
-              // Check for '.' and '?.' where we treat identifiers as literals for field access.
-              // In other words x.y is the same as x.'y' even if a variable y exists somewhere.
-              // Note: we checked for '(' immediately after the '.' so we can use value of y if
-              // expression is something like x.(y)
-              if (operator.is(DOT, QUESTION_DOT) && rhs instanceof Expr.Identifier && !bracketedExpression) {
-                rhs = new Expr.Literal(((Expr.Identifier) rhs).identifier);
+              if (operator.is(DOT, QUESTION_DOT) && !bracketedExpression) {
+                // Check for '.' and '?.' where we treat identifiers as literals for field access.
+                // In other words x.y is the same as x.'y' even if a variable y exists somewhere.
+                // Note: we checked for '(' immediately after the '.' so we can use value of y if
+                // expression is something like x.(y)
+                if (rhs instanceof Expr.Identifier) {
+                  rhs = new Expr.Literal(((Expr.Identifier) rhs).identifier);
+                }
+                else if (rhs instanceof Expr.Literal) {
+                  // Make sure unbracketed numbers are treated as strings so x.1.2 is turned into x.'1'.'2'
+                  Token value = ((Expr.Literal) rhs).value;
+                  if (value.isNot(STRING_CONST,IDENTIFIER)) {
+                    if (!value.isKeyword() && !Utils.isDigits(value.getChars())) {
+                      error("Invalid value for field - should be bracketed with '()' or be chars or digits only", rhs.location);
+                    }
+                    else {
+                      ((Expr.Literal) rhs).value = value.newLiteral(value.getChars());
+                    }
+                  }
+                }
               }
               
               // If operator is =~ and we had a /regex/ for rhs then since we create "it =~ /regex/"

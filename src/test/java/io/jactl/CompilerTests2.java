@@ -3128,7 +3128,6 @@ public class CompilerTests2 extends BaseTest {
     test("[1,2].flatMap{ [it,it] } << [a:1]", Utils.listOf(1,1,2,2,Utils.mapOf("a",1)));
   }
 
-
   @Test public void mapAdd() {
     test("[:] + [:]", Utils.mapOf());
     test("def x = [:]; x + x", Utils.mapOf());

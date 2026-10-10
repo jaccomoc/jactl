@@ -5881,8 +5881,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * E.g. if doing integer arithmetic use 0 or if doing string concatenation use ''.
    * @param exprType        the expected type of the result
    * @param accessOperator  the type of field access ('.', '?.', '[', '?[')
-   * @param defaultValue    use this as the default value (only one of defaultType or defaultValue should
-   *                        be supplied since they are mutally exclusive)
+   * @param defaultValue    use this as the default value
    * @param location        location in the code
    */
   private void loadField(JactlType exprType, Token accessOperator, Object defaultValue, Location location) {
@@ -5905,10 +5904,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       invokeMethod(RuntimeUtils.LOAD_FIELD_OR_DEFAULT_METHOD);
     }
     else {
-      if (accessOperator.is(DOT,QUESTION_DOT) && !peek().is(STRING)) {
-        // If we have x.a.1 then convert 1 to string since it is being used as a field name
-        convertToStringOrNull();
-      }
       if (peek2().is(MAP)) {
         loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
         loadConst(!insideTryCatchNullError());
@@ -5931,10 +5926,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void loadMethodOrField(Token accessOperator) {
     expect(2);
     box();                        // Field name/index passed as Object
-    if (accessOperator.is(DOT,QUESTION_DOT) && !peek().is(STRING)) {
-      // If we have x.a.1 then convert 1 to string since it is being used as a field name
-      convertToStringOrNull();
-    }
     loadConst(accessOperator.is(DOT, QUESTION_DOT));
     loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
     loadConst(!insideTryCatchNullError());

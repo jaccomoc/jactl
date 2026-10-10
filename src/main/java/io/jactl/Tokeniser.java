@@ -743,11 +743,11 @@ public class Tokeniser {
     i = skipToNonDigit(i, base, remaining);
 
     // Check for double/decimal number but first check for special case where previous token
-    // was a '.' to allow for numbers to be fields in a dotted path. E.g. a.1.2.b
+    // was a '.' or a '?.' to allow for numbers to be fields in a dotted path. E.g. a.1.2.b
     // In this case we don't want to return 1.2 as the number but 1 followed by '.' followed by 2.
     // If previous token was not a '.' then if following char is a '.' we know we have a decimal
     // number.
-    boolean decimal = base == 10 && (previousToken == null || previousToken.isNot(DOT)) &&
+    boolean decimal = base == 10 && (previousToken == null || previousToken.isNot(DOT,QUESTION_DOT)) &&
                       i + 1 < remaining && charAt(i) == '.' && Character.isDigit(charAt(i + 1));
 
     if (decimal) {
