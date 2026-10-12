@@ -673,6 +673,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     if (expr.isParam) {
       defineVar(expr);
+      // For byte parameters make sure we turn signed value into unsigned
+      if (expr.type.is(BYTE) && !expr.isHeapLocal) {
+        loadLocal(expr.slot);
+        mv.visitIntInsn(SIPUSH, 255);
+        mv.visitInsn(IAND);
+        storeLocal(expr.slot);
+      }
       return null;     // Nothing else to do since value is already stored for parameters
     }
 

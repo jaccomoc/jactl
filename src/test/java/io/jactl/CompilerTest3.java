@@ -34,7 +34,8 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class CompilerTest3 extends BaseTest {
-  @Test public void die() {
+  @Test
+  public void die() {
     testError("die \"ab${2+3}\"", "ab5");
     testError("die if true", "die if true");
     testError("die if true", "script death");
@@ -77,7 +78,7 @@ public class CompilerTest3 extends BaseTest {
     testError("def f = sleep; f(timeMs:1,datax:2)", "no such parameter");
     testError("sleep('abc')", "cannot be cast to number");
     testError("def f = sleep; f('abc')", "cannot be cast");
-    test("sleep(1,(byte)2)", (byte)2);
+    test("sleep(1,(byte)2)", (byte) 2);
     test("sleep(1,2L)", 2L);
     test("sleep(1,2D)", 2D);
     test("sleep(1,2.0)", "#2.0");
@@ -151,7 +152,7 @@ public class CompilerTest3 extends BaseTest {
     test("def f(x){x<=1?1:g(x)}; def g(x){def s = sleep; s(0,x) + s(0,f(x-1))}; f(2)+f(3)", 9);
     test("int i = 1; def f(){ return sleep(0,{ ++i }) }; def g = f(); g() + g()", 5);
     test("int i = sleep(0,-1)+sleep(0,2); def f(){ return sleep(0,{ sleep(0,++i - 1)+sleep(0,1) }) }; def g = f(); g() + g()", 5);
-    test("byte i = 5; def f(byte x = sleep(0,(byte)1)+sleep(0,(byte)1), byte y=sleep(0,{x+i}())+sleep(0,{x+i+(byte)1}()), byte z=3) { sleep(0,x)+sleep(0,y)+sleep(0,z) }; f()", (byte)20);
+    test("byte i = 5; def f(byte x = sleep(0,(byte)1)+sleep(0,(byte)1), byte y=sleep(0,{x+i}())+sleep(0,{x+i+(byte)1}()), byte z=3) { sleep(0,x)+sleep(0,y)+sleep(0,z) }; f()", (byte) 20);
     test("int i = 5; def f(int x = sleep(0,1)+sleep(0,1), long y=sleep(0,{x+i}())+sleep(0,{x+i+1}()), double z=3) { sleep(0,x)+sleep(0,y)+sleep(0,z) }; f()", 20D);
     test("def x = 1; while (true) { (false and break) or x = sleep(0,2); break }; x", 2);
     test("def x = 1; true and sleep(0, x = 2); x", 2);
@@ -167,28 +168,32 @@ public class CompilerTest3 extends BaseTest {
     testError("def f(x) { x == 1 ? 3 : f(sleep(0,x.a)) }; f([a:[a:[a:2]]])", "invalid parent object type");
   }
 
-  @Test public void asyncFieldAccess() {
+  @Test
+  public void asyncFieldAccess() {
     test("Map m = [(sleep(0,'a')):sleep(0,1)]; m.\"${sleep(0,'a')}\"", 1);
     test("def m = [(sleep(0,'a')):sleep(0,1)]; m.\"${sleep(0,'a')}\"", 1);
   }
 
-  @Test public void asyncErrorPropagation() {
+  @Test
+  public void asyncErrorPropagation() {
     testError("def f(m) { m.y.z == 1 ? 1 : sleep(0,m.x) + sleep(0,f([x:m.x-1])) }; f([x:3])", "null value for parent");
     testError("def f(m) { m.x == ('x'+m.x) as Decimal ? 1 : sleep(0,m.x) + sleep(0,f([x:m.x-1])) }; f([x:3])", "string value is not a valid decimal");
   }
 
-  @Test public void keywordAsIdentifier() {
+  @Test
+  public void keywordAsIdentifier() {
     testError("int for = 3", "expecting identifier");
     testError("int for(x){x}", "expecting identifier");
   }
 
-  @Test public void endOfLine() {
+  @Test
+  public void endOfLine() {
     test("1 + \n2", 3);
     test("def x =\n1 + \n2", 3);
     test("def x =\n1 + \n(2\n)", 3);
     test("def x =\n1 + (\n2)\n", 3);
     test("def x =\n1 + (\n2)\n", 3);
-    test("[1,2,3].map{\n\nit}", Utils.listOf(1,2,3));
+    test("[1,2,3].map{\n\nit}", Utils.listOf(1, 2, 3));
     test("['a','b'].map{\n\n\"\"\"\"$it=\" + $it\"\"\" }.\n\njoin(' + \", \" + ')", "\"a=\" + a + \", \" + \"b=\" + b");
     test("def f = {\nreturn }; f()", null);
     test("def f = {\nreturn\n}; f()", null);
@@ -205,7 +210,7 @@ public class CompilerTest3 extends BaseTest {
     test("true &&\n!\n!\n!\nfalse", true);
     test("def x=1; ++\nx", 2);
     test("def x=1; ++\n++\nx", 3);
-    test("[a\n:\n1\n]", Utils.mapOf("a",1));
+    test("[a\n:\n1\n]", Utils.mapOf("a", 1));
     test("1\n[1].map{ it }", Utils.listOf(1));
     test("'123'[2]", "3");
     test("'123'\n[2]", Utils.listOf(2));
@@ -215,7 +220,7 @@ public class CompilerTest3 extends BaseTest {
     testError("def x = 1; ++\n++\nx\n++\n++;\n++\nx\nx", "unexpected token ';'");
     testError("def x = 1; ++\n++\nx++ ++", "cannot be used here");
     testError("def x = 1; ++\n++\nx\n++\n++", "unexpected end-of-file");
-    test("[\n1\n,\n2\n,\n3\n]", Utils.listOf(1,2,3));
+    test("[\n1\n,\n2\n,\n3\n]", Utils.listOf(1, 2, 3));
     test("def f(x\n,\ny\n)\n{\nx +\ny\n}\nf(1,2)", 3);
     testError("4\n/2", "unexpected end of file in string");
     test("4\n-3*2", -6);
@@ -235,11 +240,13 @@ public class CompilerTest3 extends BaseTest {
     test("(1 + 2)\n + 3\n", 3);
   }
 
-  @Test public void eof() {
+  @Test
+  public void eof() {
     testError("def ntimes(n,x) {\n for (int i = 0; i < n; i++) {\n", "unexpected end-of-file");
   }
 
-  @Test public void globalsOptimisation() {
+  @Test
+  public void globalsOptimisation() {
     globals.put("x", "abc");
     test("sleep(0,x) + sleep(0,'d')", "abcd");
     test("sleep(0,x) + sleep(0,'d') + sleep(0,x)", "abcdabc");
@@ -278,7 +285,8 @@ public class CompilerTest3 extends BaseTest {
     assertEquals(expectedOutput, output.toString());
   };
 
-  @Test public void beginEndBlocks() {
+  @Test
+  public void beginEndBlocks() {
     // Test in repl mode only so that we can use global vars
     // Auto-creation ???
     //    test.accept("x = x + 1", 1, "");
@@ -295,13 +303,14 @@ public class CompilerTest3 extends BaseTest {
     //    replTest.accept("BEGIN { def x = 7 }; x = 2; END { println 'end1'; x + x }; BEGIN{ x += 3 }; END { println 'end2'; x + x + x }", null, 6, "end1\nend2\n");
   }
 
-  @Test public void nextLine() {
-    replTest.accept("nextLine() == null", null,true, "");
-    replTest.accept("nextLine() == 'x'", "x",true, "");
-    replTest.accept("nextLine() == 'x' && nextLine() == null", "x",true, "");
-    replTest.accept("while (it = nextLine()) println it", "x",null, "x\n");
-    replTest.accept("while ((it = nextLine()) != null) println it", "x\ny\n\nz\n",null, "x\ny\n\nz\n");
-    replTest.accept("stream(nextLine).map{ eval(it,[:]) }", "[1,2]\n[3]\n", Utils.listOf(Utils.listOf(1,2), Utils.listOf(3)), "");
+  @Test
+  public void nextLine() {
+    replTest.accept("nextLine() == null", null, true, "");
+    replTest.accept("nextLine() == 'x'", "x", true, "");
+    replTest.accept("nextLine() == 'x' && nextLine() == null", "x", true, "");
+    replTest.accept("while (it = nextLine()) println it", "x", null, "x\n");
+    replTest.accept("while ((it = nextLine()) != null) println it", "x\ny\n\nz\n", null, "x\ny\n\nz\n");
+    replTest.accept("stream(nextLine).map{ eval(it,[:]) }", "[1,2]\n[3]\n", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3)), "");
     replTest.accept("stream{sleep(0,nextLine())}.filter{ !/^$/r }.map{ eval(it,[:]) }.grouped(2).map{ it[0].size() + it[1].size() }.filter{ true }",
                     "[1,2]\n[3]\n\n", Utils.listOf(3), "");
     try {
@@ -317,38 +326,42 @@ public class CompilerTest3 extends BaseTest {
     replTest.accept("def x = 0; while(sleep(1,nextLine()) =~ /(\\d)/ng) { x+= $1 }; x", "123\n666\n", 7L, "");
   }
 
-  @Test public void stream() {
-    replTest.accept("stream{nextLine()}", "1\n4\n3\n", Utils.listOf("1","4","3"), "");
+  @Test
+  public void stream() {
+    replTest.accept("stream{nextLine()}", "1\n4\n3\n", Utils.listOf("1", "4", "3"), "");
     replTest.accept("stream{nextLine()}.size() == 3", "1\n4\n3\n", true, "");
-    replTest.accept("stream{nextLine() as int}", "1\n4\n3\n", Utils.listOf(1,4,3), "");
+    replTest.accept("stream{nextLine() as int}", "1\n4\n3\n", Utils.listOf(1, 4, 3), "");
     replTest.accept("stream(nextLine).max{it as int}", "1\n4\n3\n", "4", "");
     replTest.accept("stream(closure:nextLine).max{it as int}", "1\n4\n3\n", "4", "");
     replTest.accept("def f = stream; f(nextLine).max{it as int}", "1\n4\n3\n", "4", "");
     replTest.accept("def f = stream; f(closure:nextLine).max{it as int}", "1\n4\n3\n", "4", "");
   }
 
-  @Test public void groupedRepl() {
-    replTest.accept("[''].map{sleep(0,it)}.filter{ !/^$/r }.map{ it.size() }.grouped(2).map{ it }.filter{ true }","\n", Utils.listOf(), "");
+  @Test
+  public void groupedRepl() {
+    replTest.accept("[''].map{sleep(0,it)}.filter{ !/^$/r }.map{ it.size() }.grouped(2).map{ it }.filter{ true }", "\n", Utils.listOf(), "");
   }
 
-  @Test public void globalVars() {
+  @Test
+  public void globalVars() {
     replError("x", "unknown variable 'x'");
-    replTest.accept("x = (byte)1", "", (byte)1, "");
+    replTest.accept("x = (byte)1", "", (byte) 1, "");
     replTest.accept("x = 1", "", 1, "");
     replTest.accept("x = 1; x", "", 1, "");
     replTest.accept("x = x", "", null, "");
   }
 
-  @Test public void fib() {
-    final String fibDef = "int cnt; def fib(def x) { /*cnt++;*/ x <= 2 ? 1 : fib(x-1) + fib(x-2) }";
-    final String fibInt = "int cnt; int fib(int x) { /*cnt++;*/ x <= 2 ? 1 : fib(x-1) + fib(x-2) }";
+  @Test
+  public void fib() {
+    final String fibDef      = "int cnt; def fib(def x) { /*cnt++;*/ x <= 2 ? 1 : fib(x-1) + fib(x-2) }";
+    final String fibInt      = "int cnt; int fib(int x) { /*cnt++;*/ x <= 2 ? 1 : fib(x-1) + fib(x-2) }";
     final String fibDefSleep = "int cnt; def fib(def x) { /*cnt++;*/ x <= 2 ? 1 : sleep(0, fib(x-1)) + sleep(0, fib(x-2)) }";
     final String fibIntSleep = "int cnt; int fib(int x) { /*cnt++;*/ x <= 2 ? 1 : sleep(0, fib(x-1)) + sleep(0, fib(x-2)) }";
 
-    BiConsumer<Integer,Object> runFibDef = (num, expected) -> doTest(fibDef + "; def result = fib(" + num + "); //println cnt; result", expected);
-    BiConsumer<Integer,Object> runFibInt = (num, expected) -> doTest(fibInt + "; def result = fib(" + num + "); //println cnt; result", expected);
-    BiConsumer<Integer,Object> runFibSleepDef = (num, expected) -> doTest(fibDef + "; def result = fib(" + num + "); //println cnt; result", expected, true);
-    BiConsumer<Integer,Object> runFibSleepInt = (num, expected) -> doTest(fibInt + "; def result = fib(" + num + "); //println cnt; result", expected, true);
+    BiConsumer<Integer, Object> runFibDef      = (num, expected) -> doTest(fibDef + "; def result = fib(" + num + "); //println cnt; result", expected);
+    BiConsumer<Integer, Object> runFibInt      = (num, expected) -> doTest(fibInt + "; def result = fib(" + num + "); //println cnt; result", expected);
+    BiConsumer<Integer, Object> runFibSleepDef = (num, expected) -> doTest(fibDef + "; def result = fib(" + num + "); //println cnt; result", expected, true);
+    BiConsumer<Integer, Object> runFibSleepInt = (num, expected) -> doTest(fibInt + "; def result = fib(" + num + "); //println cnt; result", expected, true);
     //    BiConsumer<Integer,Object> runFibSleepDef = (num, expected) -> doTest(fibDefSleep + "; def result = fib(" + num + "); //println cnt; result", expected);
     //    BiConsumer<Integer,Object> runFibSleepInt = (num, expected) -> doTest(fibIntSleep + "; def result = fib(" + num + "); //println cnt; result", expected);
 
@@ -360,14 +373,14 @@ public class CompilerTest3 extends BaseTest {
     runFibSleepDef.accept(20, 6765);
     runFibSleepInt.accept(20, 6765);
 
-    BiConsumer<Integer,Runnable> ntimes = (n,runnable) -> IntStream.range(0, n).forEach(i -> runnable.run());
+    BiConsumer<Integer, Runnable> ntimes = (n, runnable) -> IntStream.range(0, n).forEach(i -> runnable.run());
 
-    final int          ITERATIONS = 0;
-    Map<String,Object> globals    = new HashMap<>();
-    JactlScript        scriptDef  = compile(fibDef + "; fib(40)");
-    JactlScript        scriptInt = compile(fibInt + "; fib(40)");
-    JactlScript scriptSleepDef = compile(fibDefSleep + "; fib(20)");
-    JactlScript scriptSleepInt = compile(fibIntSleep + "; fib(20)");
+    final int           ITERATIONS     = 0;
+    Map<String, Object> globals        = new HashMap<>();
+    JactlScript         scriptDef      = compile(fibDef + "; fib(40)");
+    JactlScript         scriptInt      = compile(fibInt + "; fib(40)");
+    JactlScript         scriptSleepDef = compile(fibDefSleep + "; fib(20)");
+    JactlScript         scriptSleepInt = compile(fibIntSleep + "; fib(20)");
     ntimes.accept(ITERATIONS, () -> {
       long start = System.currentTimeMillis();
       scriptDef.eval(globals);
@@ -390,7 +403,8 @@ public class CompilerTest3 extends BaseTest {
     });
   }
 
-  @Test public void globalsTest() {
+  @Test
+  public void globalsTest() {
     JactlContext jactlContext = JactlContext.create()
                                             .evaluateConstExprs(true)
                                             .classAccessToGlobals(true)
@@ -401,17 +415,17 @@ public class CompilerTest3 extends BaseTest {
     Jactl.compileClass("class Z { int i }", jactlContext);
     Object z = Jactl.eval("new Z(2)", new HashMap(), jactlContext);
 
-    Map<String,Object> globals = createGlobals();
+    Map<String, Object> globals = createGlobals();
     globals.put("z", z);
     globals.put("xxx", "xxx");
-    BiConsumer<String,Object> runtest = (code,expected) -> {
+    BiConsumer<String, Object> runtest = (code, expected) -> {
       testCounter++;
       Object result = Compiler.eval(code, jactlContext, globals);
       assertEquals(expected, result);
     };
 
     runtest.accept("def i = 1; (xxx + i).size()", 4);
-    runtest.accept("def x = (byte)1", (byte)1);
+    runtest.accept("def x = (byte)1", (byte) 1);
     runtest.accept("def x = 1", 1);
     runtest.accept("x", 1);
     runtest.accept("def f(x){x*x}; f(2)", 4);
@@ -460,7 +474,8 @@ public class CompilerTest3 extends BaseTest {
     jactlContext.replMode = true;
   }
 
-  @Test public void inifiniteLoopDetection() {
+  @Test
+  public void inifiniteLoopDetection() {
     //    JactlContext jactlContext = JactlContext.create().build();
     //
     //    for (int i = 0; i < 3; i++) {
@@ -501,7 +516,8 @@ public class CompilerTest3 extends BaseTest {
     assertThrows(TimeoutError.class, () -> Jactl.eval("long x = 0; sleep(1, { while (true) { for (i = 0; i < 100; i++) { sleep(0, x++); } } }())", new HashMap(), jactlContext3));
   }
 
-  @Test public void longRunningScriptTimeout() {
+  @Test
+  public void longRunningScriptTimeout() {
     JactlContext jactlContext = JactlContext.create()
                                             .maxExecutionTime(100)
                                             .build();
@@ -516,13 +532,14 @@ public class CompilerTest3 extends BaseTest {
     assertThrows(TimeoutError.class, () -> Jactl.eval("('a' * 30 + '!') =~ /^(a+)+$/", new HashMap(), jactlContext));
   }
 
-  @Test public void loopAndTimeoutDetection() {
+  @Test
+  public void loopAndTimeoutDetection() {
     JactlContext jactlContext = JactlContext.create()
                                             .maxExecutionTime(100)
                                             .maxLoopIterations(1000)
                                             .build();
 
-    BiConsumer<String,String> test = (script,err) -> {
+    BiConsumer<String, String> test = (script, err) -> {
       testCounter++;
       try {
         Jactl.eval(script, new HashMap(), jactlContext);
@@ -543,7 +560,8 @@ public class CompilerTest3 extends BaseTest {
     test.accept("long x = 0; sleep(1, { while (true) { for (i = 0; i < 100; i++) { sleep(2, x++); } } }())", "exceeded max time");
   }
 
-  @Test public void disablePrint() {
+  @Test
+  public void disablePrint() {
     JactlContext context = JactlContext.create()
                                        .disablePrint(true)
                                        .build();
@@ -557,11 +575,12 @@ public class CompilerTest3 extends BaseTest {
       assertTrue(e.getMessage().toLowerCase().contains("println has been disabled"));
     }
     Object result = Jactl.eval("def m = [x:1]; eval('print x',m); m", new HashMap(), context);
-    String error  = (String)((Map) result).get("$error");
+    String error  = (String) ((Map) result).get("$error");
     assertTrue(error.contains("print has been disabled"));
   }
 
-  @Test public void disableDie() {
+  @Test
+  public void disableDie() {
     JactlContext context = JactlContext.create()
                                        .disableDie(true)
                                        .build();
@@ -575,11 +594,12 @@ public class CompilerTest3 extends BaseTest {
       assertTrue(e.getMessage().toLowerCase().contains("die has been disabled"));
     }
     Object result = Jactl.eval("def m = [x:1]; eval('die x',m); m", new HashMap(), context);
-    String error  = (String)((Map) result).get("$error");
+    String error  = (String) ((Map) result).get("$error");
     assertTrue(error.contains("die has been disabled"));
   }
 
-  @Test public void disableEval() {
+  @Test
+  public void disableEval() {
     JactlContext context = JactlContext.create()
                                        .disableEval(true)
                                        .build();
@@ -594,7 +614,8 @@ public class CompilerTest3 extends BaseTest {
     }
   }
 
-  @Test public void undeclaredGlobals() {
+  @Test
+  public void undeclaredGlobals() {
     testError("x", "unknown variable");
     allowUndeclaredGlobals = true;
     test("x", null);
@@ -602,8 +623,8 @@ public class CompilerTest3 extends BaseTest {
     testError(Utils.listOf("class X { def f() { unknown } }"), "new X().f()", "unknown variable 'unknown'");
     classAccessToGlobals = true;
     test("class X { def f() { unknown } }; new X().f()", null);
-    JactlContext ctx = getJactlContext(false);
-    JactlScript script = Jactl.compileScript("unknown", new HashMap(), ctx);
+    JactlContext ctx    = getJactlContext(false);
+    JactlScript  script = Jactl.compileScript("unknown", new HashMap(), ctx);
     assertEquals(null, script.eval(new HashMap<>()));
     assertEquals("xxx", script.eval(Utils.mapOf("unknown", "xxx")));
     assertEquals(123, script.eval(Utils.mapOf("unknown", 123)));
@@ -616,12 +637,13 @@ public class CompilerTest3 extends BaseTest {
     test(Utils.listOf("class X { def f() { unknown } }"), "new X().f()", "abcdef");
   }
 
-  @Test public void invokeDynamic() {
+  @Test
+  public void invokeDynamic() {
     test("def x = 'abc'; x.length()", 3);
     test("def x = 'abc'; def result; 2.each{ result = x.length() }; result", 3);
     test("def x = 'abc'; def result; 2.each{ result = x.size() }; result", 3);
     test("def x = 'abc'; def f(a) { a.size() }; def i = f(x); x = [1,2,3,4]; 2.each{ i += f(x) }; i", 11);
-    test("def x = 3; def f(byte a) { a }; def i = f(x); x = 4; 2.each{ i += f(x) }; i", (byte)11);
+    test("def x = 3; def f(byte a) { a }; def i = f(x); x = 4; 2.each{ i += f(x) }; i", (byte) 11);
     test("def x = 'abc'; x.toUpperCase()", "ABC");
     test("def list = ['1','22222','3','4444', '55555']; list.filter{ it.size() > 3 }.map{ it.toUpperCase() }.sort().join(',')", "22222,4444,55555");
     test("class X { def f(byte x) { x } }; def x = new X(); def y = 6; 2.each { x.f(y) }", null);
@@ -640,13 +662,13 @@ public class CompilerTest3 extends BaseTest {
     test("class X { def f(int d) { d * d } }; def x = new X(); def g = x.f; g(2.1234)", 4);
     test("class X { static def f(int d) { d * d } }; def g = X.f; g(2.1234)", 4);
     test("def i = 0; [null, 'P'].each{ i++ if sleep(0,it) }; i", 1);
-    test("def b = (byte)-3; def f = { x -> x }; f(b)", (byte)-3);
-    test("def b = (byte)-3; def f = { byte x -> x }; f(b)", (byte)-3);
+    test("def b = (byte)-3; def f = { x -> x }; f(b)", (byte) -3);
+    test("def b = (byte)-3; def f = { byte x -> x }; f(b)", (byte) -3);
     test("def b = (byte)-3; def f = { x -> (int)x }; f(b)", 253);
     test("def b = (byte)-3; def f = { byte x -> (int)x }; f(b)", 253);
-    test("byte b = (byte)-3; def f = { x -> x }; f(b)", (byte)-3);
-    test("byte b = (byte)-3; def f = { byte x -> x }; f(b)", (byte)-3);
-    test("def b = (byte)-3; def f(byte x) { x }; f(b)", (byte)-3);
+    test("byte b = (byte)-3; def f = { x -> x }; f(b)", (byte) -3);
+    test("byte b = (byte)-3; def f = { byte x -> x }; f(b)", (byte) -3);
+    test("def b = (byte)-3; def f(byte x) { x }; f(b)", (byte) -3);
     test("byte b = -3; def f(byte x) { x }; f(b).toString()", "253");
     test("def f = { int a, long b, double c, int d -> a+b+c+d }; def g = f; [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> g(a,b,c,d) }.sum()", 90D);
     test("def f = { a, b, c, d -> a+b+c+d }; def g = f; [[1,2,3,4], [1L,2,3,4], [1,2L,3,4], [1,2,3L,4], [1,2,3,4L], [1L,2L,3,4], [1L,2L,3L,4], [1L,2L,3L,4L], [1D,2,3,4]].map{ a,b,c,d -> g(a,b,c,d) }.sum()", 90D);
@@ -739,7 +761,7 @@ public class CompilerTest3 extends BaseTest {
     test("class X { static def f(int a ) { a }; }; [1, 1L, 1, 1, 1, 1L, 1L, 1L, 1D].map{ a -> X.f(a) }.sum()", 9);
     test("class X { static def f(a) { a }; }; [1, 1L, 1, 1, 1, 1L, 1L, 1L, 1D].map{ a -> X.f(a) }.sum()", 9D);
   }
-
+  
   @Test public void invokeDynamic2() {
     test("def f(byte x) { x }; def g = f; g((byte)200) == 200", true);
     test("class X { def f(byte x) { x } }; def x = new X(); x.f((byte)200) == 200", true);
@@ -750,12 +772,14 @@ public class CompilerTest3 extends BaseTest {
       System.out.println("Result:" + script.eval(new HashMap<>()));
       fail("Expected error");
     }
-    catch (RuntimeError e) {}
+    catch (RuntimeError e) {
+    }
     try {
       System.out.println("Result:" + script.eval(new HashMap<>()));
       fail("Expected error");
     }
-    catch (RuntimeError e) {}
+    catch (RuntimeError e) {
+    }
     testError("def list = [1,2,3]; list.remove()", "missing mandatory argument");
     testError("def f = {x, int y -> y }; def g = f; def r = []; [2,3,[]].each{ r.add(g(1,it)) }; r", "cannot be cast to int");
     testError("def f = {x, int y -> y }; def g = f; def r = []; [2,3,null].each{ r.add(g(1,it)) }; r", "cannot convert null value to int");
@@ -773,7 +797,7 @@ public class CompilerTest3 extends BaseTest {
         assertTrue(e.getMessage().contains("Cannot convert null value to double"));
       }
       catch (RuntimeException e) {
-        fail("Got unexpected error: "+ e);
+        fail("Got unexpected error: " + e);
       }
     }
     test("class X { Decimal f(Decimal d = 3) { d + 1 } }; def x = new X(); x.f()", "#4");
@@ -781,16 +805,44 @@ public class CompilerTest3 extends BaseTest {
     test("class X { def f = { Decimal d = 3 -> d + 1 } }; def x = new X(); def g = x.f; g()", "#4");
     test("def f(Decimal dd) { dd }; def g = f; def b = (byte)200; 3.map{ g(b) }.sum()", BigDecimal.valueOf(600));
   }
+
+  @Test public void invokeDynamic3() {
+    test("def f(x=4,y=5){ x + y }; def g = f; def x = 0; for (i= 0; i < 2; i++) { x += g(x:1, y:2) }; x", 6);
+    test("def f(x=4,y=5){ x + y }; def g = f; def x = 0; for (i= 0; i < 2; i++) { x += g([1,2]) }; x", 6);
+    test("class X { def f(x=4,y=5){ x + y } }; def g = new X().f; def x = 0; for (i= 0; i < 2; i++) { x += g([1,2]) }; x", 6);
+    test("def f(byte b) { b / (byte)2 }; def g = f; def x = 0; for (i=0;i<2;i++) { x += g(200) }; x", 200);
+    test("def f(byte b) { def g() { b }; g() }; f((byte)200)/2 + f((byte)200)/2", 200);
+    test("def f = { byte b -> def g() { b }; g() }; f((byte)200)", (byte)200);
+    test("byte b = 200; def s = 'x' * 300; def f(t, i) { t.substring(0, i).size() }; [f(s, b), f(s, b)]", Utils.listOf(200, 200));
+    testError("def f(a,b) { a / b }; f(4,2); f(1,0)", "divide by zero");
+    testError("def f(a,b) { a / b }; f(4.0,2.0); f(1.0,0.0)", "divide by zero");
+    testError("def f(a,b) { a / b }; f(4L,2L); f(1L,0L)", "divide by zero");
+    testError("def f(a,b) { a / b }; f(4L,2); f(1L,0)", "divide by zero");
+    testError("def f(a,b) { a % b }; f(4,2); f(1,0)", "divide by zero");
+    testError("def f(a,b) { a % b }; f(4.0,2.0); f(1.0,0.0)", "divide by zero");
+    testError("def f(a,b) { a % b }; f(4L,2L); f(1L,0L)", "divide by zero");
+    testError("def f(a,b) { a % b }; f(4L,2); f(1L,0)", "divide by zero");
+    testError("def f(a,b) { a %% b }; f(4,2); f(1,0)", "divide by zero");
+    testError("def f(a,b) { a %% b }; f(4.0,2.0); f(1.0,0.0)", "divide by zero");
+    testError("def f(a,b) { a %% b }; f(4L,2L); f(1L,0L)", "divide by zero");
+    testError("def f(a,b) { a %% b }; f(4L,2); f(1L,0)", "divide by zero");
+    globals.put("index", null);
+    testError("'abcdef'.substring(index)", "cannot convert null value to int");
+    //test("eval('s.substring(n)', [s:'abcde',n:2]) == 'cde'", true);
+    test("def m = [s:'abcde',n:null]; def x = []; for (i=0; i<2; i++) { eval('s.substring(n)', m); x <<= m.'$error' =~ /cannot convert null value to int/i }; x", Utils.listOf(true, true));
+    test("def g = { int x -> x }; def x = []; for (int i = 0; i < 2; i++) { def m = [g:g, a:null]; eval('g(a)', m); x <<= m.'$error'.toString() =~ /Cannot convert null value to int/ }; x", Utils.listOf(true, true));
+    test("class X { def f(int x) { x } }; def x = []; for (int i = 0; i < 2; i++) { def m = [x:new X(), a:null]; eval('x.f(a)', m); x <<= m.'$error'.toString() =~ /Cannot convert null value to int/ }; x", Utils.listOf(true, true));
+  }
   
   @Test public void globalTypedVars() {
-    globalTypedVars(Jactl.type(byte.class), (byte)2, (byte)3, (byte)7);
-    globalTypedVars(Jactl.type(Byte.class), (byte)2, (byte)3, (byte)7);
-    globalTypedVars(Jactl.BYTE_TYPE, (byte)2, (byte)3, (byte)7);
-    globalTypedVars(Jactl.type(Byte.class), (byte)254, (byte)253, (byte)-7);
-    globalTypedVars(Jactl.BYTE_TYPE, (byte)254, (byte)253, (byte)-7);
-    globalTypedVars(Jactl.type(int.class), 2, 3,  7);
-    globalTypedVars(Jactl.type(Integer.class), 2, 3,  7);
-    globalTypedVars(Jactl.INT_TYPE, 2, 3,  7);
+    globalTypedVars(Jactl.type(byte.class), (byte) 2, (byte) 3, (byte) 7);
+    globalTypedVars(Jactl.type(Byte.class), (byte) 2, (byte) 3, (byte) 7);
+    globalTypedVars(Jactl.BYTE_TYPE, (byte) 2, (byte) 3, (byte) 7);
+    globalTypedVars(Jactl.type(Byte.class), (byte) 254, (byte) 253, (byte) -7);
+    globalTypedVars(Jactl.BYTE_TYPE, (byte) 254, (byte) 253, (byte) -7);
+    globalTypedVars(Jactl.type(int.class), 2, 3, 7);
+    globalTypedVars(Jactl.type(Integer.class), 2, 3, 7);
+    globalTypedVars(Jactl.INT_TYPE, 2, 3, 7);
     globalTypedVars(Jactl.type(long.class), 2L, 3L, 7L);
     globalTypedVars(Jactl.type(Long.class), 2L, 3L, 7L);
     globalTypedVars(Jactl.LONG_TYPE, 2L, 3L, 7L);
@@ -801,18 +853,18 @@ public class CompilerTest3 extends BaseTest {
     globalTypedVars(Jactl.DECIMAL_TYPE, BigDecimal.valueOf(2), BigDecimal.valueOf(3), BigDecimal.valueOf(7));
     globalTypedVars(Jactl.type(String.class), "abc", "def", "defabcabc");
     globalTypedVars(Jactl.STRING_TYPE, "abc", "def", "defabcabc");
-    globalTypedVars(Jactl.type(List.class), Utils.listOf(1,2,3), Utils.listOf(4,5,6), Utils.listOf(4,5,6,1,2,3,1,2,3));
-    globalTypedVars(Jactl.LIST_TYPE, Utils.listOf(1,2,3), Utils.listOf(4,5,6), Utils.listOf(4,5,6,1,2,3,1,2,3));
-    globalTypedVars(Jactl.type(Map.class), Utils.mapOf("a",1), Utils.mapOf("b",2,"c",3), Utils.mapOf("a",1,"b",2,"c",3));
-    globalTypedVars(Jactl.MAP_TYPE, Utils.mapOf("a",1), Utils.mapOf("b",2,"c",3), Utils.mapOf("a",1,"b",2,"c",3));
+    globalTypedVars(Jactl.type(List.class), Utils.listOf(1, 2, 3), Utils.listOf(4, 5, 6), Utils.listOf(4, 5, 6, 1, 2, 3, 1, 2, 3));
+    globalTypedVars(Jactl.LIST_TYPE, Utils.listOf(1, 2, 3), Utils.listOf(4, 5, 6), Utils.listOf(4, 5, 6, 1, 2, 3, 1, 2, 3));
+    globalTypedVars(Jactl.type(Map.class), Utils.mapOf("a", 1), Utils.mapOf("b", 2, "c", 3), Utils.mapOf("a", 1, "b", 2, "c", 3));
+    globalTypedVars(Jactl.MAP_TYPE, Utils.mapOf("a", 1), Utils.mapOf("b", 2, "c", 3), Utils.mapOf("a", 1, "b", 2, "c", 3));
   }
-  
+
   private void globalTypedVars(JactlType type, Object x, Object y, Object expected) {
-    Map<String,Object> globals = new HashMap<>();
+    Map<String, Object> globals = new HashMap<>();
     globals.put("x", type);
     globals.put("y", type);
-    JactlContext ctx = JactlContext.create().build();
-    JactlScript script = Jactl.compileScript("def f(){ x }; f(); y + x + f()", globals, ctx);
+    JactlContext ctx    = JactlContext.create().build();
+    JactlScript  script = Jactl.compileScript("def f(){ x }; f(); y + x + f()", globals, ctx);
     try {
       script.eval(new HashMap<>());
       if (type.getJavaClass() != String.class) {
@@ -823,21 +875,28 @@ public class CompilerTest3 extends BaseTest {
       // Success
     }
     try {
-      script.eval(new HashMap() {{ put("y", new CompilerTest3()); put("x", new CompilerTest3()); }});
+      script.eval(new HashMap() {{
+        put("y", new CompilerTest3());
+        put("x", new CompilerTest3());
+      }});
       fail("Expected error");
     }
     catch (RuntimeError e) {
       assertTrue(e.getMessage().contains("not of type "));
     }
-    assertEquals(expected, script.eval(new HashMap() {{ put("x", x); put("y", y); }}));
+    assertEquals(expected, script.eval(new HashMap() {{
+      put("x", x);
+      put("y", y);
+    }}));
   }
 
-  @Test public void globalBooleanVars() {
-    Map<String,Object> globals = new HashMap<>();
+  @Test
+  public void globalBooleanVars() {
+    Map<String, Object> globals = new HashMap<>();
     globals.put("x", Jactl.type(Boolean.class));
     globals.put("y", Jactl.type(Boolean.class));
-    JactlContext ctx = JactlContext.create().build();
-    JactlScript script = Jactl.compileScript("def f(){ 1 }; f(); x && y", globals, ctx);
+    JactlContext ctx    = JactlContext.create().build();
+    JactlScript  script = Jactl.compileScript("def f(){ 1 }; f(); x && y", globals, ctx);
     try {
       script.eval(new HashMap<>());
       fail("Expected error");
@@ -846,21 +905,28 @@ public class CompilerTest3 extends BaseTest {
       assertTrue(e.getMessage().contains("Null value for global variable"));
     }
     try {
-      script.eval(new HashMap() {{ put("y", new CompilerTest3()); put("x", new CompilerTest3()); }});
+      script.eval(new HashMap() {{
+        put("y", new CompilerTest3());
+        put("x", new CompilerTest3());
+      }});
       fail("Expected error");
     }
     catch (RuntimeError e) {
       assertTrue(e.getMessage().contains("not of type Boolean"));
     }
-    assertEquals(true, script.eval(new HashMap() {{ put("x", true); put("y", true); }}));
+    assertEquals(true, script.eval(new HashMap() {{
+      put("x", true);
+      put("y", true);
+    }}));
   }
 
-  @Test public void globalIntArrVars() {
-    Map<String,Object> globals = new HashMap<>();
+  @Test
+  public void globalIntArrVars() {
+    Map<String, Object> globals = new HashMap<>();
     globals.put("x", Jactl.type(int[].class));
     globals.put("y", Jactl.type(int[].class));
-    JactlContext ctx = JactlContext.create().build();
-    JactlScript script = Jactl.compileScript("def f(){ 1 }; f(); (x as List) + (y as List)", globals, ctx);
+    JactlContext ctx    = JactlContext.create().build();
+    JactlScript  script = Jactl.compileScript("def f(){ 1 }; f(); (x as List) + (y as List)", globals, ctx);
     try {
       script.eval(new HashMap<>());
       fail("Expected error");
@@ -869,52 +935,67 @@ public class CompilerTest3 extends BaseTest {
       assertTrue(e.getMessage().contains("Left hand side of '+' is null"));
     }
     try {
-      script.eval(new HashMap() {{ put("y", new CompilerTest3()); put("x", new CompilerTest3()); }});
+      script.eval(new HashMap() {{
+        put("y", new CompilerTest3());
+        put("x", new CompilerTest3());
+      }});
       fail("Expected error");
     }
     catch (RuntimeError e) {
       assertTrue(e.getMessage().contains("not of type int[]"));
     }
-    assertEquals(Utils.listOf(1,2,3,4,5,6), script.eval(new HashMap() {{ put("x", new int[]{1,2,3}); put("y", new int[]{4,5,6}); }}));
+    assertEquals(Utils.listOf(1, 2, 3, 4, 5, 6), script.eval(new HashMap() {{
+      put("x", new int[]{1, 2, 3});
+      put("y", new int[]{4, 5, 6});
+    }}));
   }
-  
-  @Test public void globalLocalDateVars() {
-    Map<String,Object> globals = new HashMap<>();
+
+  @Test
+  public void globalLocalDateVars() {
+    Map<String, Object> globals = new HashMap<>();
     globals.put("today", Jactl.LOCAL_DATE_TYPE);
     globals.put("count", Jactl.INT_TYPE);
     JactlScript script   = Jactl.compileScript("today.plusDays(count)", globals);
-    LocalDate   tomorrow = (LocalDate)script.eval(new HashMap(){{ put("today", LocalDate.now()); put("count", 1); }});
+    LocalDate   tomorrow = (LocalDate) script.eval(new HashMap() {{
+      put("today", LocalDate.now());
+      put("count", 1);
+    }});
     assertEquals(LocalDate.now().plusDays(1), tomorrow);
   }
-  
-  @Test public void globalIntArrVar() {
-    Map<String,Object> globals = new HashMap<>();
+
+  @Test
+  public void globalIntArrVar() {
+    Map<String, Object> globals = new HashMap<>();
     globals.put("arr", Jactl.type(int[].class));
-    JactlScript script = Jactl.compileScript("arr.filter{ it % 2 }.sum()", globals);
-    Map<String,Object> values = new HashMap<>();
-    values.put("arr", new int[]{ 1,2,3,4,5 });
+    JactlScript         script = Jactl.compileScript("arr.filter{ it % 2 }.sum()", globals);
+    Map<String, Object> values = new HashMap<>();
+    values.put("arr", new int[]{1, 2, 3, 4, 5});
     assertEquals(9, script.eval(values));
   }
-  
-  @Test public void globalObjectVar() {
-    Map<String,Object> globals = new HashMap<>();
+
+  @Test
+  public void globalObjectVar() {
+    Map<String, Object> globals = new HashMap<>();
     globals.put("arr", Jactl.OBJECT_TYPE);
-    JactlScript script = Jactl.compileScript("arr.filter{ it % 2 }.sum()", globals);
-    Map<String,Object> values = new HashMap<>();
-    values.put("arr", new int[]{ 1,2,3,4,5 });
+    JactlScript         script = Jactl.compileScript("arr.filter{ it % 2 }.sum()", globals);
+    Map<String, Object> values = new HashMap<>();
+    values.put("arr", new int[]{1, 2, 3, 4, 5});
     assertEquals(9, script.eval(values));
   }
-  
-  @Test public void script() {
+
+  @Test
+  public void script() {
     String source = String.join("\n",
-                         "def customer = body.customer",
-                         "def items    = body.items",
-                         "def total    = items.map{ it.qty * it.unitPrice }.sum()",
-                         "def discount = customer.tier == 'gold' && total >= 10000 ? 1500 : customer.tier == 'silver' && total >= 10000 ? 500 : 0",
-                         "def subtotals = [:]",
-                         "items.each{ subtotals[it.category] = (subtotals[it.category] ?: 0) + it.qty * it.unitPrice }",
-                         "def result = [customer:customer.name, total:total, discount:discount, payable:total - discount, categories:subtotals, summary:\"${customer.name}: ${items.size()} items, payable ${total - discount}c\".toString()]",
-                         "result");
-    JactlScript script = Jactl.compileScript(source, new HashMap() {{ put("body", new Object()); }});
+                                "def customer = body.customer",
+                                "def items    = body.items",
+                                "def total    = items.map{ it.qty * it.unitPrice }.sum()",
+                                "def discount = customer.tier == 'gold' && total >= 10000 ? 1500 : customer.tier == 'silver' && total >= 10000 ? 500 : 0",
+                                "def subtotals = [:]",
+                                "items.each{ subtotals[it.category] = (subtotals[it.category] ?: 0) + it.qty * it.unitPrice }",
+                                "def result = [customer:customer.name, total:total, discount:discount, payable:total - discount, categories:subtotals, summary:\"${customer.name}: ${items.size()} items, payable ${total - discount}c\".toString()]",
+                                "result");
+    JactlScript script = Jactl.compileScript(source, new HashMap() {{
+      put("body", new Object());
+    }});
   }
-}
+}  

@@ -38,4 +38,8 @@ public class  RuntimeError extends JactlError {
   public RuntimeError(String error, String source, int offset, Throwable e) {
     super(error, new Location(source,offset), true, e);
   }
+
+  public RuntimeError(String error, String source, int offset, Throwable e, boolean captureStackTrace) {
+    super(error, new Location(source,offset), captureStackTrace, e);
+  }
 }

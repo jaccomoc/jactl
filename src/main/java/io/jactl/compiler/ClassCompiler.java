@@ -593,7 +593,7 @@ public class ClassCompiler {
     mv.visitLabel(catchLabel);
 
     mv.visitVarInsn(ASTORE, 2);
-    mv.visitTypeInsn(NEW, "java/lang/RuntimeException");
+    mv.visitTypeInsn(NEW, "io/jactl/runtime/RuntimeError");
     mv.visitInsn(DUP);
     mv.visitTypeInsn(NEW, "java/lang/StringBuilder");
     mv.visitInsn(DUP);
@@ -607,8 +607,11 @@ public class ClassCompiler {
     mv.visitLdcInsn(".hashCode()");
     mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
     mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+    mv.visitLdcInsn(classDecl.location.getSource());
+    Utils.loadConst(mv, classDecl.location.getOffset(), context);
     mv.visitVarInsn(ALOAD, 2);
-    mv.visitMethodInsn(INVOKESPECIAL, "java/lang/RuntimeException", "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V", false);
+    Utils.loadConst(mv, false, context);
+    mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;ILjava/lang/Throwable;Z)V", false);
     mv.visitInsn(ATHROW);
 
     mv.visitMaxs(0, 0);
@@ -660,7 +663,7 @@ public class ClassCompiler {
     mv.visitLabel(catchLabel);
 
     mv.visitVarInsn(ASTORE, 1);
-    mv.visitTypeInsn(NEW, "java/lang/RuntimeException");
+    mv.visitTypeInsn(NEW, "io/jactl/runtime/RuntimeError");
     mv.visitInsn(DUP);
     mv.visitTypeInsn(NEW, "java/lang/StringBuilder");
     mv.visitInsn(DUP);
@@ -674,15 +677,11 @@ public class ClassCompiler {
     mv.visitLdcInsn(".hashCode()");
     mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
     mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;", false);
+    mv.visitLdcInsn(classDecl.location.getSource());
+    Utils.loadConst(mv, classDecl.location.getOffset(), context);
     mv.visitVarInsn(ALOAD, 1);
-    mv.visitMethodInsn(INVOKESPECIAL, "java/lang/RuntimeException", "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V", false);
-    mv.visitInsn(ATHROW);
-
-    mv.visitTypeInsn(NEW, "java/lang/RuntimeException");
-    mv.visitInsn(DUP);
-    mv.visitLdcInsn("Self-referential object detected in hashCode()");
-    mv.visitVarInsn(ALOAD, 2);
-    mv.visitMethodInsn(INVOKESPECIAL, "java/lang/RuntimeException", "<init>", "(Ljava/lang/String;Ljava/lang/Throwable;)V", false);
+    Utils.loadConst(mv, false, context);
+    mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;ILjava/lang/Throwable;Z)V", false);
     mv.visitInsn(ATHROW);
 
     mv.visitMaxs(0, 0);

@@ -95,7 +95,7 @@ public class Compiler {
     String         className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
     Parser         parser    = new Parser(new Tokeniser(source, false), jactlContext, packageName);
     Stmt.ClassDecl script    = parser.parseScript(className);
-    Resolver       resolver = new Resolver(jactlContext, bindings, script.location);
+    Resolver       resolver = new Resolver(jactlContext, false, bindings, script.location);
     resolver.resolveScript(script);
     Analyser analyser = new Analyser(jactlContext);
     analyser.analyseClass(script);

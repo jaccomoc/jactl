@@ -759,79 +759,90 @@ public class RuntimeUtils {
    * @return true if equal or not equal based on value of operator
    */
   private static boolean equality(Object leftObj, Object rightObj, String operator, String source, int offset) {
-    if (leftObj == rightObj)                 { return operator == EQUAL_EQUAL; }
-    if (leftObj == null || rightObj == null) { return operator == BANG_EQUAL; }
-
-    if (leftObj instanceof List || rightObj instanceof List || leftObj.getClass().isArray() || rightObj.getClass().isArray()) {
-      return listEquals(leftObj, rightObj, operator, source, offset);
-    }
-
-    if (leftObj instanceof Map && rightObj instanceof Map) {
-      Map<String,Object> left = (Map<String,Object>)leftObj;
-      Map<String,Object> right = (Map<String,Object>)rightObj;
-      if (left.size() != right.size()) { return operator == BANG_EQUAL; }
-      for (Object key: left.keySet()) {
-        if (!right.containsKey(key)) {
-          return operator == BANG_EQUAL;
-        }
-        if (!isEquals(left.get(key), right.get(key), source, offset)) {
-          return operator == BANG_EQUAL;
-        }
+    try {
+      if (leftObj == rightObj) {
+        return operator == EQUAL_EQUAL;
       }
-      return operator == EQUAL_EQUAL;
-    }
-
-    if (leftObj instanceof JactlObject && rightObj instanceof JactlObject) {
-      if (!leftObj.getClass().equals(rightObj.getClass())) {
+      if (leftObj == null || rightObj == null) {
         return operator == BANG_EQUAL;
       }
-      // Have two instances of same class so check that each field is equal
-      Map<String, Object> fieldAndMethods = ((JactlObject) leftObj)._$j$getFieldsAndMethods();
-      for (Map.Entry<String, Object> entry: fieldAndMethods.entrySet()) {
-        if (entry.getValue() instanceof Field) {
-          Field field = (Field) entry.getValue();
-          try {
-            // If field values differ then we are done
-            if (!isEquals(field.get(leftObj), field.get(rightObj), source, offset)) {
-              return operator == BANG_EQUAL;
-            }
+
+      if (leftObj instanceof List || rightObj instanceof List || leftObj.getClass().isArray() || rightObj.getClass().isArray()) {
+        return listEquals(leftObj, rightObj, operator, source, offset);
+      }
+
+      if (leftObj instanceof Map && rightObj instanceof Map) {
+        Map<String, Object> left  = (Map<String, Object>) leftObj;
+        Map<String, Object> right = (Map<String, Object>) rightObj;
+        if (left.size() != right.size()) {
+          return operator == BANG_EQUAL;
+        }
+        for (Object key : left.keySet()) {
+          if (!right.containsKey(key)) {
+            return operator == BANG_EQUAL;
           }
-          catch (IllegalAccessException e) {
-            throw new IllegalStateException("Internal error: accessing field '" + entry.getKey() + "': " + e, e);
+          if (!isEquals(left.get(key), right.get(key), source, offset)) {
+            return operator == BANG_EQUAL;
           }
         }
+        return operator == EQUAL_EQUAL;
       }
-      return operator == EQUAL_EQUAL;
-    }
 
-    if (leftObj instanceof JactlObject && rightObj instanceof Map || leftObj instanceof Map && rightObj instanceof JactlObject) {
-      Map<String,Object> map = (Map<String,Object>)(leftObj instanceof Map ? leftObj : rightObj);
-      JactlObject        obj = (JactlObject)(leftObj instanceof JactlObject ? leftObj : rightObj);
-      Set<String> mapKeys = new HashSet<>(map.keySet());
-      Map<String, Object> fieldAndMethods = obj._$j$getFieldsAndMethods();
-      for (Map.Entry<String, Object> entry: fieldAndMethods.entrySet()) {
-        if (entry.getValue() instanceof Field) {
-          Field  field = (Field) entry.getValue();
-          String key   = entry.getKey();
-          try {
-            // If field values differ then we are done
-            if (!isEquals(field.get(obj), map.get(key), source, offset)) {
-              return operator == BANG_EQUAL;
+      if (leftObj instanceof JactlObject && rightObj instanceof JactlObject) {
+        if (!leftObj.getClass().equals(rightObj.getClass())) {
+          return operator == BANG_EQUAL;
+        }
+        // Have two instances of same class so check that each field is equal
+        Map<String, Object> fieldAndMethods = ((JactlObject) leftObj)._$j$getFieldsAndMethods();
+        for (Map.Entry<String, Object> entry : fieldAndMethods.entrySet()) {
+          if (entry.getValue() instanceof Field) {
+            Field field = (Field) entry.getValue();
+            try {
+              // If field values differ then we are done
+              if (!isEquals(field.get(leftObj), field.get(rightObj), source, offset)) {
+                return operator == BANG_EQUAL;
+              }
             }
-            mapKeys.remove(key);
-          }
-          catch (IllegalAccessException e) {
-            throw new IllegalStateException("Internal error: accessing field '" + key + "': " + e, e);
+            catch (IllegalAccessException e) {
+              throw new IllegalStateException("Internal error: accessing field '" + entry.getKey() + "': " + e, e);
+            }
           }
         }
+        return operator == EQUAL_EQUAL;
       }
-      if (mapKeys.size() > 0) {
-        return operator == BANG_EQUAL;
-      }
-      return operator == EQUAL_EQUAL;
-    }
 
-    return leftObj.equals(rightObj) == (operator == EQUAL_EQUAL);
+      if (leftObj instanceof JactlObject && rightObj instanceof Map || leftObj instanceof Map && rightObj instanceof JactlObject) {
+        Map<String, Object> map             = (Map<String, Object>) (leftObj instanceof Map ? leftObj : rightObj);
+        JactlObject         obj             = (JactlObject) (leftObj instanceof JactlObject ? leftObj : rightObj);
+        Set<String>         mapKeys         = new HashSet<>(map.keySet());
+        Map<String, Object> fieldAndMethods = obj._$j$getFieldsAndMethods();
+        for (Map.Entry<String, Object> entry : fieldAndMethods.entrySet()) {
+          if (entry.getValue() instanceof Field) {
+            Field  field = (Field) entry.getValue();
+            String key   = entry.getKey();
+            try {
+              // If field values differ then we are done
+              if (!isEquals(field.get(obj), map.get(key), source, offset)) {
+                return operator == BANG_EQUAL;
+              }
+              mapKeys.remove(key);
+            }
+            catch (IllegalAccessException e) {
+              throw new IllegalStateException("Internal error: accessing field '" + key + "': " + e, e);
+            }
+          }
+        }
+        if (mapKeys.size() > 0) {
+          return operator == BANG_EQUAL;
+        }
+        return operator == EQUAL_EQUAL;
+      }
+
+      return leftObj.equals(rightObj) == (operator == EQUAL_EQUAL);
+    }
+    catch (StackOverflowError e) {
+      throw new RuntimeError("Self-referential data structure detected during equality check", source, offset, e, false);
+    }
   }
 
   /**

@@ -69,6 +69,12 @@ public class InvokeDynamicBootstrap {
   private static final MethodHandle DOUBLE_VALUE;
   private static final MethodHandle DECIMAL_VALUE;
   private static final MethodHandle IS_TRUTH;
+
+  private static final MethodHandle BYTE_TO_SHORT;
+  private static final MethodHandle BYTE_TO_INT;
+  private static final MethodHandle BYTE_TO_LONG;
+  private static final MethodHandle BYTE_TO_DOUBLE;
+  private static final MethodHandle BYTE_TO_DECIMAL;
   
   private static final MethodType   GET_CLASS_TYPE = MethodType.methodType(Class.class);
   
@@ -110,6 +116,12 @@ public class InvokeDynamicBootstrap {
       LONG_VALUE              = lookup.findVirtual(Number.class, "longValue", MethodType.methodType(long.class));
       DOUBLE_VALUE            = lookup.findVirtual(Number.class, "doubleValue", MethodType.methodType(double.class));
       DECIMAL_VALUE           = lookup.findStatic(InvokeDynamicBootstrap.class, "decimalValue", MethodType.methodType(BigDecimal.class, Number.class));
+      
+      BYTE_TO_SHORT           = lookup.findStatic(InvokeDynamicBootstrap.class, "byteToShort", MethodType.methodType(short.class, byte.class));
+      BYTE_TO_INT             = lookup.findStatic(InvokeDynamicBootstrap.class, "byteToInt", MethodType.methodType(int.class, byte.class));
+      BYTE_TO_LONG            = lookup.findStatic(InvokeDynamicBootstrap.class, "byteToLong", MethodType.methodType(long.class, byte.class));
+      BYTE_TO_DOUBLE          = lookup.findStatic(InvokeDynamicBootstrap.class, "byteToDouble", MethodType.methodType(double.class, byte.class));
+      BYTE_TO_DECIMAL         = lookup.findStatic(InvokeDynamicBootstrap.class, "byteToDecimal", MethodType.methodType(BigDecimal.class, byte.class));
       
       IS_TRUTH                = lookup.findStatic(RuntimeUtils.class, "isTruth", MethodType.methodType(boolean.class, Object.class));
     }
@@ -488,6 +500,11 @@ public class InvokeDynamicBootstrap {
     // To start with we assume we can invoke directly if we don't have too many arguments
     boolean directInvoke = argCount <= func.paramCount;
 
+    // Check if we have args passed a list in which case we delegate to wrapper
+    if (argCount == 1 && args[1] instanceof List && func.paramCount != 1 && func.mandatoryArgCount != 1) {
+      directInvoke = false;
+    }
+    
     // We need to insert default values for missing arguments (if they are simple values)
     if (argCount < func.paramCount) {
       // Check that we have values for all mandatory parameters and for simple default values work
@@ -503,7 +520,8 @@ public class InvokeDynamicBootstrap {
         Class<?> paramType = func.paramTypes.get(i).classFromType();
         MethodHandle filter = getFilter(defaultVal,
                                         boxedType(defaultVal == null ? paramType : defaultVal.getClass()),
-                                        boxedType(paramType));
+                                        boxedType(paramType),
+                                        paramType.isPrimitive());
         if (filter == null) {
           // No trivial conversion possible
           directInvoke = false;
@@ -555,6 +573,7 @@ public class InvokeDynamicBootstrap {
 
   private static final HashMap<Class<?>, MethodHandle> NUMERIC_FILTERS = new HashMap<>();
   private static final HashMap<Class<?>, Integer>      NUMERIC_RANK    = new HashMap<>();
+  private static final HashMap<Class<?>, MethodHandle> BYTE_PROMOTION  = new HashMap<>();
   static {
     NUMERIC_FILTERS.put(Byte.class,       BYTE_VALUE);
     NUMERIC_FILTERS.put(Short.class,      SHORT_VALUE);
@@ -571,7 +590,19 @@ public class InvokeDynamicBootstrap {
     NUMERIC_RANK.put(Integer.class,    3);
     NUMERIC_RANK.put(Long.class,       4);
     NUMERIC_RANK.put(Double.class,     5);
+    
+    BYTE_PROMOTION.put(Short.class,      BYTE_TO_SHORT);
+    BYTE_PROMOTION.put(Integer.class,    BYTE_TO_INT);
+    BYTE_PROMOTION.put(Long.class,       BYTE_TO_LONG);
+    BYTE_PROMOTION.put(Double.class,     BYTE_TO_DOUBLE);
+    BYTE_PROMOTION.put(BigDecimal.class, BYTE_TO_DECIMAL);
   }
+  
+  public static short      byteToShort(byte n)   { return (short) (n & 0xff); }
+  public static int        byteToInt(byte n)     { return n & 0xff; }
+  public static long       byteToLong(byte n)    { return n & 0xff; }
+  public static double     byteToDouble(byte n)  { return n & 0xff; }
+  public static BigDecimal byteToDecimal(byte n) { return BigDecimal.valueOf(n & 0xff); }
   
   // NOTE: adapted is the MethodHandle for the actual method with potentially some default values inserted
   private static MethodHandle coerceArgumentsOrFail(MethodType siteType, MethodHandle adapted, Object[] args, int argStart) {
@@ -580,10 +611,11 @@ public class InvokeDynamicBootstrap {
       throw WRONG_METHOD_TYPE_EXCEPTION;
     }
     for (int i = argStart; i < args.length; i++) {
-      Object       arg       = args[i];
-      Class<?>     argType   = boxedType(arg == null ? siteType.parameterType(i) : arg.getClass());
-      Class<?>     paramType = boxedType(adaptedType.parameterType(i));
-      MethodHandle filter    = getFilter(arg, argType, paramType);
+      Object       arg              = args[i];
+      Class<?>     argType          = boxedType(arg == null ? siteType.parameterType(i) : arg.getClass());
+      Class<?>     unboxedParamType = adaptedType.parameterType(i);
+      Class<?>     paramType        = boxedType(unboxedParamType);
+      MethodHandle filter           = getFilter(arg, argType, paramType, unboxedParamType.isPrimitive());
       if (filter == null) {
         throw WRONG_METHOD_TYPE_EXCEPTION;
       }
@@ -596,7 +628,10 @@ public class InvokeDynamicBootstrap {
 
   private static final MethodHandle IDENTITY = MethodHandles.identity(Object.class);
   
-  private static MethodHandle getFilter(Object arg, Class<?> argType, Class<?> paramType) {
+  private static MethodHandle getFilter(Object arg, Class<?> argType, Class<?> paramType, boolean isPrimitive) {
+    if (arg == null && isPrimitive) {
+      return null;
+    }
     if (argType == paramType || paramType.isAssignableFrom(argType)) {
       return IDENTITY;
     }
@@ -610,6 +645,9 @@ public class InvokeDynamicBootstrap {
         }
         // If automatic promotion will work
         if (prank > 0 && arank > 0 && prank >= arank) {
+          if (argType == Byte.class) {
+            return isPrimitive ? BYTE_PROMOTION.get(paramType) : null; 
+          }
           return IDENTITY;
         }
         return NUMERIC_FILTERS.get(paramType);

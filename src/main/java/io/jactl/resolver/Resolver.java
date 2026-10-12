@@ -124,6 +124,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   
   private List<CompileError> errors = new ArrayList<>();
 
+  boolean replMode = false;
+  
   boolean testAsync = false;   // Set to true to flag every method/function as potentially aysnc
 
   private static final JactlType TYPE_FOR_BAD_REF = UNKNOWN;
@@ -135,10 +137,15 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
    * @param location location for error
    */
   public Resolver(JactlContext jactlContext, Map<String, Object> globals, Token location) {
+    this(jactlContext, jactlContext.replMode, globals, location);
+  }
+  
+  public Resolver(JactlContext jactlContext, boolean replMode, Map<String, Object> globals, Token location) {
     this.jactlContext   = jactlContext;
     this.globals        = globals == null ? Utils.mapOf() : globals;
-    this.globalVarDecls = jactlContext.replMode ? jactlContext.replVarDecls : new HashMap<>();
-    if (jactlContext.replMode) {
+    this.globalVarDecls = replMode ? jactlContext.replVarDecls : new HashMap<>();
+    this.replMode       = replMode;
+    if (replMode) {
       this.globals.keySet().forEach(name -> {
         if (!globalVarDecls.containsKey(name)) {
           Object obj = globals.get(name);
@@ -147,7 +154,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         }
       });
     }
-    if (jactlContext.replMode) {
+    if (replMode) {
       imports = jactlContext.getImports();
     }
     else {
@@ -340,7 +347,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // NOTE: we only support class declarations at top level of script or directly within another class decl.
     // NOTE: When in repl mode we don't nest classes within the script itself since they will
     //       not then be accessible in subsequent lines being compiled in the repl.
-    JactlClassDescriptor       outerClass           = outerClassDecl == null || outerClassDecl.isScriptClass() && jactlContext.replMode ? null : outerClassDecl.classDescriptor;
+    JactlClassDescriptor       outerClass           = outerClassDecl == null || outerClassDecl.isScriptClass() && replMode ? null : outerClassDecl.classDescriptor;
     //List<JactlClassDescriptor> interfaces           = classDecl.interfaces != null ? classDecl.interfaces.stream().map(this::lookupClass).collect(Collectors.toList()) : null;
     List<JactlClassDescriptor> interfaces = Collections.EMPTY_LIST;
     boolean allFieldsAreDefaults = true;
@@ -693,11 +700,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         classDesc.getAllMethods()
                  .filter(entry -> entry.getValue().isStaticImplementation)
                  .forEach(entry -> defineConst.accept(entry.getKey()));
-        if (jactlContext.replMode) imports.add("import static " + classDesc.getPackageName() + ".*");
+        if (replMode) imports.add("import static " + classDesc.getPackageName() + ".*");
       }
       else {
         defineConst.accept(fieldName);
-        if (jactlContext.replMode) imports.add("import static " + classDesc.getPackagedName() + "." + fieldName + (stmt.as == null ? "" : " as " + stmt.as.getStringValue())); 
+        if (replMode) imports.add("import static " + classDesc.getPackagedName() + "." + fieldName + (stmt.as == null ? "" : " as " + stmt.as.getStringValue())); 
       }
     }
     else {
@@ -707,7 +714,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           error("No such package '" + importedPackage + "'", stmt.location);
         }
         imports.importedPackages.add(importedPackage);
-        if (jactlContext.replMode) imports.add("import " + importedPackage + ".*");
+        if (replMode) imports.add("import " + importedPackage + ".*");
       }
       else {
         resolveClassPath(stmt.className).ifPresent(type -> {
@@ -720,7 +727,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
               error("Class of name '" + name + "' already " + (autoImported ? "auto-" : "") + "imported (" + old.getPackagedName() + ")", stmt.as != null ? stmt.as : stmt.className.get(0).location);
             }
             else {
-              if (jactlContext.replMode) imports.add("import " + classDesc.getPackagedName() + (stmt.as == null ? "" : " as " + stmt.as.getStringValue()));
+              if (replMode) imports.add("import " + classDesc.getPackagedName() + (stmt.as == null ? "" : " as " + stmt.as.getStringValue()));
             }
           }
         });
@@ -1680,7 +1687,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (identifierExpr.isSuper() || identifierExpr.isThis()) {
       error("Cannot assign to '" + identifierExpr.identifier.getStringValue() + "'", identifierExpr.location);
     }
-    if (jactlContext.replMode && isScriptScope()) {
+    if (replMode && isScriptScope()) {
       // In repl mode if variable doesn't exist yet we create it when first assigned to
       Token  identifier = identifierExpr.identifier;
       String name       = identifier.getStringValue();
@@ -2657,7 +2664,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // If we have a field then get class block variables, otherwise get vars for current block
     Map<String, Expr.VarDecl> vars = decl.isField ? currentClass().classBlock.variables : getVars(decl.isParam);
-    if (!(jactlContext.replMode && isAtTopLevel())) {
+    if (!(replMode && isAtTopLevel())) {
       Expr.VarDecl existingDecl = vars.get(varName);
       // Allow fields to be shadowed by local variables
       if (existingDecl != null && (!existingDecl.isField || decl.isField)) {
@@ -2691,7 +2698,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     // In repl mode we don't have a top level block, and we store var types in the compileContext
     // and their actual values will be stored in the globals map.
-    if (!decl.isParam && !decl.isConstVar && isAtTopLevel() && jactlContext.replMode && !decl.name.getStringValue().startsWith(JACTL_PREFIX)) {
+    if (!decl.isParam && !decl.isConstVar && isAtTopLevel() && replMode && !decl.name.getStringValue().startsWith(JACTL_PREFIX)) {
       decl.isGlobal = true;
       decl.type = decl.type.boxed();
     }
@@ -2710,7 +2717,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   // Get variables for current block
   private Map<String,Expr.VarDecl> getVars(boolean isParam) {
     // Special case for repl mode where we ignore top level block
-    if (!isParam && jactlContext.replMode && isAtTopLevel()) {
+    if (!isParam && replMode && isAtTopLevel()) {
       return globalVarDecls;
     }
     return getBlock().variables;
@@ -2855,7 +2862,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       }
       // If not in current hierarchy and in a script then look for a top level class of that name
       if (className == null && isScript) {
-        String               topLevelClass = jactlContext.replMode ? firstClass : scriptName + '$' + firstClass;
+        String               topLevelClass = replMode ? firstClass : scriptName + '$' + firstClass;
         JactlClassDescriptor topClass      = localClasses.get(topLevelClass);
         if (topClass != null) {
           className = topLevelClass + subPath;
@@ -2915,7 +2922,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
     if (classPkg.equals(packageName)) {
       descriptor = localClasses.get(className);
-      if (descriptor == null && isScript && !jactlContext.replMode) {
+      if (descriptor == null && isScript && !replMode) {
         // Could be a.b.c.X in a script where script is the owner of the class so look for a top
         // level class within the script
         descriptor = localClasses.get(scriptName + '$' + className);

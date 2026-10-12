@@ -249,83 +249,131 @@ public class BinaryOpMethods {
   }
 
   public static Object intDivide(int lhs, Object rhs, String op, String originalOp, int minScale, boolean captureStackTrace, String source, int offset) {
-    if (rhs instanceof Integer)    return lhs / (int)rhs;
-    if (rhs instanceof Long)       return (long)lhs / (long)rhs;
-    if (rhs instanceof Double)     return lhs / (double)rhs;
-    if (rhs instanceof BigDecimal) return RuntimeUtils.decimalDivide(BigDecimal.valueOf(lhs), (BigDecimal)rhs, minScale, source, offset);
-    if (rhs instanceof Short)      return lhs / ((short)rhs & 0xff);
-    return RuntimeUtils.divide(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    try {
+      if (rhs instanceof Integer) return lhs / (int) rhs;
+      if (rhs instanceof Long) return (long) lhs / (long) rhs;
+      if (rhs instanceof Double) return lhs / (double) rhs;
+      if (rhs instanceof BigDecimal)
+        return RuntimeUtils.decimalDivide(BigDecimal.valueOf(lhs), (BigDecimal) rhs, minScale, source, offset);
+      if (rhs instanceof Short) return lhs / ((short) rhs & 0xff);
+      return RuntimeUtils.divide(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    }
+    catch (ArithmeticException e) {
+      throw new RuntimeError("Divide by zero", source, offset);
+    }
   }
 
   public static Object longDivide(long lhs, Object rhs, String op, String originalOp, int minScale, boolean captureStackTrace, String source, int offset) {
-    if (rhs instanceof Integer)    return lhs / (int)rhs;
-    if (rhs instanceof Long)       return lhs / (long)rhs;
-    if (rhs instanceof Double)     return lhs / (double)rhs;
-    if (rhs instanceof BigDecimal) return RuntimeUtils.decimalDivide(BigDecimal.valueOf(lhs), (BigDecimal)rhs, minScale, source, offset);
-    if (rhs instanceof Short)      return lhs / ((short)rhs & 0xff);
-    return RuntimeUtils.divide(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    try {
+      if (rhs instanceof Integer) return lhs / (int) rhs;
+      if (rhs instanceof Long) return lhs / (long) rhs;
+      if (rhs instanceof Double) return lhs / (double) rhs;
+      if (rhs instanceof BigDecimal)
+        return RuntimeUtils.decimalDivide(BigDecimal.valueOf(lhs), (BigDecimal) rhs, minScale, source, offset);
+      if (rhs instanceof Short) return lhs / ((short) rhs & 0xff);
+      return RuntimeUtils.divide(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    }
+    catch (ArithmeticException e) {
+      throw new RuntimeError("Divide by zero", source, offset);
+    }
   }
 
   public static Object doubleDivide(double lhs, Object rhs, String op, String originalOp, int minScale, boolean captureStackTrace, String source, int offset) {
-    if (rhs instanceof Integer)    return lhs / (int)rhs;
-    if (rhs instanceof Long)       return lhs / (long)rhs;
-    if (rhs instanceof Double)     return lhs / (double)rhs;
-    if (rhs instanceof BigDecimal) return RuntimeUtils.decimalDivide(BigDecimal.valueOf(lhs), (BigDecimal)rhs, minScale, source, offset);
-    if (rhs instanceof Short)      return lhs / ((short)rhs & 0xff);
-    return RuntimeUtils.divide(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    try {
+      if (rhs instanceof Integer) return lhs / (int) rhs;
+      if (rhs instanceof Long) return lhs / (long) rhs;
+      if (rhs instanceof Double) return lhs / (double) rhs;
+      if (rhs instanceof BigDecimal)
+        return RuntimeUtils.decimalDivide(BigDecimal.valueOf(lhs), (BigDecimal) rhs, minScale, source, offset);
+      if (rhs instanceof Short) return lhs / ((short) rhs & 0xff);
+      return RuntimeUtils.divide(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    }
+    catch (ArithmeticException e) {
+      throw new RuntimeError("Divide by zero", source, offset);
+    }
   }
 
   public static Object intModulo(int lhs, Object rhs, String op, String originalOp, int minScale, boolean captureStackTrace, String source, int offset) {
-    if (rhs instanceof Integer)    { int right = (int)rhs; return ((lhs % right) + right) % right; }
-    if (rhs instanceof Long)       { long right = (long)rhs; return ((lhs % right) + right) % right; }
-    if (rhs instanceof Double)     { double right = (double)rhs; return ((lhs % right) + right) % right; }
-    if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
-    if (rhs instanceof Short)      { int right = (short)rhs & 0xff; return ((lhs % right) + right) % right; }  
-    return RuntimeUtils.modulo(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    try {
+      if (rhs instanceof Integer)    { int right = (int)rhs; return ((lhs % right) + right) % right; }
+      if (rhs instanceof Long)       { long right = (long)rhs; return ((lhs % right) + right) % right; }
+      if (rhs instanceof Double)     { double right = (double)rhs; return ((lhs % right) + right) % right; }
+      if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
+      if (rhs instanceof Short)      { int right = (short)rhs & 0xff; return ((lhs % right) + right) % right; }  
+      return RuntimeUtils.modulo(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    }
+    catch (ArithmeticException e) {
+      throw new RuntimeError("Divide by zero", source, offset);
+    }
   }
 
   public static Object longModulo(long lhs, Object rhs, String op, String originalOp, int minScale, boolean captureStackTrace, String source, int offset) {
-    if (rhs instanceof Integer)    { int right = (int)rhs; return ((lhs % right) + right) % right; }
-    if (rhs instanceof Long)       { long right = (long)rhs; return ((lhs % right) + right) % right; }
-    if (rhs instanceof Double)     { double right = (double)rhs; return ((lhs % right) + right) % right; }
-    if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
-    if (rhs instanceof Short)      { int right = (short)rhs & 0xff; return ((lhs % right) + right) % right; }  
-    return RuntimeUtils.modulo(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    try {
+      if (rhs instanceof Integer)    { int right = (int)rhs; return ((lhs % right) + right) % right; }
+      if (rhs instanceof Long)       { long right = (long)rhs; return ((lhs % right) + right) % right; }
+      if (rhs instanceof Double)     { double right = (double)rhs; return ((lhs % right) + right) % right; }
+      if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
+      if (rhs instanceof Short)      { int right = (short)rhs & 0xff; return ((lhs % right) + right) % right; }  
+      return RuntimeUtils.modulo(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    }
+    catch (ArithmeticException e) {
+      throw new RuntimeError("Divide by zero", source, offset);
+    }
   }
 
   public static Object doubleModulo(double lhs, Object rhs, String op, String originalOp, int minScale, boolean captureStackTrace, String source, int offset) {
-    if (rhs instanceof Integer)    { int right = (int)rhs; return ((lhs % right) + right) % right; }
-    if (rhs instanceof Long)       { long right = (long)rhs; return ((lhs % right) + right) % right; }
-    if (rhs instanceof Double)     { double right = (double)rhs; return ((lhs % right) + right) % right; }
-    if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
-    if (rhs instanceof Short)      { int right = (short)rhs & 0xff; return ((lhs % right) + right) % right; }  
-    return RuntimeUtils.modulo(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    try {
+      if (rhs instanceof Integer)    { int right = (int)rhs; return ((lhs % right) + right) % right; }
+      if (rhs instanceof Long)       { long right = (long)rhs; return ((lhs % right) + right) % right; }
+      if (rhs instanceof Double)     { double right = (double)rhs; return ((lhs % right) + right) % right; }
+      if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
+      if (rhs instanceof Short)      { int right = (short)rhs & 0xff; return ((lhs % right) + right) % right; }  
+      return RuntimeUtils.modulo(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    }
+    catch (ArithmeticException e) {
+      throw new RuntimeError("Divide by zero", source, offset);
+    }
   }
 
   public static Object intRemainder(int lhs, Object rhs, String op, String originalOp, int minScale, boolean captureStackTrace, String source, int offset) {
-    if (rhs instanceof Integer)    return lhs % (int)rhs;
-    if (rhs instanceof Long)       return lhs % (long)rhs;
-    if (rhs instanceof Double)     return lhs % (double)rhs;
-    if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
-    if (rhs instanceof Short)      return lhs % ((short)rhs & 0xff);
-    return RuntimeUtils.remainder(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    try {
+      if (rhs instanceof Integer)    return lhs % (int)rhs;
+      if (rhs instanceof Long)       return lhs % (long)rhs;
+      if (rhs instanceof Double)     return lhs % (double)rhs;
+      if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
+      if (rhs instanceof Short)      return lhs % ((short)rhs & 0xff);
+      return RuntimeUtils.remainder(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    }
+    catch (ArithmeticException e) {
+      throw new RuntimeError("Divide by zero", source, offset);
+    }
   }
 
   public static Object longRemainder(long lhs, Object rhs, String op, String originalOp, int minScale, boolean captureStackTrace, String source, int offset) {
-    if (rhs instanceof Integer)    return lhs % (int)rhs;
-    if (rhs instanceof Long)       return lhs % (long)rhs;
-    if (rhs instanceof Double)     return lhs % (double)rhs;
-    if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
-    if (rhs instanceof Short)      return lhs % ((short)rhs & 0xff);
-    return RuntimeUtils.remainder(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    try {
+      if (rhs instanceof Integer)    return lhs % (int)rhs;
+      if (rhs instanceof Long)       return lhs % (long)rhs;
+      if (rhs instanceof Double)     return lhs % (double)rhs;
+      if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
+      if (rhs instanceof Short)      return lhs % ((short)rhs & 0xff);
+      return RuntimeUtils.remainder(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    }
+    catch (ArithmeticException e) {
+      throw new RuntimeError("Divide by zero", source, offset);
+    }
   }
 
   public static Object doubleRemainder(double lhs, Object rhs, String op, String originalOp, int minScale, boolean captureStackTrace, String source, int offset) {
-    if (rhs instanceof Integer)    return lhs % (int)rhs;
-    if (rhs instanceof Long)       return lhs % (long)rhs;
-    if (rhs instanceof Double)     return lhs % (double)rhs;
-    if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
-    if (rhs instanceof Short)      return lhs % ((short)rhs & 0xff);
-    return RuntimeUtils.remainder(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    try {
+      if (rhs instanceof Integer)    return lhs % (int)rhs;
+      if (rhs instanceof Long)       return lhs % (long)rhs;
+      if (rhs instanceof Double)     return lhs % (double)rhs;
+      if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
+      if (rhs instanceof Short)      return lhs % ((short)rhs & 0xff);
+      return RuntimeUtils.remainder(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
+    }
+    catch (ArithmeticException e) {
+      throw new RuntimeError("Divide by zero", source, offset);
+    }
   }
 }

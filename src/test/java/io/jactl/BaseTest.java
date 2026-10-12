@@ -546,7 +546,7 @@ public class BaseTest {
       Compiler.eval(scriptCode, jactlContext, packageName, bindings);
       fail("Expected JactlError");
     }
-    catch (Throwable e) {
+    catch (JactlError e) {
       if (e.getMessage() == null) {
         e.printStackTrace();
         fail("Error: " + e);
@@ -561,6 +561,9 @@ public class BaseTest {
         }
         fail("Message did not contain expected string <" + expectedError + ">. Message=" + e.getMessage());
       }
+    }
+    catch (Throwable e) {
+      fail("Non JactlError: " + e);
     }
   }
 
