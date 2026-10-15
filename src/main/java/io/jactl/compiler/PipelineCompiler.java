@@ -86,6 +86,7 @@ public class PipelineCompiler {
       case "subList":
       case "reduce":
       case "groupBy":
+      case "reverse":
         return true;
       default:
         return false;
@@ -734,6 +735,7 @@ public class PipelineCompiler {
     int   listIdxSlot = -1;
     int   listSlot    = -1;
     InlineReverse(Expr.MethodCall expr, MethodCompiler methodCompiler) { super(expr, methodCompiler); }
+    @Override boolean canBeDirect()   { return true; }
     @Override void initialise() {
       listSlot = methodCompiler.stack.allocateSlot(LIST);
       methodCompiler.mv.visitTypeInsn(NEW, "java/util/ArrayList");
@@ -1033,6 +1035,10 @@ public class PipelineCompiler {
         Label IS_FIRST = new Label();
         methodCompiler.mv.visitJumpInsn(IFNE, IS_FIRST);
         methodCompiler._loadLocal(joinSlot);
+        if (args.get(0).couldBeNull) {
+          methodCompiler.mv.visitJumpInsn(IFNULL, IS_FIRST);
+          methodCompiler._loadLocal(joinSlot);
+        }
         methodCompiler.mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
         methodCompiler.mv.visitLabel(IS_FIRST);    // :IS_FIRST
       }
@@ -1061,6 +1067,7 @@ public class PipelineCompiler {
   private static class InlineMinMax extends InlineClosureInvoker {
     int minMaxValueSlot;
     int minMaxObjectSlot;
+    int haveMinMaxSlot;   // true if we have assigned to minMaxObjectSlot
     boolean isMin;
     Label asyncCont = new Label();
     InlineMinMax(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler, boolean isMin) { super(expr, args, methodCompiler); this.isMin = isMin; }
@@ -1070,6 +1077,9 @@ public class PipelineCompiler {
       minMaxValueSlot  = methodCompiler.stack.allocateSlot(ANY);
       methodCompiler.loadConst(null);
       methodCompiler.storeLocal(minMaxValueSlot);
+      haveMinMaxSlot = methodCompiler.stack.allocateSlot(BOOLEAN);
+      methodCompiler.loadConst(false);
+      methodCompiler.storeLocal(haveMinMaxSlot);
       minMaxObjectSlot = methodCompiler.stack.allocateSlot(ANY);
       methodCompiler.loadConst(null);
       methodCompiler.storeLocal(minMaxObjectSlot);
@@ -1092,8 +1102,8 @@ public class PipelineCompiler {
         methodCompiler.swap();
       }
       Label STORE_NEW_OBJ_VALUE = new Label();
-      methodCompiler._loadLocal(minMaxValueSlot);
-      methodCompiler.mv.visitJumpInsn(IFNULL, STORE_NEW_OBJ_VALUE);
+      methodCompiler._loadLocal(haveMinMaxSlot);
+      methodCompiler.mv.visitJumpInsn(IFEQ, STORE_NEW_OBJ_VALUE);
       methodCompiler.dupVal();
       methodCompiler.loadLocal(minMaxValueSlot);
       methodCompiler.loadLocation(expr.methodNameLocation);
@@ -1107,6 +1117,8 @@ public class PipelineCompiler {
       methodCompiler.mv.visitLabel(STORE_NEW_OBJ_VALUE);   // :STORE_NEW_OBJ_VALUE
       methodCompiler.storeLocal(minMaxValueSlot);
       methodCompiler.storeLocal(minMaxObjectSlot);
+      methodCompiler.loadConst(true);
+      methodCompiler.storeLocal(haveMinMaxSlot);
       methodCompiler.mv.visitLabel(END);                   // :END
     }
     @Override void asyncResumed(int contResultSlot, int valueSlot) {
@@ -1117,6 +1129,7 @@ public class PipelineCompiler {
       super.cleanUp();
       methodCompiler.stack.freeSlot(minMaxValueSlot);
       methodCompiler.stack.freeSlot(minMaxObjectSlot);
+      methodCompiler.stack.freeSlot(haveMinMaxSlot);
     }
     @Override void finish() {
       methodCompiler._loadLocal(minMaxObjectSlot);
@@ -1262,9 +1275,8 @@ public class PipelineCompiler {
     }
     @Override void initialise() { 
       Label NON_ZERO = new Label();
-      if (argExpr.isConst && argExpr.constValue instanceof Number) {
+      if (argExpr.isConst && argExpr.constValue instanceof Number && ((Number)argExpr.constValue).intValue() >= 0) {
         int windowSize = ((Number)argExpr.constValue).intValue();
-        if (windowSize < 0) { throw new CompileError("Window size must be >= 0", argExpr.location); }
         bufferSlot = methodCompiler.stack.allocateSlot(ANY);
         if (windowSize == 0) {
           methodCompiler._loadConst(null);
@@ -1273,7 +1285,9 @@ public class PipelineCompiler {
           methodCompiler.mv.visitTypeInsn(NEW, CircularBuffer.INTERNAL_NAME);
           methodCompiler.mv.visitInsn(DUP);
           methodCompiler._loadConst(windowSize);
-          methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, CircularBuffer.INTERNAL_NAME, "<init>", "(I)V", false);
+          methodCompiler._loadConst(false);
+          methodCompiler._loadLocation(argExpr.location);
+          methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, CircularBuffer.INTERNAL_NAME, "<init>", "(IZLjava/lang/String;I)V", false);
         }
         methodCompiler._storeLocal(bufferSlot);
         return;
@@ -1301,7 +1315,9 @@ public class PipelineCompiler {
       methodCompiler.mv.visitTypeInsn(NEW, CircularBuffer.INTERNAL_NAME);
       methodCompiler.mv.visitInsn(DUP_X1);
       methodCompiler.mv.visitInsn(SWAP);
-      methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, CircularBuffer.INTERNAL_NAME, "<init>", "(I)V", false);
+      methodCompiler._loadConst(false);
+      methodCompiler._loadLocation(argExpr.location);
+      methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, CircularBuffer.INTERNAL_NAME, "<init>", "(IZLjava/lang/String;I)V", false);
       methodCompiler._storeLocal(bufferSlot);
       methodCompiler.mv.visitLabel(END);           // :END
     }
@@ -1377,9 +1393,8 @@ public class PipelineCompiler {
     }
     @Override void initialise() { 
       Label NON_ZERO = new Label();
-      if (argExpr.isConst && argExpr.constValue instanceof Number) {
+      if (argExpr.isConst && argExpr.constValue instanceof Number && ((Number)argExpr.constValue).intValue() >= 0) {
         int groupedSize = ((Number)argExpr.constValue).intValue();
-        if (groupedSize < 0) { throw new CompileError("Value for grouped() must be >= 0", argExpr.location); }
         groupedSizeSlot = methodCompiler.stack.allocateSlot(INT);
         bufferSlot = methodCompiler.stack.allocateSlot(LIST);
         if (groupedSize == 0) {
@@ -1498,8 +1513,8 @@ public class PipelineCompiler {
       methodCompiler.convertTo(INT, argExpr, argExpr.couldBeNull, argExpr.location);
       argSlot = methodCompiler.stack.allocateSlot(INT);
       methodCompiler.storeLocal(argSlot);
-      constNegative = argExpr.isConst && argExpr.constValue instanceof Number && ((Number) argExpr.constValue).longValue() < 0;
-      constPositive = argExpr.isConst && argExpr.constValue instanceof Number && ((Number) argExpr.constValue).longValue() >= 0;
+      constNegative = argExpr.isConst && argExpr.constValue instanceof Number && ((Number) argExpr.constValue).intValue() < 0;
+      constPositive = argExpr.isConst && argExpr.constValue instanceof Number && ((Number) argExpr.constValue).intValue() >= 0;
       
       // We need a CircularBuffer if we have a negative value for the argument so we can buffer
       // values until we know we can let them through.
@@ -1512,8 +1527,10 @@ public class PipelineCompiler {
         bufferSlot = methodCompiler.stack.allocateSlot(ANY);
         methodCompiler.mv.visitTypeInsn(NEW, CircularBuffer.INTERNAL_NAME);
         methodCompiler.mv.visitInsn(DUP);
-        methodCompiler._loadConst(-((Number)argExpr.constValue).intValue() + (isLimit ? 1 : 0));
-        methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, CircularBuffer.INTERNAL_NAME, "<init>", "(I)V", false);
+        methodCompiler._loadConst(-((Number)argExpr.constValue).intValue());
+        methodCompiler._loadConst(isLimit);
+        methodCompiler._loadLocation(argExpr.location);
+        methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, CircularBuffer.INTERNAL_NAME, "<init>", "(IZLjava/lang/String;I)V", false);
         methodCompiler._storeLocal(bufferSlot);
       }
       else if (!argExpr.isConst) {
@@ -1531,11 +1548,9 @@ public class PipelineCompiler {
         methodCompiler.mv.visitInsn(DUP);
         methodCompiler._loadLocal(argSlot);
         methodCompiler.mv.visitInsn(INEG);
-        if (isLimit) {
-          methodCompiler._loadConst(1);
-          methodCompiler.mv.visitInsn(IADD);
-        }
-        methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, CircularBuffer.INTERNAL_NAME, "<init>", "(I)V", false);
+        methodCompiler._loadConst(isLimit);
+        methodCompiler._loadLocation(argExpr.location);
+        methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, CircularBuffer.INTERNAL_NAME, "<init>", "(IZLjava/lang/String;I)V", false);
         methodCompiler._storeLocal(bufferSlot);
         Label finish = new Label();
         methodCompiler.mv.visitJumpInsn(GOTO, finish);

@@ -2434,7 +2434,7 @@ public class CompilerTests2 extends BaseTest {
     test("def x = 7; def reset() { x = 0 }; for (reset(), x=5, reset(); x < 10; x++) {}; x", 10);
     test("def x = 7; def reset() { x = 0 }; for (x=5, reset(), reset(); x < 10; x++) {}; x", 10);
   }
-  
+
   @Test public void forInLoops() {
     test("for (int i in [1,2,3]) { }", null);
     test("for (int i: [1,2,3]) { }", null);
@@ -2460,6 +2460,8 @@ public class CompilerTests2 extends BaseTest {
     test("def sum = ''; for (i in 'abc')sum=i+sum; sum", "cba");
     test("def list = []; for (i in [a:1,b:2]) { list <<= i }; list", Utils.listOf(Utils.listOf("a",1),Utils.listOf("b",2)));
     testError("for (i in null) { }", "null object");
+    test("def sum = 0; for (i in [1,2,3].map{ sleep(0,it) }) { sum += i }; sum", 6);
+    test("def sum = 0; for (i in [1,2,3].map{ sleep(0,it) }.map{ sleep(0,it) + sleep(0,it) }) { sum += i }; sum", 12);
   }
   
   @Test public void destructuringForLoops() {

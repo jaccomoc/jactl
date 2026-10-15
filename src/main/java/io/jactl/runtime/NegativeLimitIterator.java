@@ -54,10 +54,10 @@ public class NegativeLimitIterator extends JactlIterator {
 
   NegativeLimitIterator() {}
 
-  NegativeLimitIterator(JactlIterator iter, int count) {
+  NegativeLimitIterator(JactlIterator iter, int count, String source, int offset) {
     this.iter = iter;
     this.count  = count;
-    this.buffer = new CircularBuffer<>(count + 1);
+    this.buffer = new CircularBuffer<>(count, true, source, offset);
   }
 
   public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(NegativeLimitIterator.class, IteratorType.NEGATIVE_LIMIT, "hasNext$c", Object.class, Continuation.class);

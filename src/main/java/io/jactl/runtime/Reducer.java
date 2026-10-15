@@ -170,7 +170,7 @@ public class Reducer implements Checkpointable {
                 break;
               case TRANSPOSE:
                 List<List> valueList = (List)value;
-                int elemListSize = sizeOf(elem);
+                int elemListSize = transposeSizeOf(elem);
                 // grow if needed
                 for (int i = valueList.size(); i < elemListSize; i++) {
                   // New list has to have nulls for all earlier entries
@@ -232,6 +232,9 @@ public class Reducer implements Checkpointable {
       return nextValue;
     }
     int compare = RuntimeUtils.compareTo(((Object[])value)[0], nextValue[0], source, offset);
+    if (compare == 0) {
+      return value;
+    }
     return compare < 0 ? (type == Type.MAX ? nextValue : value)
                        : (type == Type.MAX ? value : nextValue);
   }
@@ -275,14 +278,17 @@ public class Reducer implements Checkpointable {
     }
   }
 
-  private int sizeOf(Object object) {
+  private int transposeSizeOf(Object object) {
     if (object instanceof List) {
       return ((List)object).size();
+    }
+    if (object == null) {
+      throw new NullError("Null entry in source list for transpose()", source, offset);
     }
     if (object.getClass().isArray()) {
       return Array.getLength(object);
     }
-    throw new RuntimeError("Entries in source list must be lists for transpose()", source, offset);
+    throw new RuntimeError("Entries in source list must be lists for transpose(): encountered object of type " + RuntimeUtils.className(object), source, offset);
   }
 
   private Object listGet(Object object, int idx) {

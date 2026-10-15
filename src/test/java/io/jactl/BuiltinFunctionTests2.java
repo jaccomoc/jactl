@@ -608,6 +608,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
   }
 
   @Test public void grouped() {
+    testError("[1,2,3,4].grouped(-1)", "must be >= 0");
     test("[].grouped(2)", Utils.listOf());
     test("[a:1,b:2,c:3,d:4].grouped(2)", Utils.listOf(Utils.listOf(Utils.listOf("a",1),Utils.listOf("b",2)),Utils.listOf(Utils.listOf("c",3),Utils.listOf("d",4))));
     test("[1,2].grouped(0)", Utils.listOf(1,2));

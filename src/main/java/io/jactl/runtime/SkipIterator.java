@@ -56,10 +56,10 @@ public class SkipIterator extends JactlIterator {
 
   SkipIterator() {}
 
-  SkipIterator(JactlIterator iter, int count) {
+  SkipIterator(JactlIterator iter, int count, String source, int offset) {
     this.iter   = iter;
     this.count  = count;
-    this.buffer = new CircularBuffer<>(count);
+    this.buffer = new CircularBuffer<>(count, false, source, offset);
   }
 
   public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(SkipIterator.class, IteratorType.SKIP, "hasNext$c", Object.class, Continuation.class);

@@ -1095,7 +1095,7 @@ public class BuiltinFunctions {
     if (count >= 0) {
       return new FilterIterator(iter, source, offset, shouldNotSkipHandle.bindTo(count).bindTo(new int[]{ 0 }));
     }
-    return new SkipIterator(iter, -count);
+    return new SkipIterator(iter, -count, source, offset);
   }
 
   public static JactlMethodHandle shouldNotSkipHandle = RuntimeUtils.lookupMethod(BuiltinFunctions.class, "shouldNotSkip",
@@ -1114,7 +1114,7 @@ public class BuiltinFunctions {
     if (limit >= 0) {
       return new LimitIterator(iter, limit);
     }
-    return new NegativeLimitIterator(iter, -limit);
+    return new NegativeLimitIterator(iter, -limit, source, offset);
   }
 
   ////////////////////////////////
@@ -1142,7 +1142,7 @@ public class BuiltinFunctions {
       return iter;
     }
     if (size < 0) {
-      throw new RuntimeError("Value for windowSliding() must be >= 0 (was " + size + ")", source, offset);
+      throw new RuntimeError("Window size must be >= 0 (was " + size + ")", source, offset);
     }
     return new GroupedIterator(iter, source, offset, size, true);
   }

@@ -58,16 +58,35 @@ public class CircularBuffer<T> implements Checkpointable {
   int      head = 0;
   int      tail = 0;
 
+  static final int MAX_SIZE = Integer.getInteger("jactl.buffer.maxSize", 10_000_000);
+  
   public CircularBuffer() {}    // for checkpoint/restore
 
-  public CircularBuffer(int capacity) {
-    this.bufferSize = capacity + 1;
-    buffer = (T[])new Object[this.bufferSize];
+  /**
+   * Create a CircularBuffer
+   * @param capacity    the maximum capacity needed
+   * @param extraSlot   true if we actually need one more than capacity (used for limit(-amount))
+   * @param source      source code
+   * @param offset      offset into source code
+   */
+  public CircularBuffer(int capacity, boolean extraSlot, String source, int offset) {
+    if (capacity < 0) {
+      throw new RuntimeError("Negative buffer size: " + capacity, source, offset);
+    }
+    if (capacity > MAX_SIZE) {
+      throw new RuntimeError("Buffer size too large: " + capacity + " (max size is " + MAX_SIZE + " - system property jactl.buffer.maxSize)", source, offset);
+    }
+    init(capacity + (extraSlot ? 1 : 0));
   }
 
   CircularBuffer(int capacity, boolean canGrow) {
-    this(capacity);
+    init(capacity);
     this.canGrow = canGrow;
+  }
+  
+  private void init(int capacity) {
+    this.bufferSize = capacity + 1;
+    buffer = (T[])new Object[this.bufferSize];
   }
 
   /**

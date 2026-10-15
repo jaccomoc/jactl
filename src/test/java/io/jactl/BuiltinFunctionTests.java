@@ -401,10 +401,15 @@ public class BuiltinFunctionTests extends BaseTest {
     test("((byte)3).max()", 2);
     test("1.max()", 0);
     test("3.max()", 2);
+    
+    test("[null,1,null,2].min()", null);
+    test("[null,1,null,2].map().min()", null);
+    
+    test("[[name:'a',age:30],[name:'b',age:20],[name:'c',age:20]].map{ it }.min{ it.age }.name", "b");
+    test("['ab','cd','x'].map{ it }.min{ it.size() == 1 ? 9 : it.size() }", "ab");
   }
 
-  @Test
-  public void testSumAvg() {
+  @Test public void sumAvg() {
     test("[(byte)-1,(byte)2,(byte)3].sum()", 255 + 2 + 3);
     test("[1,2,3].sum()", 6);
     test("[(byte)-1,(byte)-2,(byte)3,256].avg()", "#192");
@@ -459,6 +464,7 @@ public class BuiltinFunctionTests extends BaseTest {
   @Test
   public void listTranspose() {
     test("[].transpose()", Utils.listOf());
+    test("[[null],[null]].transpose()", Utils.listOf(Utils.listOf(null, null)));
     testError("[{ -> 1 }].transpose()", "must be list");
     testError("[{ -> 1 }].map().transpose()", "must be list");
     testError("[1].transpose()", "must be list");
@@ -620,9 +626,9 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("'abc1234'.substring(-4,1)", "StringIndexOutOfBounds");
   }
 
-  @Test
-  public void join() {
+  @Test public void join() {
     test("[].join()", "");
+    test("[].join(null)", "");
     test("[].join('')", "");
     test("[].join('x')", "");
     test("[:].join()", "");
@@ -630,6 +636,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("['x'].join()", "x");
     test("['x'].join(',')", "x");
     test("['x','y'].join(',')", "x,y");
+    test("['x','y'].join(null)", "xy");
     test("['x','y',1].join(', ')", "x, y, 1");
     test("[x:1,y:2].join(',')", "['x', 1],['y', 2]");
     test("[[x:1],[y:2]].join(', ')", "[x:1], [y:2]");
@@ -1284,6 +1291,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("var list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap{ [it,it] }.sum()", 12);
     test("def list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap().sum()", 6);
     test("var list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap().sum()", 6);
+    test("var list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap().size() == 2", true);
     test("5.map{ {it+1}(it) }.sum()", 15);
     testError("5.map(null)", "null value for function");
     test("def f = { sleep(0,it) * 2 }; [1,2,3].map(f).sum()", 12);
@@ -1293,10 +1301,23 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("[1,2,3].windowed(-1)", "window size must be >= 0");
     testError("def x = -1; [1,2,3].windowed(x)", "window size must be >= 0");
     testError("def list = null; list.map{ it + it }.sum()", "tried to invoke method on null value");
+    test("def sum = 0; [1,2,3].map{ sleep(0,it) }.each{ sum += it }; sum", 6);
+    test("List x = [1,2,3]; def f = { x.size() }; x.map().size() == 3", true);
+    test("List x = [1,2,3]; def f = { x.size() }; x.map().anyMatch{ it == 2 }", true);
+    test("List x = [1,2,3]; x.reverse()", Utils.listOf(3,2,1));
+    test("List x = [1,2,3]; x.map().reverse()", Utils.listOf(3,2,1));
+    test("List x = [1,2,3]; x.map().reverse().size() == 3", true);
     testError("List list = null; list.map{ it + it }.sum()", "cannot iterate over null object");
+    testError("[null,[1,2]].limit(2).transpose()", "null entry");
   }
 
   @Test public void pipelineNegativeSkipLimit() {
+    testError("List list = [1,2,3,4]; list.skip(-30000000)", "buffer size too large");
+    testError("def x = -30000000; List list = [1,2,3,4]; list.skip(x)", "buffer size too large");
+    testError("def x = -30000000; def list = [1,2,3,4]; list.skip(x)", "buffer size too large");
+    testError("List list = [1,2,3,4]; list.limit(-30_000_000)", "buffer size too large");
+    testError("def list = [1,2,3,4]; list.limit(-30_000_000)", "buffer size too large");
+    testError("def list = [1,2,3,4]; def x = -30_000_000; list.limit(x)", "buffer size too large");
     test("List list = [1,2,3,4]; list.skip(-3)", Utils.listOf(2, 3, 4));
     test("List list = [1,2,3,4]; list.skip(-3).limit(2).skip(-1)", Utils.listOf(3));
     test("def x = -3; def y = -1; List list = [1,2,3,4]; list.skip(x).limit(2).skip(y)", Utils.listOf(3));
@@ -1351,6 +1372,7 @@ public class BuiltinFunctionTests extends BaseTest {
     test("Map x = [a:1,b:2]; x.size() == 2", true);
     test("def x = [a:1,b:2]; x.size() == 2", true);
     test("def x = [1,2,3,4]; x.flatMap{ x.size().filter{ it % 2 == 0 } }.sum()", 8);
+    test("List x = [1,2,3]; x.reverse().size() == 3", true);
   }
 
   @Test public void pipelineOverloadedMethods() {

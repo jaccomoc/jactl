@@ -2814,8 +2814,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       mv.visitIincInsn(expr.iteratorVarDecl.slot, 1);
     }
     else {
-      loadLocal(expr.iteratorVarDecl.slot);
-      invokeMethod(ITERATOR_NEXT_METHOD);
+      invokeMaybeAsync(expr.isAsync, ANY, 0, expr.location,
+                       () -> loadLocal(expr.iteratorVarDecl.slot),
+                       () -> invokeMethod(ITERATOR_NEXT_METHOD));
     }
     return null;
   }
@@ -2838,8 +2839,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       pushType(BOOLEAN);
     }
     else {
-      loadLocal(expr.iteratorVarDecl.slot);
-      invokeMethod(ITERATOR_HAS_NEXT_METHOD);
+      invokeMaybeAsync(expr.isAsync, BOOLEAN, 0, expr.location,
+                       () -> loadLocal(expr.iteratorVarDecl.slot),
+                       () -> invokeMethod(ITERATOR_HAS_NEXT_METHOD));
     }
     return null;
   }
@@ -5787,7 +5789,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         _loadConst(255);
         mv.visitInsn(IAND);
       }
-      if (varDecl.type.is(INSTANCE,ARRAY)) {
+      if (varDecl.type.is(INSTANCE,ARRAY,MAP,LIST)) {
         checkCast(varDecl.type);
       }
       return;
@@ -6404,7 +6406,7 @@ NOT_NEGATIVE: mv.visitLabel(NOT_NEGATIVE);
     pushType(INT);
   }
 
-  private void _loadLocation(SourceLocation sourceLocation) {
+  void _loadLocation(SourceLocation sourceLocation) {
     if (sourceLocation instanceof LocalLocation) {
       LocalLocation localLocation = (LocalLocation) sourceLocation;
       _loadLocal(localLocation.sourceSlot);

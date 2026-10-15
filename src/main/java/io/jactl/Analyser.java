@@ -466,13 +466,13 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   
   @Override public Void visitForLoopIteratorInit(Expr.ForLoopIteratorInit expr) { return null; }
   @Override public Void visitForLoopIterNext(Expr.ForLoopIterNext expr) {
-    if (expr.iteratorVarDecl.isAsync) {
+    if (expr.iterableVarDecl.isAsync) {
       async(expr);
     }
     return null;
   }
   @Override public Void visitForLoopIterHasNext(Expr.ForLoopIterHasNext expr) {
-    if (expr.iteratorVarDecl.isAsync) {
+    if (expr.iterableVarDecl.isAsync) {
       async(expr);
     }
     return null;

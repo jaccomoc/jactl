@@ -89,7 +89,7 @@ public class TransposeIterator extends JactlIterator {
     nonEmptySeen = false;
   }
 
-  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(TransposeIterator.class, IteratorType.FLATMAP, "hasNext$c", Object.class, Continuation.class);
+  public static JactlMethodHandle hasNext$cHandle = RuntimeUtils.lookupMethod(TransposeIterator.class, IteratorType.TRANSPOSE, "hasNext$c", Object.class, Continuation.class);
   public static Object hasNext$c(Continuation c) {
     return ((TransposeIterator)c.localObjects[0]).doHasNext(c);
   }
@@ -169,7 +169,7 @@ public class TransposeIterator extends JactlIterator {
     }
   }
 
-  private static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(TransposeIterator.class, IteratorType.FLATMAP, "next$c", Object.class, Continuation.class);
+  private static JactlMethodHandle next$cHandle = RuntimeUtils.lookupMethod(TransposeIterator.class, IteratorType.TRANSPOSE, "next$c", Object.class, Continuation.class);
   public static Object next$c(Continuation c) {
     return ((TransposeIterator)c.localObjects[0]).doNext(c);
   }
