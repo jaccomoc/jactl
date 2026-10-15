@@ -1128,6 +1128,8 @@ public class ClassTests extends BaseTest {
     test("class X { int i=1; int j=2; X x = new X(i:3,j:4,x:null) }; new X() != [i:1,j:2,x:[i:3,j:4,x:null]]", false);
     test("class X { int i=1; int j=2; X x = new X(i:3,j:4,x:null) }; def x = new X(); def y = [i:1,j:2,x:[i:3,j:4,x:null]]; x == y && y == x", true);
     test("class X { int i=1; int j=2; X x = new X(i:3,j:4,x:null) }; def x = new X(); def y = [i:1,j:2,x:[i:3,j:4,x:null]]; x != y && y != x", false);
+    test("class X { String s }; [new X('Aa')] == [new X('Aa')]", true);
+    test("class X { String s }; [new X('Aa')] != [new X('BB')]", true);
   }
 
   @Test public void mapConversions() {

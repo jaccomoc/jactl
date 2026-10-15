@@ -267,6 +267,9 @@ public class ListMapArrayTests extends BaseTest {
     test("def x = [[1,'a'],[2,'b'],['1','c']] as Map; x[1] + x[2] + x['1']", "abc");
     test("def x; x.(1).(2) = true; x[1][2]", true);
     test("def x; x.(1) = true; x[1L]", null);  // unfortunately HashMap uses equals where 1 and 1L are not equal
+    test("Map m = [:]; m[['Aa']] = 1; m[['BB']] = 2; m.size()", 2);
+    test("Map m = [:]; m[[a:'Aa']] = 1; m[[a:'BB']] = 2; m.size()", 2);
+    test("class X { String s }; Map m = [:]; m[new X('Aa')] = 1; m[new X('BB')] = 2; m.size()", 2);
   }
 
   @Test public void listMapVariables() {

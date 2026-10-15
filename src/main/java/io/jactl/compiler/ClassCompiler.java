@@ -557,11 +557,11 @@ public class ClassCompiler {
       mv.visitFieldInsn(GETFIELD, classDescriptor.getInternalName(), field.getKey(), type.descriptor());
       if (type.is(ARRAY)) {
         mv.visitMethodInsn(INVOKESTATIC, "java/util/Objects", "deepEquals", "(Ljava/lang/Object;Ljava/lang/Object;)Z", false);
-        mv.visitJumpInsn(IFNE, fieldNotEquals);
+        mv.visitJumpInsn(IFEQ, fieldNotEquals);
       }
       else if (!type.isPrimitive()) {
         mv.visitMethodInsn(INVOKESTATIC, "java/util/Objects", "equals", "(Ljava/lang/Object;Ljava/lang/Object;)Z", false);
-        mv.visitJumpInsn(IFNE, fieldNotEquals);
+        mv.visitJumpInsn(IFEQ, fieldNotEquals);
       }
       else {
         switch (type.getType()) {
