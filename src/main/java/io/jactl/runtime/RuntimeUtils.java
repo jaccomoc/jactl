@@ -3209,6 +3209,9 @@ public class RuntimeUtils {
     catch (Continuation cont) {
       throw new Continuation(cont, eval$cHandle, 0, null, null);
     }
+    catch (TimeoutError e) {
+      throw e;
+    }
     catch (JactlError e) {
       if (bindings != null) {
         bindings.put(Utils.EVAL_ERROR, e.toString());

@@ -73,15 +73,7 @@ public class RuntimeState {
   }
 
   public static void setState(JactlContext context, Map<String, Object> globals) {
-    RuntimeState state = getState();
-    state.context = context;
-    state.globals = globals;
-    state.writer = null;
-    state.input = null;
-    state.invocationContext = null;
-    state.loopIterationCount = 0;
-    state.counter = 0;
-    state.endTime = 0;
+    setState(context, globals, null, null, null);
   }
   
   public static void setState(JactlContext context, Map<String, Object> globals, Reader input, Writer writer, Object invocationContext) {
@@ -130,8 +122,8 @@ public class RuntimeState {
     }
     // Increment after because we insert check just before body of loop
     loopIterationCount++;
-    
-    _checkTimeout(source, offset);
+
+    checkNthTimeout(source, offset);
   }
   
   public static boolean hasLimits() {
@@ -145,8 +137,14 @@ public class RuntimeState {
     state._checkTimeout(source, offset);
   }
   
-  public void _checkTimeout(String source, int offset) {
-    if (endTime > 0 && ++counter % TIMEOUT_FREQ_CHECK == 0 && System.nanoTime() >= endTime) {
+  public void checkNthTimeout(String source, int offset) {
+    if (endTime > 0 && ++counter % TIMEOUT_FREQ_CHECK == 0) {
+      _checkTimeout(source, offset);
+    }
+  }
+  
+  private void _checkTimeout(String source, int offset) {
+    if (System.nanoTime() >= endTime) {
       throw new TimeoutError("Script execution exceeded max time of " + context.maxExecutionTimeMs + "ms", source, offset);
     }
   }

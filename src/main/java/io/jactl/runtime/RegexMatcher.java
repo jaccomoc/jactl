@@ -419,7 +419,7 @@ public class RegexMatcher implements Checkpointable {
     }
 
     @Override public char charAt(int index) {
-      state._checkTimeout(source, sourceOffset);
+      state.checkNthTimeout(source, sourceOffset);
       return str.charAt(index);
     }
 

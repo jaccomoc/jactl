@@ -60,6 +60,25 @@ public class CompilerTest3 extends BaseTest {
     test("['[1,2]','[3]'].map{ eval(it,[:]) }", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3)));
     test("['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3)));
   }
+  
+  @Test public void evalWithTimeout() {
+    if (isAsync) {
+      JactlContext context = getJactlContext(true, false, false, 2000, 10);
+      JactlScript  script  = Jactl.compileScript("eval('10.each{ sleep(20) }')", new HashMap(), context);
+      assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
+      assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
+      JactlScript script2 = Jactl.compileScript("eval('def f = true ? sleep : null; 10.each{ f(20) }')", new HashMap(), context);
+      assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
+      assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
+    }
+  }
+
+  @Test public void evalWithLoopLimit() {
+    JactlContext context = getJactlContext(true, false, false, 1000, 10000);
+    JactlScript script = Jactl.compileScript("eval('int i; for (i=0; i<2000; i++) { }; i')", new HashMap(), context);
+    assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
+    assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
+  }
 
   @Test public void evalWithAsync() {
     test("eval('sleep(0,1)')", 1);
@@ -522,6 +541,9 @@ public class CompilerTest3 extends BaseTest {
                                             .maxExecutionTime(100)
                                             .build();
 
+    assertThrows(TimeoutError.class, () -> Jactl.eval("2.each{ sleep(200) }", new HashMap(), jactlContext));
+    assertThrows(TimeoutError.class, () -> Jactl.eval("sleep(200)", new HashMap(), jactlContext));
+    assertThrows(TimeoutError.class, () -> Jactl.eval("eval('sleep(200)')", new HashMap(), jactlContext));
     assertThrows(TimeoutError.class, () -> Jactl.eval("long x; def f() { for (i=0; i < 100000; i++) { x++ } }; def g() { for (i=0;i<10000;i++) { f(); x++ } }; for (i = 0; i < 100; i++) { g(); x++ }; for (i=0;i<1;i++){}; x", new HashMap(), jactlContext));
     assertThrows(TimeoutError.class, () -> Jactl.eval("def f() { for (i=0; i < 100000; i++) {} }; def g() { for (i=0;i<100000;i++) { f() } }; for (i = 0; i < 100000; i++) { f() }", new HashMap(), jactlContext));
     assertThrows(TimeoutError.class, () -> Jactl.eval("while (true) {}", new HashMap(), jactlContext));

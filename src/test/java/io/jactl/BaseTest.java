@@ -312,6 +312,10 @@ public class BaseTest {
   }
 
   protected JactlContext getJactlContext(boolean evalConsts, boolean replMode, boolean testCheckpoint, boolean loopDetection) {
+    return getJactlContext(evalConsts, replMode, testCheckpoint, loopDetection ? 1_000_000_000L : -1, loopDetection ? 1_000_000 : -1);
+  }
+  
+  protected JactlContext getJactlContext(boolean evalConsts, boolean replMode, boolean testCheckpoint, long maxIterations, int timeoutMs) {
     JactlContext jactlContext = JactlContext.create()
                                             .environment(isAsync ? jactlEnv : null)
                                             .async(isAsync)
@@ -326,8 +330,8 @@ public class BaseTest {
                                             .allowUndeclaredGlobals(allowUndeclaredGlobals)
                                             .allowHostAccess(allowHostAccess)
                                             .allowHostClassLookup(allowHostClassLookup)
-                                            .maxLoopIterations(loopDetection ? 1_000_000_000L : -1)
-                                            .maxExecutionTime(loopDetection ? 1_000_000 : -1)
+                                            .maxLoopIterations(maxIterations)
+                                            .maxExecutionTime(timeoutMs)
                                             .build();
     return jactlContext;
   }
