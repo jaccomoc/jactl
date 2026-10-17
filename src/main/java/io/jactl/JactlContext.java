@@ -966,14 +966,14 @@ public class JactlContext {
         checkpointSize.addAndGet(buf.length);
         if (testRestoring()) {
           Continuation cont1 = (Continuation)Restorer.restore(this, buf);
-          asyncTask.execute(this, instance, cont1.localObjects[0], result -> resumeContinuation(completion, result, cont1, instance, asyncTask.getRuntimeState()));
+          asyncTask.execute(this, instance, cont1.localObjects[0], result -> resumeContinuation(completion, result, cont1, instance, asyncTask.getRuntimeState(), asyncTask.getSource(), asyncTask.getOffset()));
         }
         else {
-          asyncTask.execute(this, instance, asyncTaskCont.localObjects[0], result -> resumeContinuation(completion, result, asyncTaskCont, instance, asyncTask.getRuntimeState()));
+          asyncTask.execute(this, instance, asyncTaskCont.localObjects[0], result -> resumeContinuation(completion, result, asyncTaskCont, instance, asyncTask.getRuntimeState(), asyncTask.getSource(), asyncTask.getOffset()));
         }
       }
       else {
-        asyncTask.execute(this, instance, asyncTaskCont.localObjects[0], result -> resumeContinuation(completion, result, asyncTaskCont, instance, asyncTask.getRuntimeState()));
+        asyncTask.execute(this, instance, asyncTaskCont.localObjects[0], result -> resumeContinuation(completion, result, asyncTaskCont, instance, asyncTask.getRuntimeState(), asyncTask.getSource(), asyncTask.getOffset()));
       }
     }
     catch (Throwable t) {
@@ -990,8 +990,16 @@ public class JactlContext {
   }
 
   private void resumeContinuation(Consumer<Object> completion, Object asyncResult, Continuation cont, JactlScriptObject instance, RuntimeState state) {
+    resumeContinuation(completion, asyncResult, cont, instance, state, null, 0);
+  }
+  
+  private void resumeContinuation(Consumer<Object> completion, Object asyncResult, Continuation cont, JactlScriptObject instance, RuntimeState state, String source, int offset) {
     RuntimeState.setState(state);
     try {
+      if (source != null) {
+        // Check for timeout
+        state._checkTimeout(source, offset);
+      }
       Object result = cont.continueExecution(asyncResult);
       // We finally get the real result out of the script execution
       cleanUp(instance);

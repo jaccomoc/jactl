@@ -87,6 +87,9 @@ public class RuntimeState {
     if (context.maxExecutionTimeMs >= 0) {
       state.endTime = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(context.maxExecutionTimeMs);
     }
+    else {
+      state.endTime = 0;
+    }
     state.loopIterationCount = 0;
     state.invocationContext = invocationContext;
   }
@@ -137,15 +140,23 @@ public class RuntimeState {
     state._checkTimeout(source, offset);
   }
   
+  public boolean hasTimeout() {
+    return endTime != 0;
+  }
+  
   public void checkNthTimeout(String source, int offset) {
-    if (endTime > 0 && ++counter % TIMEOUT_FREQ_CHECK == 0) {
+    if (hasTimeout() && ++counter % TIMEOUT_FREQ_CHECK == 0) {
       _checkTimeout(source, offset);
     }
   }
   
-  private void _checkTimeout(String source, int offset) {
-    if (System.nanoTime() >= endTime) {
+  public void _checkTimeout(String source, int offset) {
+    if (hasTimeout() && System.nanoTime() - endTime >= 0) {
       throw new TimeoutError("Script execution exceeded max time of " + context.maxExecutionTimeMs + "ms", source, offset);
     }
+  }
+  
+  public long getEndTime() {
+    return endTime;
   }
 }

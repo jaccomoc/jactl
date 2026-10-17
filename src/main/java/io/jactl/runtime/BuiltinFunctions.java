@@ -26,6 +26,7 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.runtime.Reducer.Type.JOIN;
@@ -641,9 +642,17 @@ public class BuiltinFunctions {
   // = sleep
   public static Object sleep(Continuation c, String source, int offset, long timeMs, Object data) {
     if (timeMs >= 0) {
-      if (RuntimeState.getState().getContext().isAsync) {
+      RuntimeState state        = RuntimeState.getState();
+      JactlContext jactlContext = state.getContext();
+      // If we have a timeout configured that times out before our sleep time then only sleep until
+      // then (plus 1ms) so we timeout closer to configured timeout time
+      if (state.hasTimeout()) {
+        timeMs = Math.min(Math.max(TimeUnit.NANOSECONDS.toMillis(state.getEndTime() - System.nanoTime()), 0) + 1, timeMs);
+      }
+      if (jactlContext.isAsync) {
+        long finalTimeMs = timeMs;
         Continuation.suspendNonBlocking(source, offset, data, (context, dataObj, resumer) -> {
-          context.scheduleEvent(() -> resumer.accept(dataObj), timeMs);
+          context.scheduleEvent(() -> resumer.accept(dataObj), finalTimeMs);
         });
       }
       else {

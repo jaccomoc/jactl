@@ -336,6 +336,11 @@ public class InvokeDynamicBootstrap {
       directInvoke = false;
     }
 
+    // Use slow path so we get timeout checking for sync invocations
+    if (jmh.isBlocking() && !jactlContext.isAsync) {
+      directInvoke = false;
+    }
+    
     // Install the guard and direct call or call via wrapper as needed
     cs.setTarget(MethodHandles.guardWithTest(guard, directInvoke ? adapted : makeWrapperInvoker(siteType, source, offset), cs.getTarget()));
     MutableCallSite.syncAll(new MutableCallSite[]{cs});
@@ -483,6 +488,13 @@ public class InvokeDynamicBootstrap {
       adapted = adapted.asType(siteType);
     }
     catch (WrongMethodTypeException e) {
+      directInvoke = false;
+    }
+    
+    // Use slow path if blocking built-in and we are in sync mode so that the
+    // timeout check will be done in FunctionWrapperHandler.invoke() and
+    // BoundHandle.invoke()
+    if (func.isBlocking() && !jactlContext.isAsync) {
       directInvoke = false;
     }
     

@@ -1235,11 +1235,12 @@ public class RuntimeUtils {
         return sb.toString();
       }
 
+      // If user class has overridden toString() invoke that
       if (obj instanceof JactlObject) {
         JactlObject jobj = (JactlObject)obj;
         Object toString = jobj._$j$getFieldsAndMethods().get(Utils.TO_STRING);
         if (toString instanceof JactlMethodHandle) {
-          JactlMethodHandle mh = (JactlMethodHandle)toString;
+          JactlMethodHandle mh = (JactlMethodHandle) toString;
           if (mh.parameterCount() == 5) {
             try {
               Object result = mh.invoke(jobj, (Continuation)null, null, 0, Utils.EMPTY_OBJ_ARR);

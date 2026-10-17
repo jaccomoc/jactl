@@ -47,7 +47,7 @@ public class BaseTest {
   protected boolean            checkClasses = true;
   protected String             packageName;
   protected Map<String,Object> globals;
-  protected boolean            isAsync = Boolean.valueOf(System.getProperty(JactlScriptEngine.JACTL_ASYNC, "true"));
+  protected boolean            isAsync;
   protected boolean            useAsyncDecorator;
   protected boolean            classAccessToGlobals;
   protected boolean            alwaysEvalConsts;
@@ -65,6 +65,7 @@ public class BaseTest {
 
   @BeforeEach
   public void setUp() {
+    isAsync              = Boolean.valueOf(System.getProperty(JactlScriptEngine.JACTL_ASYNC, "true"));
     debugLevel           = 0;
     packageName          = Utils.DEFAULT_JACTL_PKG;
     globals              = new HashMap<>();

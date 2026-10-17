@@ -62,15 +62,13 @@ public class CompilerTest3 extends BaseTest {
   }
   
   @Test public void evalWithTimeout() {
-    if (isAsync) {
-      JactlContext context = getJactlContext(true, false, false, 2000, 10);
-      JactlScript  script  = Jactl.compileScript("eval('10.each{ sleep(20) }')", new HashMap(), context);
-      assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
-      assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
-      JactlScript script2 = Jactl.compileScript("eval('def f = true ? sleep : null; 10.each{ f(20) }')", new HashMap(), context);
-      assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
-      assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
-    }
+    JactlContext context = getJactlContext(true, false, false, 2000, 10);
+    JactlScript  script  = Jactl.compileScript("eval('10.each{ sleep(20) }')", new HashMap(), context);
+    assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
+    assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
+    JactlScript script2 = Jactl.compileScript("eval('def f = true ? sleep : null; 10.each{ f(20) }')", new HashMap(), context);
+    assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
+    assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
   }
 
   @Test public void evalWithLoopLimit() {
@@ -86,6 +84,28 @@ public class CompilerTest3 extends BaseTest {
     test("eval('''['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }''')", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3)));
     test("eval('''result = 0; for(int i = 0; i < 5; i++) result += sleep(0,i-1)+sleep(0,1); result''',[result:null])", 10);
     test("eval('''eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')''')", 10);
+  }
+
+  @Test public void evalTimeoutSyncMode() {
+    isAsync = false;
+    JactlContext context = getJactlContext(true, false, false, 2000, 10);
+    JactlScript script = Jactl.compileScript("eval('10.each{ sleep(20) }')", new HashMap(), context);
+    assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
+    assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
+    JactlScript script2 = Jactl.compileScript("eval('def f = true ? sleep : null; 10.each{ f(20) }')", new HashMap(), context);
+    assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
+    assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
+  }
+
+  @Test public void timeoutSyncMode() {
+    isAsync = false;
+    JactlContext context = getJactlContext(true, false, false, 2000, 10);
+    JactlScript script = Jactl.compileScript("10.each{ sleep(20) }", new HashMap(), context);
+    assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
+    assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
+    JactlScript script2 = Jactl.compileScript("def f = true ? sleep : null; 10.each{ f(20) }", new HashMap(), context);
+    assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
+    assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
   }
 
   @Test public void asyncFunctions() {
@@ -495,25 +515,9 @@ public class CompilerTest3 extends BaseTest {
 
   @Test
   public void inifiniteLoopDetection() {
-    //    JactlContext jactlContext = JactlContext.create().build();
-    //
-    //    for (int i = 0; i < 3; i++) {
-    //      long start = System.nanoTime();
-    //      long x     = (long) Jactl.eval("long x; def f() { for (i=0; i < 1000; i++) { x++ } }; def g() { for (i=0;i<1000;i++) { f(); x++ } }; for (i = 0; i < 100; i++) { g(); x++ }; x", new HashMap(), jactlContext);
-    //      assertEquals(100100100L, x);
-    //      System.out.println("Duration = " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start) + "ms");
-    //    }
-
     JactlContext jactlContext2 = JactlContext.create()
                                              .maxLoopIterations(100_100_100L)
                                              .build();
-
-    //    for (int i = 0; i < 3; i++) {
-    //      long start = System.nanoTime();
-    //      long x     = (long) Jactl.eval("long x; def f() { for (i=0; i < 1000; i++) { x++ } }; def g() { for (i=0;i<1000;i++) { f(); x++ } }; for (i = 0; i < 100; i++) { g(); x++ }; x", new HashMap(), jactlContext2);
-    //      assertEquals(100100100L, x);
-    //      System.out.println("With loop limit: Duration = " + TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start) + "ms");
-    //    }
 
     try {
       Jactl.eval("long x; def f() { for (i=0; i < 1000; i++) { x++ } }; def g() { for (i=0;i<1000;i++) { f(); x++ } }; for (i = 0; i < 100; i++) { g(); x++ }; for (i=0;i<1;i++){}; x", new HashMap(), jactlContext2);

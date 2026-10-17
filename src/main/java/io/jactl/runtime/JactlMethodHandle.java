@@ -71,10 +71,6 @@ public abstract class JactlMethodHandle implements Checkpointable {
     return handle.invokeExact(c, source, offset, args);
   }
 
-  public Object invokeWithArguments(Object... args) throws Throwable {
-    return handle.invokeWithArguments(args);
-  }
-
   public JactlMethodHandle bindTo(Object obj) {
     return new BoundHandle(this, obj);
   }
@@ -93,6 +89,7 @@ public abstract class JactlMethodHandle implements Checkpointable {
   private static final boolean[] EMPTY_BOOLEAN_ARR = new boolean[0];
   public boolean[] heapLocalsPassedToFn() { return EMPTY_BOOLEAN_ARR; }
 
+  public boolean            isBlocking()     { return false; }
   public boolean            isBoundHandle()  { return false; }
   public Object             getBoundObject() { return null; }
   public JactlMethodHandle  getInnerHandle() { return this; }
@@ -348,6 +345,21 @@ public abstract class JactlMethodHandle implements Checkpointable {
     @Override public MethodHandle handleToUnderlyingFunction() { return function.getMethodHandle(); }
     @Override public boolean isAsync() { return function.isAsync(); }
     @Override public boolean needsLocation() { return function.needsLocation; }
+    @Override public boolean isBlocking() { return function.isBlocking(); }
+
+    @Override
+    public Object invoke(Continuation c, String source, int offset, Object[] args) throws Throwable {
+      Object result = super.invoke(c, source, offset, args);
+
+      // If we have a built-in async function like sleep() and we are in sync mode (where we block during
+      // long operations) then check for timeout after function returns. If in async mode we will do this
+      // check in JactlContext.resumeExecution().
+      if (function.isBlocking() && !RuntimeState.getState().getContext().isAsync) {
+        RuntimeState.checkTimeout(source, offset);
+      }
+      
+      return result;
+    }
 
     @Override
     public boolean equals(Object other) {
@@ -395,6 +407,7 @@ public abstract class JactlMethodHandle implements Checkpointable {
 
     @Override public MethodHandle      handleToUnderlyingFunction() { return wrappedHandle.handleToUnderlyingFunction(); }
     @Override public boolean[]         heapLocalsPassedToFn()       { return wrappedHandle.heapLocalsPassedToFn(); }
+    @Override public boolean           isBlocking()                 { return wrappedHandle.isBlocking(); }
     @Override public boolean           isAsync()                    { return wrappedHandle.isAsync(); }
     @Override public boolean           needsLocation()              { return wrappedHandle.needsLocation(); }
     @Override public boolean           isBoundHandle()              { return true; }
@@ -443,12 +456,14 @@ public abstract class JactlMethodHandle implements Checkpointable {
 
     @Override public Object invoke(Continuation c, String source, int offset, Object[] args) throws Throwable {
       populateHandle();
-      return handle.invokeExact(c, source, offset, args);
-    }
-
-    @Override public Object invokeWithArguments(Object... args) throws Throwable {
-      populateHandle();
-      return handle.invokeWithArguments(args);
+      Object result = handle.invokeExact(c, source, offset, args);
+      // If we have a built-in async function like sleep() and we are in sync mode (where we block during
+      // long operations) then check for timeout after function returns. If in async mode we will do this
+      // check in JactlContext.resumeExecution().
+      if (isBlocking() && !RuntimeState.getState().getContext().isAsync) {
+        RuntimeState.checkTimeout(source, offset);
+      }
+      return result;
     }
 
     @Override public int parameterCount() {

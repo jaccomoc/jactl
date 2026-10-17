@@ -2628,7 +2628,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // We can invoke the method directly as we have exact number of args required
       invokeMaybeAsync(isAsync, method.returnType, 0, expr.location,
                        () -> {
-//                         compile(parent);
                          if (couldBeNull(parent)) {
                            throwIfNull("Cannot invoke method " + method.name + "() on null object", expr.methodNameLocation);
                          }
@@ -2686,7 +2685,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // Need to invoke the wrapper
       invokeMaybeAsync(isAsync, method.returnType, 0, expr.location,
                        () -> {
-//                         compile(parent);
                          if (couldBeNull(parent)) {
                            throwIfNull("Cannot invoke method " + method.name + "() on null object", expr.methodNameLocation);
                          }
@@ -2726,6 +2724,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          }
                        });
     }
+
+    // If method was an async built-in and we are in sync mode then check for timeout if timeout configured
+    checkTimeout(method, expr.location);
+
     if (method.returnType.is(ITERATOR) && !expr.isMethodCallTarget) {
       // If Iterator is not going to have another method invoked on it then we need to convert
       // to List since Iterators are not standard Jactl types.
@@ -3009,6 +3011,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   ///////////////////////////////////////////////////////////////
+
+  /**
+   * For built-in functions that are async, we add a check for a timeout since these functions are
+   * the ones likely to cause us to exceed our time budget. We only check functions that actually
+   * block so we ignore async functions that are async only because they might be passed an async
+   * argument (e.g. list.map{ sleep(1) }).
+   * NOTE: We only check if we are in sync mode because we already have a check in 
+   * JactlContext.resumeExecution() that covers the cases for async mode.
+   * @param func      the FunctionDescriptor being invoked
+   * @param location  the location of the call
+   */
+  private void checkTimeout(FunctionDescriptor func, Location location) {
+    if (!classCompiler.context.isAsync && classCompiler.context.maxExecutionTimeMs >= 0 && func.isBlocking()) {
+      loadLocation(location);
+      invokeMethod(RuntimeState.CHECK_TIMEOUT_METHOD);
+    }
+  }
 
   // Return true if we can guarantee expression evaluates to positive integer
   private boolean compilePositiveInt(Expr expr) {
@@ -5144,15 +5163,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     refreshAllAliases();
     mv.visitLabel(after);              // :after
-
-    // If we have a max execution time configure then as well as checking every n iterations of loops
-    // we also check after an async function returns (since they are likely to have taken some wall-clock
-    // time to finish)
-    if (classCompiler.context.maxExecutionTimeMs >= 0) {
-      loadConst(location.getSource());
-      loadConst(location.getOffset());
-      invokeMethod(RuntimeState.CHECK_TIMEOUT_METHOD);
-    }
   }
 
   boolean asyncEnabled() {
@@ -5355,6 +5365,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        },
                        () -> invokeMethod(func, finalParamTypes, false));
     }
+
+    checkTimeout(func, expr.location);
   }
 
   /**

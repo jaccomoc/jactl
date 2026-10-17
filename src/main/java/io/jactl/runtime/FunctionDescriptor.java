@@ -169,18 +169,14 @@ public class FunctionDescriptor {
   public boolean isAsync() {
     return isAsync == null ? false : isAsync;
   }
-  
-//  public void invoke(MethodVisitor mv, boolean isInvokeSpecial, LocalTypes stack) {
-//    int stackCount = paramTypes.size() + (isStatic ? 0 : 1);
-//    stack.expect(stackCount);
-//    mv.visitMethodInsn(isStatic ? INVOKESTATIC
-//                                : isInvokeSpecial ? INVOKESPECIAL
-//                                                  : INVOKEVIRTUAL,
-//                       implementingClassName,
-//                       wrapperMethod,
-//                       getMethodDescriptor(this),
-//                       false);
-//    stack.pop(stackCount);
-//    stack.push(returnType);
-//  }
+
+  /**
+   * Is the function a blocking function like sleep().
+   * Ignore functions that are async only because they async args since those args
+   * will be dealt with separately when they are compiled.
+   * @return true if blocking
+   */
+  public boolean isBlocking() {
+    return isBuiltin && isAsync() && asyncArgs.isEmpty();
+  }
 }
