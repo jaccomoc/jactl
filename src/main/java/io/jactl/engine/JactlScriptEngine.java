@@ -92,17 +92,17 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
 
   private Object evalScript(String script, Map<String,Object> ctxGlobals, Reader reader, Writer writer) throws ScriptException {
     JactlScript jactlScript;
-    if (untypedGlobals) {
-      synchronized (scriptCache) {
+    synchronized (scriptCache) {
+      if (untypedGlobals) {
         jactlScript = scriptCache.get(Pair.of(script, ctxGlobals.keySet()));
         if (jactlScript == null) {
           jactlScript = compileScript(script, ctxGlobals);
           scriptCache.put(Pair.of(script, new HashSet(ctxGlobals.keySet())), jactlScript);
         }
       }
-    }
-    else {
-      jactlScript = compileScript(script, ctxGlobals);
+      else {
+        jactlScript = compileScript(script, ctxGlobals);
+      }
     }
     this.jactlScript = jactlScript;
     try {

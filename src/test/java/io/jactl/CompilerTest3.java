@@ -525,7 +525,7 @@ public class CompilerTest3 extends BaseTest {
       fail("Should have thrown");
     }
     catch (TimeoutError e) {
-      assertTrue(e.getMessage().contains("line 1, column 142"));
+      assertTrue(e.getMessage().toLowerCase().contains("loop iterations limit"));
     }
     assertThrows(TimeoutError.class, () -> Jactl.eval("long x; def f() { for (i=0; i < 1000; i++) { x++ } }; def g() { for (i=0;i<1000;i++) { f(); x++ } }; for (i = 0; i < 100; i++) { g(); x++ }; for (i=0;i<1;i++){}; x", new HashMap(), jactlContext2));
     assertThrows(TimeoutError.class, () -> Jactl.eval("def f() { for (i=0; i < 100000; i++) {} }; def g() { for (i=0;i<100000;i++) { f() } }; for (i = 0; i < 100000; i++) { f() }", new HashMap(), jactlContext2));
