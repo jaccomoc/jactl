@@ -17,6 +17,7 @@
 
 package io.jactl.engine;
 
+import io.jactl.CompileError;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
@@ -120,6 +121,13 @@ class JactlScriptEngineTest {
     Bindings bindings = engine.createBindings();
     bindings.put("x", "xxx");
     assertEquals("xxxxxx", engine.eval("x + x", bindings));
+    bindings.remove("x");
+    try {
+      engine.eval("x + x", bindings);
+    }
+    catch (ScriptException e) {
+      assertTrue(e.getMessage().toLowerCase().contains("reference to unknown variable 'x'"));
+    }
   }
   
   @Test void evalWithNoReader() throws ScriptException {

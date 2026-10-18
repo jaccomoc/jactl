@@ -59,8 +59,9 @@ public class CompilerTest3 extends BaseTest {
     test("eval('''result = 0; for(int i = 0; i < 5; i++) result += i; result''',[result:null])", 10);
     test("['[1,2]','[3]'].map{ eval(it,[:]) }", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3)));
     test("['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3)));
+    test("eval('x + y', [x:1,y:2]); def m = [y:2]; eval('x + y', m); m.'$error' =~ /reference to unknown variable 'x'/i", true);
   }
-  
+
   @Test public void evalWithTimeout() {
     JactlContext context = getJactlContext(true, false, false, 2000, 10);
     JactlScript  script  = Jactl.compileScript("eval('10.each{ sleep(20) }')", new HashMap(), context);
