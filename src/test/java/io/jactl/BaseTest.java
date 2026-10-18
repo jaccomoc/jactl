@@ -59,7 +59,10 @@ public class BaseTest {
   protected boolean            runTestsWithAllowHostAccess = false;
   protected boolean            invokeDynamic = true;
   protected JactlEnv           jactlEnv;
-
+  protected long               maxIterations = 1_000_000_000L;
+  protected int                maxExecutionTimeMs = 1_000_000;
+  protected boolean            limitsSet = false;
+  
   protected static int testCounter = 0;
   protected static int testVariationCounter = 0;
 
@@ -113,9 +116,11 @@ public class BaseTest {
   }
   
   protected void doTest(List<String> classCode, String scriptCode, String input, ByteArrayOutputStream output, boolean evalConsts, boolean replMode, boolean testAsync, Object expected) {
-    checkEqual(expected, doRun(classCode, scriptCode, input, output, evalConsts, replMode, testAsync, false));
-    if (output != null) {
-      output.reset();
+    if (!limitsSet) {
+      checkEqual(expected, doRun(classCode, scriptCode, input, output, evalConsts, replMode, testAsync, false));
+      if (output != null) {
+        output.reset();
+      }
     }
     checkEqual(expected, doRun(classCode, scriptCode, input, output, evalConsts, replMode, testAsync, true));
   }
@@ -313,7 +318,7 @@ public class BaseTest {
   }
 
   protected JactlContext getJactlContext(boolean evalConsts, boolean replMode, boolean testCheckpoint, boolean loopDetection) {
-    return getJactlContext(evalConsts, replMode, testCheckpoint, loopDetection ? 1_000_000_000L : -1, loopDetection ? 1_000_000 : -1);
+    return getJactlContext(evalConsts, replMode, testCheckpoint, loopDetection ? maxIterations : -1, loopDetection ? maxExecutionTimeMs : -1);
   }
   
   protected JactlContext getJactlContext(boolean evalConsts, boolean replMode, boolean testCheckpoint, long maxIterations, int timeoutMs) {
@@ -545,7 +550,7 @@ public class BaseTest {
   protected void doTestError(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, String expectedError) {
     testVariationCounter++;
     try {
-      JactlContext jactlContext = getJactlContext(evalConsts, replMode, false,false); 
+      JactlContext jactlContext = getJactlContext(evalConsts, replMode, false, limitsSet); 
       Map<String, Object> bindings = createGlobals();
       classCode.forEach(code -> compileClass(code, jactlContext, packageName, null, bindings));
       Compiler.eval(scriptCode, jactlContext, packageName, bindings);
@@ -566,6 +571,9 @@ public class BaseTest {
         }
         fail("Message did not contain expected string <" + expectedError + ">. Message=" + e.getMessage());
       }
+    }
+    catch (AssertionError e) {
+      throw e;
     }
     catch (Throwable e) {
       fail("Non JactlError: " + e);

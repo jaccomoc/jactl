@@ -1008,6 +1008,10 @@ public class JactlContext {
     catch (Continuation c) {
       asyncWork(completion, c, instance);
     }
+    catch (StackOverflowError e) {
+      cleanUp(instance);
+      completion.accept(new RuntimeError("Stack overflow error (possible infinite recursion)", null, 0, e, false));
+    }
     catch (Throwable t) {
       cleanUp(instance);
       completion.accept(t);

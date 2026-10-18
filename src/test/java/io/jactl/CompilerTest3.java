@@ -586,6 +586,30 @@ public class CompilerTest3 extends BaseTest {
     test.accept("long x = 0; sleep(1, { while (true) { for (i = 0; i < 100; i++) { sleep(2, x++); } } }())", "exceeded max time");
   }
 
+  @Test public void iteratorLoopCounting() {
+    maxIterations = 1000;
+    maxExecutionTimeMs = 1000;
+    limitsSet = true;
+    testError("String str = 'abcdefghijklmnopqrstuvxyz' * 100; def i = 0; str.each{ i++ }; i", "loop iterations");
+    testError("def str = 'abcdefghijklmnopqrstuvxyz' * 100; def i = 0; str.each{ i++ }; i", "loop iterations");
+    testError("def list = [1,2,3,4,5,6,7,8,9,10]; def x = 101.flatMap{ list }; def i = 0; x.map().each{ i++ }; i", "loop iterations");
+    testError("def cnt = 0; 1001.each{ cnt++ }; cnt", "loop iterations");
+    testError("def list = [1,2,3,4,5,6,7,8,9,10]; def x = 101.flatMap{ list } as Object[]; def i = 0; x.map().each{ i++ }; i", "loop iterations");
+  }
+  
+  @Test public void recursionTimeout() {
+    limitsSet = true;
+    maxIterations = 1000;
+    testError("long fib(long x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }; fib(20)", "loop iterations");
+    maxIterations = 1_000_000_000;
+    maxExecutionTimeMs = 10;
+    testError("long fib(long x) { x <= 2 ? 1 : fib(x-1) + fib(x-2) }; fib(50)", "execution exceeded max time");
+  }
+  
+  @Test public void recursionStackOverflow() {
+    testError("def f(x) { f(x) }; f(1)", "Stack overflow");
+  }
+  
   @Test
   public void disablePrint() {
     JactlContext context = JactlContext.create()

@@ -189,6 +189,12 @@ public class PipelineCompiler {
     methodCompiler.invokeMethod(MethodCompiler.ITERATOR_HAS_NEXT_METHOD);
     methodCompiler.popType();
     methodCompiler.mv.visitJumpInsn(IFEQ, endLabel);
+
+    // Check for timeout/max iterations if needed
+    if (methodCompiler.classCompiler.context.hasLimits()) {
+      methodCompiler.loadLocation(exprs.get(0).location);
+      methodCompiler.invokeMethod(RuntimeState.class, RuntimeState.UPDATE_ITERATION_COUNT, String.class, int.class);
+    }
     
     methodCompiler.loadLocal(iteratorSlot);
     methodCompiler.invokeMethod(MethodCompiler.ITERATOR_NEXT_METHOD);
@@ -313,6 +319,11 @@ public class PipelineCompiler {
 
         // case 2: next()
         methodCompiler.mv.visitLabel(switchLabels[index++]);
+        // Check for timeout/max iterations if needed
+        if (methodCompiler.classCompiler.context.hasLimits()) {
+          methodCompiler.loadLocation(exprs.get(0).location);
+          methodCompiler.invokeMethod(RuntimeState.class, RuntimeState.UPDATE_ITERATION_COUNT, String.class, int.class);
+        }
         methodCompiler.loadLocal(iteratorSlot);
         methodCompiler.invokeMethod(MethodCompiler.ITERATOR_NEXT_METHOD);
         methodCompiler.storeLocal(valueSlot);

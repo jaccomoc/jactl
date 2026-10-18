@@ -112,6 +112,10 @@ public class JactlScript {
           cleanUp(instance, jactlContext);
           throw e;
         }
+        catch (StackOverflowError e) {
+          cleanUp(instance, jactlContext);
+          throw new RuntimeError("Stack overflow error (possible infinite recursion)", null, 0, e, false);
+        }
         catch (Throwable e) {
           cleanUp(instance, jactlContext);
           throw new RuntimeException(e);
@@ -127,6 +131,9 @@ public class JactlScript {
           catch (RuntimeError e) {
             throw e;
           }
+          catch (StackOverflowError e) {
+            throw new RuntimeError("Stack overflow error (possible infinite recursion)", null, 0, e, false);
+          }
           catch (Throwable e) {
             throw new RuntimeException(e);
           }
@@ -140,16 +147,32 @@ public class JactlScript {
           try {
             if (scriptInstance == null) {
               scriptInstance = (JactlScriptObject) compiledClass.newInstance();
-              invoker = globals -> scriptInstance._$j$main(globals);
+              invoker = globals -> {
+                try {
+                  return scriptInstance._$j$main(globals);
+                }
+                catch (RuntimeError e) {
+                  throw e;
+                }
+                catch (StackOverflowError e) {
+                  throw new RuntimeError("Stack overflow error (possible infinite recursion)", null, 0, e, false);
+                }
+                catch (Throwable e) {
+                  throw new RuntimeException(e);
+                }
+              };
             }
+            return scriptInstance._$j$main(map);
           }
           catch (RuntimeError e) {
             throw e;
           }
+          catch (StackOverflowError e) {
+            throw new RuntimeError("Stack overflow error (possible infinite recursion)", null, 0, e, false);
+          }
           catch (Throwable e) {
             throw new RuntimeException(e);
           }
-          return scriptInstance._$j$main(map);
         };
       }
     }

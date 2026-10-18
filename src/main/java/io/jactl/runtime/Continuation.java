@@ -195,6 +195,9 @@ public class Continuation extends RuntimeException implements Checkpointable {
         // Need to continue execution with error so that resumption code can rethrow
         result = runtimeError;
       }
+      catch (StackOverflowError e) {
+        result = new RuntimeError("Stack overflow error (possible infinite recursion)", null, 0, e, false);
+      }
       catch (Throwable e) {
         throw new IllegalStateException("Internal error: " + (e.getMessage() == null ? e.getClass() : e.getMessage()), e);
       }

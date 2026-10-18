@@ -175,7 +175,7 @@ import static org.objectweb.asm.Opcodes.*;
  */
 public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
-  private final ClassCompiler classCompiler;
+  final ClassCompiler classCompiler;
   final MethodVisitor mv;
   private final Expr.FunDecl  methodFunDecl;
   private final String        methodName;
@@ -322,6 +322,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       objArr  = stack.allocateSlot(OBJECT_ARR);
     }
 
+    // If timeout or max loop iterations configured then treat each call to a function as a loop iteration
+    // (this covers collection pipelines where closures are invoked per element of a list) so check for timeout
+    if (classCompiler.context.hasLimits() && !methodFunDecl.isWrapper) {
+      loadLocation(methodFunDecl.location);
+      invokeMethod(RuntimeState.class, RuntimeState.UPDATE_ITERATION_COUNT, String.class, int.class);
+    }
+    
     globalsLabel = new Label();
     mv.visitLabel(globalsLabel);
 

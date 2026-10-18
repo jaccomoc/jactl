@@ -359,8 +359,20 @@ public abstract class JactlIterator<T> implements Iterator<T>, Checkpointable {
   private static class NumberIterator extends JactlIterator<Integer> {
     long num;
     int  idx = 0;
+    RuntimeState state;
+    NumberIterator() {
+      state = RuntimeState.getState();
+      if (!state.hasLimits()) {
+        state = null;
+      }
+    }
     @Override public boolean hasNext() { return idx < num; }
-    @Override public Integer next()    { return idx++;     }
+    @Override public Integer next()    {
+      if (state != null) {
+        state._updateIterationCount(null, 0);
+      }
+      return idx++;
+    }
     @Override public void _$j$checkpoint(Checkpointer checkpointer) {
       checkpointer.writeType(ITERATOR);
       checkpointer.writeCInt(IteratorType.NUMBER.ordinal());
