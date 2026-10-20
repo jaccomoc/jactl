@@ -72,7 +72,7 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
 
   @Override
   public Object eval(String script) throws ScriptException {
-    return evalScript(script, globals, context.getReader(), context.getWriter());
+    return evalScript(script, globals == null ? extractGlobals(context) : globals, context.getReader(), context.getWriter());
   }
 
   @Override
@@ -91,17 +91,18 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
   }
 
   private Object evalScript(String script, Map<String,Object> ctxGlobals, Reader reader, Writer writer) throws ScriptException {
+    JactlContext context = getJactlContext();
     JactlScript jactlScript;
     synchronized (scriptCache) {
       if (untypedGlobals) {
         jactlScript = scriptCache.get(Pair.of(script, ctxGlobals.keySet()));
         if (jactlScript == null) {
-          jactlScript = compileScript(script, ctxGlobals);
+          jactlScript = compileScript(script, ctxGlobals, context);
           scriptCache.put(Pair.of(script, new HashSet(ctxGlobals.keySet())), jactlScript);
         }
       }
       else {
-        jactlScript = compileScript(script, ctxGlobals);
+        jactlScript = compileScript(script, ctxGlobals, context);
       }
     }
     this.jactlScript = jactlScript;
@@ -326,7 +327,8 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
     if (value != null) {
       return value;
     }
-    return this.getBindings(ScriptContext.GLOBAL_SCOPE).get(name);
+    Bindings bindings = this.getBindings(ScriptContext.GLOBAL_SCOPE);
+    return bindings == null ? null : bindings.get(name);
   }
 
   private class JactlCompiledScript extends CompiledScript {
@@ -357,7 +359,10 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
   }
 
   private JactlScript compileScript(String script, Map bindings) throws ScriptException {
-    JactlContext jactlContext = getJactlContext();
+    return compileScript(script, bindings, getJactlContext());
+  }
+  
+  private JactlScript compileScript(String script, Map bindings, JactlContext jactlContext) throws ScriptException {
     if (untypedGlobals) {
       // Use erased types (i.e. ANY) to avoid strange errors if bindings type changes
       // after compilation. This way compiled script won't get NullPointerException,

@@ -172,7 +172,7 @@ public class JactlContext {
     return classAdder.addClass(source, descriptor, bytes);
   }
 
-  private Class<?> _defineClass(String source, JactlClassDescriptor descriptor, byte[] bytes) {
+  private synchronized Class<?> _defineClass(String source, JactlClassDescriptor descriptor, byte[] bytes) {
     String className = descriptor.getInternalName().replace('/', '.');
     Class<?> clss = classLoader.getClass(className);
     if (clss != null) {
