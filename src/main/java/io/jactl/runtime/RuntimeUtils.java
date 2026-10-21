@@ -141,6 +141,23 @@ public class RuntimeUtils {
     }
   }
 
+  public static final MethodRef FLOOR_MOD_INT = Utils.getMethod(RuntimeUtils.class, "floorMod", int.class, int.class);
+  public static int floorMod(int x, int y) {
+    int r = x % y;
+    return r + (y & ((r ^ y) >> 31) & ((r | -r) >> 31));   // add y only if r != 0 and r, y have different signs
+  }
+  
+  public static final MethodRef FLOOR_MOD_LONG = Utils.getMethod(RuntimeUtils.class, "floorMod", long.class, long.class);
+  public static long floorMod(long x, long y) {
+    long r = x % y;
+    return r + (y & ((r ^ y) >> 63) & ((r | -r) >> 63));   // add y only if r != 0 and r, y have different signs
+  }
+
+  public static final MethodRef FLOOR_MOD_DOUBLE = Utils.getMethod(RuntimeUtils.class, "floorMod", double.class, double.class);
+  public static double floorMod(double x, double y) {
+    return ((x % y) + y) % y;
+  }
+
   public static final MethodRef DECIMAL_BINARY_OPERATION_METHOD = Utils.getMethod(RuntimeUtils.class, "decimalBinaryOperation", BigDecimal.class, BigDecimal.class, String.class, int.class, String.class, int.class);
   public static BigDecimal decimalBinaryOperation(BigDecimal left, BigDecimal right, String operator, int minScale, String source, int offset) {
     if (left == null) {
@@ -165,7 +182,7 @@ public class RuntimeUtils {
           result = left.remainder(right);
         }
         catch (ArithmeticException e) {
-          if (e.getMessage().startsWith("Division by zero")) {
+          if (e.getMessage().startsWith("Division")) {
             throw new RuntimeError("Divide by zero error", source, offset);
           }
           else {
@@ -178,7 +195,7 @@ public class RuntimeUtils {
           result = (left.remainder(right).add(right)).remainder(right);
         }
         catch (ArithmeticException e) {
-          if (e.getMessage().startsWith("Division by zero")) {
+          if (e.getMessage().startsWith("Division")) {
             throw new RuntimeError("Divide by zero error", source, offset);
           }
           else {
@@ -211,7 +228,7 @@ public class RuntimeUtils {
       result = left.divide(right);
     }
     catch (ArithmeticException e) {
-      if (e.getMessage().startsWith("Division by zero")) {
+      if (e.getMessage().startsWith("Division")) {
         throw new RuntimeError("Divide by zero error", source, offset);
       }
 
@@ -627,9 +644,7 @@ public class RuntimeUtils {
   public static Object modulo(Object left, Object right, String operator, String originalOperator, int minScale, boolean captureStackTrace, String source, int offset) {
     try {
       if (left instanceof Integer && right instanceof Integer) {
-        int lhs = (int)left;
-        int rhs = (int)right;
-        return ((lhs % rhs) + rhs) % rhs;
+        return floorMod((int)left, (int)right);
       }
     
       if (!(left instanceof Number)) {
@@ -661,12 +676,12 @@ public class RuntimeUtils {
       if (left instanceof Long || right instanceof Long) {
         long lhs = ((Number) left).longValue();
         long rhs = ((Number) right).longValue();
-        return ((lhs % rhs) + rhs) % rhs;
+        return floorMod(lhs, rhs);
       }
 
       int lhs = ((Number) left).intValue();
       int rhs = ((Number) right).intValue();
-      int result = ((lhs % rhs) + rhs) % rhs;
+      int result = floorMod(lhs, rhs);
       if (resultIsByte) { return (byte)result; }
       return result;
     }

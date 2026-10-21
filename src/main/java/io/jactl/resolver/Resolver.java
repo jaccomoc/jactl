@@ -2492,7 +2492,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
             case STAR:                expr.constValue = left * right;   break;
             case SLASH:               expr.constValue = left / right;   break;
             case PERCENT_PERCENT:     expr.constValue = left % right;   break;
-            case PERCENT:             expr.constValue = ((left % right) + right) % right;   break;
+            case PERCENT:             expr.constValue = RuntimeUtils.floorMod(left, right);   break;
             case AMPERSAND:           expr.constValue = left & right;   break;
             case PIPE:                expr.constValue = left | right;   break;
             case ACCENT:              expr.constValue = left ^ right;   break;
@@ -2516,7 +2516,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
             case STAR:                expr.constValue = left * right;        break;
             case SLASH:               expr.constValue = left / right;        break;
             case PERCENT_PERCENT:     expr.constValue = left % right;        break;
-            case PERCENT:             expr.constValue = ((left % right) + right) % right;   break;
+            case PERCENT:             expr.constValue = RuntimeUtils.floorMod(left, right); break;
             case AMPERSAND:           expr.constValue = left & right;        break;
             case PIPE:                expr.constValue = left | right;        break;
             case ACCENT:              expr.constValue = left ^ right;        break;

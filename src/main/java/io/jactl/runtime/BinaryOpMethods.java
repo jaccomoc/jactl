@@ -295,9 +295,9 @@ public class BinaryOpMethods {
 
   public static Object intModulo(int lhs, Object rhs, String op, String originalOp, int minScale, boolean captureStackTrace, String source, int offset) {
     try {
-      if (rhs instanceof Integer)    { int right = (int)rhs; return ((lhs % right) + right) % right; }
-      if (rhs instanceof Long)       { long right = (long)rhs; return ((lhs % right) + right) % right; }
-      if (rhs instanceof Double)     { double right = (double)rhs; return ((lhs % right) + right) % right; }
+      if (rhs instanceof Integer)    { int right = (int)rhs; return RuntimeUtils.floorMod(lhs, right); }
+      if (rhs instanceof Long)       { long right = (long)rhs; return RuntimeUtils.floorMod(lhs, right); }
+      if (rhs instanceof Double)     { double right = (double)rhs; return RuntimeUtils.floorMod(lhs, right); }
       if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
       if (rhs instanceof Short)      { int right = (short)rhs & 0xff; return ((lhs % right) + right) % right; }  
       return RuntimeUtils.modulo(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
@@ -309,9 +309,9 @@ public class BinaryOpMethods {
 
   public static Object longModulo(long lhs, Object rhs, String op, String originalOp, int minScale, boolean captureStackTrace, String source, int offset) {
     try {
-      if (rhs instanceof Integer)    { int right = (int)rhs; return ((lhs % right) + right) % right; }
-      if (rhs instanceof Long)       { long right = (long)rhs; return ((lhs % right) + right) % right; }
-      if (rhs instanceof Double)     { double right = (double)rhs; return ((lhs % right) + right) % right; }
+      if (rhs instanceof Integer)    { int right = (int)rhs; return RuntimeUtils.floorMod(lhs, right); }
+      if (rhs instanceof Long)       { long right = (long)rhs; return RuntimeUtils.floorMod(lhs, right); }
+      if (rhs instanceof Double)     { double right = (double)rhs; return RuntimeUtils.floorMod(lhs, right); }
       if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
       if (rhs instanceof Short)      { int right = (short)rhs & 0xff; return ((lhs % right) + right) % right; }  
       return RuntimeUtils.modulo(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);
@@ -323,9 +323,9 @@ public class BinaryOpMethods {
 
   public static Object doubleModulo(double lhs, Object rhs, String op, String originalOp, int minScale, boolean captureStackTrace, String source, int offset) {
     try {
-      if (rhs instanceof Integer)    { int right = (int)rhs; return ((lhs % right) + right) % right; }
-      if (rhs instanceof Long)       { long right = (long)rhs; return ((lhs % right) + right) % right; }
-      if (rhs instanceof Double)     { double right = (double)rhs; return ((lhs % right) + right) % right; }
+      if (rhs instanceof Integer)    { int right = (int)rhs; return RuntimeUtils.floorMod(lhs, right); }
+      if (rhs instanceof Long)       { long right = (long)rhs; return RuntimeUtils.floorMod(lhs, right); }
+      if (rhs instanceof Double)     { double right = (double)rhs; return RuntimeUtils.floorMod(lhs, right); }
       if (rhs instanceof BigDecimal) return RuntimeUtils.decimalBinaryOperation(BigDecimal.valueOf(lhs), (BigDecimal)rhs, op, minScale, source, offset);
       if (rhs instanceof Short)      { int right = (short)rhs & 0xff; return ((lhs % right) + right) % right; }  
       return RuntimeUtils.modulo(lhs, rhs, op, originalOp, minScale, captureStackTrace, source, offset);

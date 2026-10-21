@@ -1203,7 +1203,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   // Map of which opcode to use for common binary operations based on type
-  private static final Map<TokenType,List<Object>> opCodesByOperator = Utils.mapOf(
+  private static final Map<TokenType,List<List<Integer>>> opCodesByOperator = Utils.mapOf(
     PLUS, Utils.listOf(Utils.listOf(IADD), Utils.listOf(LADD), Utils.listOf(DADD), RuntimeUtils.PLUS),
     MINUS, Utils.listOf(Utils.listOf(ISUB), Utils.listOf(LSUB), Utils.listOf(DSUB), RuntimeUtils.MINUS),
     STAR, Utils.listOf(Utils.listOf(IMUL), Utils.listOf(LMUL), Utils.listOf(DMUL), RuntimeUtils.STAR),
@@ -1214,11 +1214,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     ACCENT, Utils.listOf(Utils.listOf(IXOR), Utils.listOf(LXOR), Utils.listOf(), Utils.listOf()),
     DOUBLE_LESS_THAN, Utils.listOf(Utils.listOf(ISHL), Utils.listOf(LSHL), Utils.listOf(), Utils.listOf()),
     DOUBLE_GREATER_THAN, Utils.listOf(Utils.listOf(ISHR), Utils.listOf(LSHR), Utils.listOf(), Utils.listOf()),
-    TRIPLE_GREATER_THAN, Utils.listOf(Utils.listOf(IUSHR), Utils.listOf(LUSHR), Utils.listOf(), Utils.listOf()),
-    PERCENT, Utils.listOf(Utils.listOf(DUP_X1, IREM, SWAP, DUP_X1, IADD, SWAP, IREM),
-                               Utils.listOf(DUP2_X2, LREM,  DUP2_X2, POP2, DUP2_X2, LADD, DUP2_X2, POP2, LREM),
-                               Utils.listOf(DUP2_X2, DREM,  DUP2_X2, POP2, DUP2_X2, DADD, DUP2_X2, POP2, DREM),
-                               RuntimeUtils.PERCENT)
+    TRIPLE_GREATER_THAN, Utils.listOf(Utils.listOf(IUSHR), Utils.listOf(LUSHR), Utils.listOf(), Utils.listOf())
   );
   private static final int intIdx = 0;
   private static final int longIdx = 1;
@@ -1715,8 +1711,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return null;
     }
 
-    List<Object> opCodes = opCodesByOperator.get(expr.operator.getType());
-    if (opCodes == null) {
+    Runnable percentOps = () -> {
+      expect(2);
+      switch (expr.type.getType()) {
+        case BYTE: case INT:
+          invokeMethod(RuntimeUtils.FLOOR_MOD_INT);
+          convertTo(expr.type, expr, false, expr.location);
+          break;
+        case LONG:            invokeMethod(RuntimeUtils.FLOOR_MOD_LONG);     break;
+        case DOUBLE:          invokeMethod(RuntimeUtils.FLOOR_MOD_DOUBLE);   break;
+        default: throw new IllegalStateException("Internal error: unexpected type " + expr.type);
+      }
+    };
+    
+    boolean isPercent = expr.operator.is(PERCENT);
+    
+    List<List<Integer>> opCodes = opCodesByOperator.get(expr.operator.getType());
+    if (opCodes == null && !isPercent) {
       throw new UnsupportedOperationException("Unsupported operator " + expr.operator.getType());
     }
     else
@@ -1725,16 +1736,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       int index = expr.type.isBoxedOrUnboxed(INT,BYTE) ? intIdx :
                   expr.type.isBoxedOrUnboxed(LONG) ? longIdx
                                                    : doubleIdx;
-      List<Integer> ops = (List<Integer>) opCodes.get(index);
-      Runnable compileOps = () -> {
-        ops.forEach(op -> mv.visitInsn(op));
-        popType(2);
-        if (expr.type.is(BYTE)) {
-          _loadConst(255);
-          mv.visitInsn(IAND);
-        }
-        pushType(expr.type);
-      };
+      Runnable compileOps = isPercent ? percentOps
+                                      : () -> {
+                                        opCodes.get(index).forEach(op -> mv.visitInsn(op));
+                                        popType(2);
+                                        if (expr.type.is(BYTE)) {
+                                          _loadConst(255);
+                                          mv.visitInsn(IAND);
+                                        }
+                                        pushType(expr.type);
+                                      };
       // Check for divide by zero or remainder 0 if int/long (double returns NaN or INFINITY)
       boolean rightMaybeZero = !expr.right.isConst || expr.right.constValue == null || RuntimeUtils.compareTo(expr.right.constValue, 0, "", 0) == 0;
       if (rightMaybeZero && expr.operator.is(SLASH, PERCENT, PERCENT_PERCENT) && !expr.type.isBoxedOrUnboxed(DOUBLE)) {
@@ -1754,7 +1765,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else
     if (expr.type.is(DECIMAL)) {
       expect(2);
-      loadConst(opCodes.get(decimalIdx));
+      loadConst(isPercent ? RuntimeUtils.PERCENT : opCodes.get(decimalIdx));
       loadConst(classCompiler.context.minScale);
       loadLocation(expr.operator);
       invokeMethod(RuntimeUtils.DECIMAL_BINARY_OPERATION_METHOD);
