@@ -18,6 +18,7 @@
 package io.jactl.runtime;
 
 import io.jactl.JactlContext;
+import io.jactl.Properties;
 import io.jactl.Utils;
 import io.jactl.compiler.MethodRef;
 
@@ -110,8 +111,6 @@ public class RuntimeState {
   
   public Object getInvocationContext() { return invocationContext; }
 
-  private static final int TIMEOUT_FREQ_CHECK = Integer.getInteger("jactl.loop.timeout-freq-check", 1000);
-
   public static final String UPDATE_ITERATION_COUNT = "updateIterationCount";
   public static void updateIterationCount(String source, int offset) {
     RuntimeState state = getState();
@@ -145,7 +144,7 @@ public class RuntimeState {
   }
   
   public void checkNthTimeout(String source, int offset) {
-    if (hasTimeout() && ++counter % TIMEOUT_FREQ_CHECK == 0) {
+    if (hasTimeout() && ++counter % Properties.TIMEOUT_FREQ_CHECK == 0) {
       _checkTimeout(source, offset);
     }
   }

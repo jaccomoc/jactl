@@ -208,7 +208,8 @@ public class PipelineCompiler {
       methodCompiler.box();
       methodCompiler.loadLocal(resultListSlot);
       methodCompiler.swap();
-      methodCompiler.invokeMethod(MethodCompiler.LIST_ADD_METHOD);
+      methodCompiler.loadLocation(exprs.get(0).location);
+      methodCompiler.invokeMethod(RuntimeUtils.LIST_ADD_ELEM_METHOD);
       methodCompiler.popVal();     // Don't need result of list.add()
     }
     
@@ -364,7 +365,8 @@ public class PipelineCompiler {
         if (convertToList) {
           methodCompiler.loadLocal(resultListSlot);
           methodCompiler.loadLocal(valueSlot);
-          methodCompiler.invokeMethod(MethodCompiler.LIST_ADD_METHOD);
+          methodCompiler.loadLocation(exprs.get(0).location);
+          methodCompiler.invokeMethod(RuntimeUtils.LIST_ADD_ELEM_METHOD);
           methodCompiler.popVal();     // Don't need result of list.add()
         }
 
@@ -660,10 +662,8 @@ public class PipelineCompiler {
     private void addToResult() {
       methodCompiler.loadLocal(resultSlot);
       methodCompiler.swap();
-      if (isCollectEntries) {
-        methodCompiler.loadLocation(expr.methodNameLocation);
-      }
-      methodCompiler.invokeMethod(isCollectEntries ? RuntimeUtils.ADD_MAP_ENTRY : MethodCompiler.LIST_ADD_METHOD);
+      methodCompiler.loadLocation(expr.methodNameLocation);
+      methodCompiler.invokeMethod(isCollectEntries ? RuntimeUtils.ADD_MAP_ENTRY : RuntimeUtils.LIST_ADD_ELEM_METHOD);
       if (!isCollectEntries) {
         methodCompiler.popVal();
       }
@@ -715,7 +715,8 @@ public class PipelineCompiler {
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
       methodCompiler.loadLocal(resultSlot);
       methodCompiler.swap();
-      methodCompiler.invokeMethod(MethodCompiler.LIST_ADD_METHOD);
+      methodCompiler.loadLocation(expr.methodNameLocation);
+      methodCompiler.invokeMethod(RuntimeUtils.LIST_ADD_ELEM_METHOD);
       methodCompiler.popVal();
     }
     @Override void finish() {
@@ -761,7 +762,8 @@ public class PipelineCompiler {
       // Keep adding results to our list
       methodCompiler.loadLocal(listSlot);
       methodCompiler.swap();
-      methodCompiler.invokeMethod(MethodCompiler.LIST_ADD_METHOD);
+      methodCompiler.loadLocation(expr.methodNameLocation);
+      methodCompiler.invokeMethod(RuntimeUtils.LIST_ADD_ELEM_METHOD);
       methodCompiler.popVal();
       methodCompiler.mv.visitJumpInsn(GOTO, loopLabel);
       
@@ -1459,7 +1461,8 @@ public class PipelineCompiler {
       methodCompiler.mv.visitJumpInsn(IFNULL, NEXT);     // grouped by size of 0 means we don't actually do anything
       methodCompiler.loadLocal(bufferSlot);
       methodCompiler.swap();
-      methodCompiler.invokeMethod(MethodCompiler.LIST_ADD_METHOD);
+      methodCompiler.loadLocation(expr.methodNameLocation);
+      methodCompiler.invokeMethod(RuntimeUtils.LIST_ADD_ELEM_METHOD);
       methodCompiler.popVal();
       methodCompiler.loadLocal(bufferSlot);
       methodCompiler.invokeMethod(MethodCompiler.LIST_SIZE_METHOD);

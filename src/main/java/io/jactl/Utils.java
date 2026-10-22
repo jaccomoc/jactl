@@ -19,6 +19,7 @@ package io.jactl;
 
 import io.jactl.compiler.MethodRef;
 import io.jactl.runtime.*;
+import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
@@ -566,6 +567,10 @@ public class Utils {
     }
   }
 
+  public static void newArray(MethodVisitor mv, JactlType type, int numDimensions, Location location) {
+    newArray(mv, type, numDimensions);
+  }
+  
   public static void newArray(MethodVisitor mv, JactlType type, int numDimensions) {
     switch (type.getArrayElemType().getType()) {
       case BOOLEAN:  mv.visitIntInsn(NEWARRAY, T_BOOLEAN);                         break;
@@ -812,6 +817,7 @@ public class Utils {
     Expr.InvokeNew invokeNew = new Expr.InvokeNew(newToken, type);
     invokeNew.dimensions  = dimensions;
     invokeNew.couldBeNull = false;
+    invokeNew.leftParen = dimensions.get(0).location;
     return invokeNew;
   }
 

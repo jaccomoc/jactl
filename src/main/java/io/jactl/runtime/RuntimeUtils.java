@@ -18,6 +18,7 @@
 package io.jactl.runtime;
 
 import io.jactl.*;
+import io.jactl.Properties;
 import io.jactl.compiler.MethodRef;
 
 import java.io.IOException;
@@ -924,7 +925,7 @@ public class RuntimeUtils {
    */
   public static Object bitOperation(Object left, Object right, String operator, boolean isAssignment, boolean captureStackStrace, String source, int offset) {
     if (left instanceof List && operator == DOUBLE_LESS_THAN) {
-      return listAddSingle((List)left, right, isAssignment);
+      return listAddSingle((List)left, right, isAssignment, source, offset);
     }
 
     boolean isShift = operator == DOUBLE_LESS_THAN || operator == DOUBLE_GREATER_THAN || operator == TRIPLE_GREATER_THAN;
@@ -1061,10 +1062,14 @@ public class RuntimeUtils {
     // If ++= then add to existing list rather than creating a new one
     List result = isPlusEqual ? list : new ArrayList<>(list);
     if (obj instanceof List) {
-      result.addAll((List) obj);
+      List other = (List) obj;
+      if ( Properties.ENFORCE_LIMITS && result.size() + other.size() >= Properties.MAX_LIST_SIZE) {
+        throw new RuntimeError("List size exceeds maximum size of " + Properties.MAX_LIST_SIZE, source, offset);
+      }
+      result.addAll(other);
     }
     else {
-      result.add(obj);
+      listAddElem(result, obj, source, offset);
     }
     return result;
   }
@@ -1075,15 +1080,25 @@ public class RuntimeUtils {
    * @param list         the list
    * @param elem         the element
    * @param isAssignment true if &lt;&lt;= (add to existing list), false creates a new list
+   * @param source       the source code
+   * @param offset       offset where operation is in source code
    * @return the list (same list for &lt;&lt;= and new list for &lt;&lt;)
    */
-  public static List listAddSingle(List list, Object elem, boolean isAssignment) {
+  public static List listAddSingle(List list, Object elem, boolean isAssignment, String source, int offset) {
     List result = isAssignment ? list : new ArrayList(list);
-    result.add(elem);
+    listAddElem(result, elem, source, offset);
     return result;
   }
-  public static final MethodRef LIST_ADD_SINGLE_METHOD = Utils.getMethod(RuntimeUtils.class, "listAddSingle", List.class, Object.class, boolean.class);
+  public static final MethodRef LIST_ADD_SINGLE_METHOD = Utils.getMethod(RuntimeUtils.class, "listAddSingle", List.class, Object.class, boolean.class, String.class, int.class);
 
+  public static final MethodRef LIST_ADD_ELEM_METHOD = Utils.getMethod(RuntimeUtils.class, "listAddElem", List.class, Object.class, String.class, int.class);
+  public static boolean listAddElem(List list, Object elem, String source, int offset) {
+    if (Properties.ENFORCE_LIMITS && list.size() >= Properties.MAX_LIST_SIZE) {
+      throw new RuntimeError("List size exceeds maximum size of " + Properties.MAX_LIST_SIZE, source, offset);
+    }
+    return list.add(elem);
+  }
+  
   /**
    * Add twp maps together. The result is a new map with a merge of the keys and values from the two maps. If the same
    * key appears in both maps the value from the second map "overwrites" the other value and becomes the value of the
@@ -1548,9 +1563,8 @@ public class RuntimeUtils {
     if (isDot) {
       throw new RuntimeError("Field access not supported for " + className(parent), source, offset);
     }
-
-    int index = -1;
-    try { index = ((Number) field).intValue(); }  catch (ClassCastException e) { throw new RuntimeError("Non-numeric value for indexed access", source, offset); }
+    
+    int index = arrayIndex(field, source, offset);
 
     if (parent instanceof List) {
       return loadListElem((List) parent, index, source, offset);
@@ -1785,7 +1799,7 @@ public class RuntimeUtils {
 
   public static final MethodRef LOAD_ARRAY_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "loadArrayField", Object.class, Object.class, String.class, int.class);
   public static Object loadArrayField(Object parent, Object idxObj, String source, int offset) {
-    int idx = castToInt(idxObj, true, source, offset);
+    int idx = arrayIndex(idxObj, source, offset);
     return loadArrayFieldInt(parent, idx, source, offset);
   }
 
@@ -1832,9 +1846,9 @@ public class RuntimeUtils {
 
   public static Object storeArrayField(Object parent, Object field, Object value, String source, int offset) {
     if (!(field instanceof Number)) {
-      throw new RuntimeError("Non-numeric array index (" + className(field) + ")", source, offset);
+      throw new RuntimeError("Index must be numeric not " + className(field), source, offset);
     }
-    int idx = ((Number)field).intValue();
+    int idx = arrayIndex(field, source, offset);
     try {
       if (parent instanceof int[]) {
         int[] arr = (int[])parent;
@@ -2064,10 +2078,10 @@ public class RuntimeUtils {
   }
 
   private static Object storeListField(List parent, Object field, Object value, String source, int offset) {
-    int index = -1;
-    try { index = ((Number)field).intValue(); } catch (ClassCastException e) { throw new RuntimeError("Non-numeric value for index during List access", source, offset); }
+    long index = -1;
+    try { index = ((Number)field).longValue(); } catch (ClassCastException e) { throw new RuntimeError("Index must be numeric for List access", source, offset); }
     if (index < 0) {
-      int originalIndex = index;
+      long originalIndex = index;
       index += parent.size();
       if (index < 0) {
         throw new RuntimeError("Negative index (" + originalIndex + ") out of range (list size is " + parent.size() + ")", source, offset);
@@ -2075,12 +2089,15 @@ public class RuntimeUtils {
     }
     try {
       if (index >= parent.size()) {
+        if (index > Properties.MAX_LIST_SIZE) {
+          throw new RuntimeError("Index (" + index + ") exceeds maximum allowed list size (" + Properties.MAX_LIST_SIZE + ")", source, offset);
+        }
         // Grow list to required size
         for (int i = parent.size(); i < index + 1; i++) {
           parent.add(null);
         }
       }
-      parent.set(index, value);
+      parent.set((int)index, value);
       return value;
     }
     catch (UnsupportedOperationException e) {
@@ -3302,6 +3319,52 @@ public class RuntimeUtils {
     return new RuntimeError(prefix + (msg == null ? "" : ": " + msg), source, offset);
   }
 
+  public static final String CREATE_ERROR = "createError";
+  public static RuntimeError createError(String msg, String source, int offset) {
+    return new RuntimeError(msg, source, offset);
+  }
+
+  public static final MethodRef ARRAY_INDEX_METHOD = Utils.getMethod(RuntimeUtils.class, "arrayIndex", Object.class, String.class, int.class);
+  public static int arrayIndex(Object idx, String source, int offset) {
+    if (idx instanceof Number) {
+      long lval = ((Number) idx).longValue();
+      if (lval > Integer.MAX_VALUE || lval < Integer.MIN_VALUE) {
+        throw new RuntimeError("Array index out of bounds: " + idx, source, offset);
+      }
+      return (int) lval;
+    }
+    if (idx == null) {
+      throw new RuntimeError("Cannot convert null value to int", source, offset);
+    }
+    throw new RuntimeError("Array index must be numeric, not " + className(idx.getClass()), source, offset);
+  }
+
+  public static final MethodRef ARRAY_SIZE_METHOD = Utils.getMethod(RuntimeUtils.class, "arraySize", Object.class, String.class, int.class);
+  public static int arraySize(Object idx, String source, int offset) {
+    if (idx instanceof Number) {
+      long lval = ((Number) idx).longValue();
+      if (lval < 0) {
+        throw new RuntimeError("Array size cannot be negative: " + idx, source, offset);
+      }
+      if (Properties.ENFORCE_LIMITS && lval > Properties.MAX_LIST_SIZE) {
+        throw new RuntimeError("Array size " + idx + " exceeds maximum size of " + Properties.MAX_LIST_SIZE, source, offset);
+      }
+      return (int) lval;
+    }
+    throw new RuntimeError("Array index must be numeric, not " + className(idx), source, offset);
+  }
+
+  public static int arrayIndex(Object idx, Location location) {
+    if (idx instanceof Number) {
+      long lval = ((Number) idx).longValue();
+      if (lval > Integer.MAX_VALUE || lval < Integer.MIN_VALUE) {
+        throw new CompileError("Array index out of bounds: " + idx, location);
+      }
+      return (int) lval;
+    }
+    throw new CompileError("Array index must be numeric, not " + className(idx.getClass()), location);
+  }
+  
   private static String repeat(String str, int repeat, String source, int offset) {
     if (repeat < 0) {
       throw new RuntimeError("String repeat count cannot be negative (was " + repeat + ")", source, offset);

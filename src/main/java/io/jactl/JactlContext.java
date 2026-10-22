@@ -72,22 +72,18 @@ public class JactlContext {
   private final Map<Class,Map<String, HostClassMethodInvoker>> staticHostMethods = new HashMap<>();
 
   // Allow local aliases for global vars (on by default unless in repl mode)
-  private boolean localAliasesForGlobals = Boolean.parseBoolean(System.getProperty("jactl.localAliasesForGlobals", "true"));
+  private boolean localAliasesForGlobals = Properties.LOCAL_ALIASES_FOR_GLOBALS;
 
   private final Map<Pair<String,Set<String>>, Function<Map<String,Object>,Object>> evalScriptCache = Collections.synchronizedMap(
     new LinkedHashMap(16, 0.75f, true) {
       @Override
       protected boolean removeEldestEntry(Map.Entry eldest) {
-        return size() > scriptCacheSize;
+        return size() > Properties.EVAL_SCRIPT_CACHE_SIZE;
       }
     });
 
-  // Total number of compiled scripts we keep for use by eval() function
-  public static int scriptCacheSize = Integer.getInteger("jactl.eval.cache-size", 100);
-
   // Map of class to handle of its no-arg constructor
   private ConcurrentHashMap<Class<?>, MethodHandle> constructors = new ConcurrentHashMap<>();
-
 
   // Testing
   boolean checkpoint = false;

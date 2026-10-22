@@ -1915,7 +1915,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     if (parent.type.is(LIST,ARRAY) && !field.type.is(ANY) && !field.type.isNumeric()) {
-      error("Non-numeric value for index for " + (parent.type.is(LIST) ? "List" : "Array") + " access", field.location);
+      error("Index must be numeric for " + (parent.type.is(LIST) ? "List" : "Array") + " access", field.location);
     }
 
     expr.type = valueExpr.type.boxed();

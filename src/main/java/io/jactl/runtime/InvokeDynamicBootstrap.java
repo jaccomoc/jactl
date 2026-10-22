@@ -19,6 +19,7 @@ package io.jactl.runtime;
 
 import io.jactl.JactlContext;
 import io.jactl.Pair;
+import io.jactl.Properties;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.*;
@@ -221,7 +222,7 @@ public class InvokeDynamicBootstrap {
     Object[] actualArgs = Arrays.copyOfRange(args, 1, args.length);
 
     // Guard against chain depth that becomes unwieldy
-    if (cs.depth.incrementAndGet() > MaxDepthCallSite.MAX_DEPTH) {
+    if (cs.depth.incrementAndGet() > Properties.INVOKE_DYNAMIC_MAX_DEPTH) {
       cs.setTarget(makeWrapperInvoker(siteType, source, offset));
       MutableCallSite.syncAll(new MutableCallSite[]{cs});
       return jmh.invoke((Continuation)null, source, offset, actualArgs);
@@ -359,7 +360,7 @@ public class InvokeDynamicBootstrap {
     Object[] actualArgs = Arrays.copyOfRange(args, 1, args.length);
 
     // Guard against chain depth that becomes unwieldy
-    if (cs.depth.incrementAndGet() > MaxDepthCallSite.MAX_DEPTH) {
+    if (cs.depth.incrementAndGet() > Properties.INVOKE_DYNAMIC_MAX_DEPTH) {
       cs.setTarget(makeMethodOrFieldInvoker(siteType, methodOrField, source, offset, captureStackTraces));
       MutableCallSite.syncAll(new MutableCallSite[]{cs});
       return invokeMethodOrField(methodOrField, parent, null, source, offset, captureStackTraces, actualArgs);
@@ -559,7 +560,7 @@ public class InvokeDynamicBootstrap {
     }
     
     // Guard against chain depth that becomes unwieldy
-    if (cs.depth.incrementAndGet() > MaxDepthCallSite.MAX_DEPTH) {
+    if (cs.depth.incrementAndGet() > Properties.INVOKE_DYNAMIC_MAX_DEPTH) {
       cs.setTarget(MethodHandles.insertArguments(methodHandle, 2, operator, originalOp, minScale, captureStackTrace == 1, source, offset)
                                 .asType(siteType));
       MutableCallSite.syncAll(new MutableCallSite[]{cs});
@@ -712,7 +713,6 @@ public class InvokeDynamicBootstrap {
 
   public static class MaxDepthCallSite extends MutableCallSite {
     AtomicInteger depth = new AtomicInteger(0);
-    static final int MAX_DEPTH = Integer.getInteger("jactl.invokeDynamic.maxDepth", 8);
 
     MaxDepthCallSite(MethodType type) { super(type); }
   }

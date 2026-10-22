@@ -17,6 +17,7 @@
 
 package io.jactl.runtime;
 
+import io.jactl.Properties;
 import io.jactl.Utils;
 import io.jactl.compiler.MethodRef;
 import org.objectweb.asm.Type;
@@ -58,8 +59,6 @@ public class CircularBuffer<T> implements Checkpointable {
   int      head = 0;
   int      tail = 0;
 
-  static final int MAX_SIZE = Integer.getInteger("jactl.buffer.maxSize", 10_000_000);
-  
   public CircularBuffer() {}    // for checkpoint/restore
 
   /**
@@ -73,8 +72,8 @@ public class CircularBuffer<T> implements Checkpointable {
     if (capacity < 0) {
       throw new RuntimeError("Negative buffer size: " + capacity, source, offset);
     }
-    if (capacity > MAX_SIZE) {
-      throw new RuntimeError("Buffer size too large: " + capacity + " (max size is " + MAX_SIZE + " - system property jactl.buffer.maxSize)", source, offset);
+    if (capacity > Properties.SKIP_LIMIT_MAX_BUFFER) {
+      throw new RuntimeError("Buffer size too large: " + capacity + " (max size is " + Properties.SKIP_LIMIT_MAX_BUFFER + " - system property jactl.buffer.maxSize)", source, offset);
     }
     init(capacity + (extraSlot ? 1 : 0));
   }

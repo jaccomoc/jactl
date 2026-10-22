@@ -18,6 +18,7 @@
 package io.jactl.runtime;
 
 import io.jactl.JactlType;
+import io.jactl.Properties;
 import io.jactl.Utils;
 import io.jactl.compiler.MethodRef;
 
@@ -67,11 +68,9 @@ public class RegexMatcher implements Checkpointable {
     () -> new LinkedHashMap(16, 0.75f, true) {
       @Override
       protected boolean removeEldestEntry(Map.Entry eldest) {
-        return size() > patternCacheSize;
+        return size() > Properties.PATTERN_CACHE_SIZE;
       }
     });
-
-  public static int patternCacheSize = Integer.getInteger("jactl.regex.cache.size", 100); // Per thread cache size
 
   private JactlMatcher globalMatcher    = new GlobalMatcher();
   private JactlMatcher nonGlobalMatcher = new NonGlobalMatcher();
@@ -149,7 +148,7 @@ public class RegexMatcher implements Checkpointable {
         throw new RuntimeError("Pattern error: " + e.getMessage(), source, offset);
       }
       cache.put(key, pattern);
-      if (cache.size() > patternCacheSize) {
+      if (cache.size() > Properties.PATTERN_CACHE_SIZE) {
         cache.remove(cache.keySet().iterator().next());
       }
     }

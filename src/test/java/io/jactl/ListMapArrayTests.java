@@ -109,6 +109,144 @@ public class ListMapArrayTests extends BaseTest {
     testError("def x = [1,2,3] as int[]; def y; x[y]", "null value");
     testError("def x = [1,2,3] as int[]; def y; def f(z) { z[y] }; f(x)", "null value");
   }
+  
+  @Test public void numericIndices() {
+    test("List x = [1,2,3]; x[294967296]", null);
+    testError("int[] x = new int[" + (Properties.MAX_LIST_SIZE + 1) + "]", "exceeds maximum");
+    testError("int[][] x = new int[1][" + (Properties.MAX_LIST_SIZE + 1) + "]", "exceeds maximum");
+    testError("int[][] x = new int[" + (Properties.MAX_LIST_SIZE + 1) + "][1]", "exceeds maximum");
+    testError("int[] x = new int[" + ((long)Integer.MAX_VALUE) * 2 + "L]", "exceeds maximum");
+    testError("int[][] x = new int[1][" + ((long)Integer.MAX_VALUE) * 2 + "L]", "exceeds maximum");
+    testError("int[][] x = new int[" + ((long)Integer.MAX_VALUE) * 2 + "L][1]", "exceeds maximum");
+    testError("int size = " + (Properties.MAX_LIST_SIZE + 1) + "; int[]x = new int[size]", "exceeds maximum");
+    testError("int size = " + (Properties.MAX_LIST_SIZE + 1) + "; int[][]x = new int[1][size]", "exceeds maximum");
+    testError("int size = " + (Properties.MAX_LIST_SIZE + 1) + "; int[][]x = new int[size][1]", "exceeds maximum");
+    testError("int size = " + Integer.MAX_VALUE + "; int[] x = new int[size]", "exceeds maximum");
+    testError("int size = " + Integer.MAX_VALUE + "; int[][] x = new int[1][size]", "exceeds maximum");
+    testError("int size = " + Integer.MAX_VALUE + "; int[][] x = new int[size][1]", "exceeds maximum");
+    testError("long size = " + (((long)Integer.MAX_VALUE) * 2) + "L; int[] x = new int[size]", "exceeds maximum");
+    testError("long size = " + (((long)Integer.MAX_VALUE) * 2) + "L; int[][] x = new int[1][size]", "exceeds maximum");
+    testError("long size = " + (((long)Integer.MAX_VALUE) * 2) + "L; int[][] x = new int[size][1]", "exceeds maximum");
+    testError("def size = " + (Properties.MAX_LIST_SIZE + 1) + "; int[] x = new int[size]", "exceeds maximum");
+    testError("def size = " + (Properties.MAX_LIST_SIZE + 1) + "; int[][] x = new int[1][size]", "exceeds maximum");
+    testError("def size = " + (Properties.MAX_LIST_SIZE + 1) + "; int[][] x = new int[size][1]", "exceeds maximum");
+    testError("def size = " + Integer.MAX_VALUE + "; int[] x = new int[size]", "exceeds maximum");
+    testError("def size = " + Integer.MAX_VALUE + "; int[][] x = new int[1][size]", "exceeds maximum");
+    testError("def size = " + Integer.MAX_VALUE + "; int[][] x = new int[size][1]", "exceeds maximum");
+    testError("def size = " + (((long)Integer.MAX_VALUE) * 2) + "L; int[] x = new int[size]", "exceeds maximum");
+    testError("def size = " + (((long)Integer.MAX_VALUE) * 2) + "L; int[][] x = new int[1][size]", "exceeds maximum");
+    testError("def size = " + (((long)Integer.MAX_VALUE) * 2) + "L; int[][] x = new int[size][1]", "exceeds maximum");
+    testError("int[] x = [1,2,3]; x[294967296] = 123", "index out of bounds");
+    testError("int[] x = [1,2,3]; x[-294967296] = 123", "index out of bounds");
+    testError("int[] x = [1,2,3]; x[4294967296L] = 123", "index out of bounds");
+    testError("int[] x = [1,2,3]; x[-4294967296L] = 123", "index out of bounds");
+    testError("int[] x = [1,2,3]; x[294967296]", "index out of bounds");
+    testError("int[] x = [1,2,3]; x[-294967296]", "index out of bounds");
+    testError("int[] x = [1,2,3]; x[4294967296L]", "index out of bounds");
+    testError("int[] x = [1,2,3]; x[-4294967296L]", "index out of bounds");
+    testError("int[] x = [1,2,3]; int i = 294967296; x[i]", "index out of bounds");
+    testError("int[] x = [1,2,3]; def i = 294967296; x[i]", "index out of bounds");
+    testError("int[] x = [1,2,3]; int i = -294967296; x[i]", "index out of bounds");
+    testError("int[] x = [1,2,3]; def i = -294967296; x[i]", "index out of bounds");
+    testError("int[] x = [1,2,3]; long i = 4294967296L; x[i]", "index out of bounds");
+    testError("int[] x = [1,2,3]; def i = 4294967296L; x[i]", "index out of bounds");
+    testError("int[] x = [1,2,3]; long i = -4294967296L; x[i]", "index out of bounds");
+    testError("int[] x = [1,2,3]; def i = -4294967296L; x[i]", "index out of bounds");
+    testError("int[] x = [1,2,3]; def i = 294967296; x[i] = 123", "array index out of bounds");
+    testError("int[] x = [1,2,3]; def i = 4294967296L; x[i] = 123", "array index out of bounds");
+    testError("int[] x = [1,2,3]; long i = 4294967296L; x[i] = 123", "array index out of bounds");
+    testError("List x = [1,2,3]; x[294967296] = 123", "exceeds maximum");
+    testError("List x = [1,2,3]; x[4294967296L]", "array index out of bounds");
+    testError("List x = [1,2,3]; x[294967296] = 1", "exceeds maximum");
+    test("def x = [1,2,3]; x[294967296]", null);
+    testError("def x = new int[" + (Properties.MAX_LIST_SIZE + 1) + "]", "exceeds maximum");
+    testError("def x = [1,2,3] as int[]; x[294967296] = 123", "index out of bounds");
+    testError("def x = [1,2,3] as int[]; def i = 294967296; x[i] = 123", "index out of bounds");
+    testError("def x = [1,2,3] as int[]; def i = 4294967296L; x[i] = 123", "index out of bounds");
+    testError("def x = [1,2,3] as int[]; long i = 4294967296L; x[i] = 123", "index out of bounds");
+    testError("def x = [1,2,3]; x[294967296] = 123", "exceeds maximum");
+    testError("def x = [1,2,3]; x[4294967296L]", "array index out of bounds");
+    testError("def x = [1,2,3]; x[294967296] = 1", "exceeds maximum");
+    testError("def x = 'abc'; x[294967296]", "index out of bounds");
+    testError("def x = 'abcdef'; def i = 294967296; x[i]", "index out of bounds");
+    testError("def x = 'abcdef'; def i = 4294967296L; x[i]", "index out of bounds");
+    testError("def x = 'abcdef'; def i = -294967296; x[i]", "index out of bounds");
+    testError("def x = 'abcdef'; def i = -4294967296L; x[i]", "index out of bounds");
+    testError("def x = 'abcdef'; int i = 294967296; x[i]", "index out of bounds");
+    testError("def x = 'abcdef'; long i = 4294967296L; x[i]", "index out of bounds");
+    testError("def x = 'abcdef'; int i = -294967296; x[i]", "index out of bounds");
+    testError("def x = 'abcdef'; long i = -4294967296L; x[i]", "index out of bounds");
+    testError("def x = 'abcdef'; long i = 4294967296L; x[i]", "index out of bounds");
+    testError("def x = 'abcdef'; x[294967296]", "index out of bounds");
+    testError("def x = 'abcdef'; x[4294967296L]", "array index out of bounds");
+    testError("def x = 'abcdef'; x[-294967296]", "index out of bounds");
+    testError("def x = 'abcdef'; x[-4294967296L]", "array index out of bounds");
+    testError("String x = 'abc'; x[294967296]", "index out of bounds");
+    testError("String x = 'abcdef'; def i = 294967296; x[i]", "index out of bounds");
+    testError("String x = 'abcdef'; def i = 4294967296L; x[i]", "index out of bounds");
+    testError("String x = 'abcdef'; def i = -294967296; x[i]", "index out of bounds");
+    testError("String x = 'abcdef'; def i = -4294967296L; x[i]", "index out of bounds");
+    testError("String x = 'abcdef'; int i = 294967296; x[i]", "index out of bounds");
+    testError("String x = 'abcdef'; long i = 4294967296L; x[i]", "index out of bounds");
+    testError("String x = 'abcdef'; int i = -294967296; x[i]", "index out of bounds");
+    testError("String x = 'abcdef'; long i = -4294967296L; x[i]", "index out of bounds");
+    testError("String x = 'abcdef'; long i = 4294967296L; x[i]", "index out of bounds");
+    testError("String x = 'abcdef'; x[294967296]", "index out of bounds");
+    testError("String x = 'abcdef'; x[4294967296L]", "array index out of bounds");
+    testError("String x = 'abcdef'; x[-294967296]", "index out of bounds");
+    testError("String x = 'abcdef'; x[-4294967296L]", "array index out of bounds");
+    testError("int[] x = 100.map(); x['a']", "index must be numeric");
+    test("int[] x = 100.map(); x[(int)'a']", 97);
+    testError("int[] x = 100.map(); String i = 'a'; x[i]", "index must be numeric");
+    test("int[] x = 100.map(); String i = 'a'; x[(int)i]", 97);
+    testError("int[] x = 100.map(); def i = 'a'; x[i]", "index must be numeric");
+    test("int[] x = 100.map(); def i = 'a'; x[(int)i]", 97);
+    test("def x = 100.map() as int[]; x[(int)'a']", 97);
+    testError("def x = 100.map() as int[]; String i = 'a'; x[i]", "index must be numeric");
+    test("def x = 100.map() as int[]; String i = 'a'; x[(int)i]", 97);
+    testError("def x = 100.map() as int[]; def i = 'a'; x[i]", "index must be numeric");
+    test("def x = 100.map() as int[]; def i = 'a'; x[(int)i]", 97);
+    test("List x = 100.map(); x[(int)'a']", 97);
+    testError("List x = 100.map(); String i = 'a'; x[i]", "index must be numeric");
+    test("List x = 100.map(); String i = 'a'; x[(int)i]", 97);
+    testError("List x = 100.map(); def i = 'a'; x[i]", "index must be numeric");
+    test("List x = 100.map(); def i = 'a'; x[(int)i]", 97);
+    test("def x = 100.map(); x[(int)'a']", 97);
+    testError("def x = 100.map(); String i = 'a'; x[i]", "index must be numeric");
+    test("def x = 100.map(); String i = 'a'; x[(int)i]", 97);
+    testError("def x = 100.map(); def i = 'a'; x[i]", "index must be numeric");
+    test("def x = 100.map(); def i = 'a'; x[(int)i]", 97);
+    test("int[] x = 100.map(); x[(int)'a'] = 123", 123);
+    testError("int[] x = 100.map(); String i = 'a'; x[i] = 123", "index must be numeric");
+    test("int[] x = 100.map(); String i = 'a'; x[(int)i] = 123", 123);
+    testError("int[] x = 100.map(); def i = 'a'; x[i] = 123", "index must be numeric");
+    test("int[] x = 100.map(); def i = 'a'; x[(int)i] = 123", 123);
+    test("def x = 100.map() as int[]; x[(int)'a'] = 123", 123);
+    testError("def x = 100.map() as int[]; String i = 'a'; x[i] = 123", "index must be numeric");
+    test("def x = 100.map() as int[]; String i = 'a'; x[(int)i] = 123", 123);
+    testError("def x = 100.map() as int[]; def i = 'a'; x[i] = 123", "index must be numeric");
+    test("def x = 100.map() as int[]; def i = 'a'; x[(int)i] = 123", 123);
+    test("List x = 100.map(); x[(int)'a'] = 123", 123);
+    testError("List x = 100.map(); String i = 'a'; x[i] = 123", "index must be numeric");
+    test("List x = 100.map(); String i = 'a'; x[(int)i] = 123", 123);
+    testError("List x = 100.map(); def i = 'a'; x[i] = 123", "index must be numeric");
+    test("List x = 100.map(); def i = 'a'; x[(int)i] = 123", 123);
+    test("def x = 100.map(); x[(int)'a'] = 123", 123);
+    testError("def x = 100.map(); String i = 'a'; x[i] = 123", "index must be numeric");
+    test("def x = 100.map(); String i = 'a'; x[(int)i] = 123", 123);
+    testError("def x = 100.map(); def i = 'a'; x[i] = 123", "index must be numeric");
+    test("def x = 100.map(); def i = 'a'; x[(int)i] = 123", 123);
+    test("String x = 'a' * 100; x[(int)'a']", "a");
+    testError("String x = 'a' * 100; String i = 'a'; x[i]", "index must be numeric");
+    test("String x = 'a' * 100; String i = 'a'; x[(int)i]", "a");
+    testError("String x = 'a' * 100; def i = 'a'; x[i]", "index must be numeric");
+    test("String x = 'a' * 100; def i = 'a'; x[(int)i]", "a");
+    test("def x = 'a' * 100; x[(int)'a']", "a");
+    testError("def x = 'a' * 100; String i = 'a'; x[i]", "index must be numeric");
+    test("def x = 'a' * 100; String i = 'a'; x[(int)i]", "a");
+    testError("def x = 'a' * 100; def i = 'a'; x[i]", "index must be numeric");
+    test("def x = 'a' * 100; def i = 'a'; x[(int)i]", "a");
+  }
 
   @Test public void mapLiterals() {
     testError("def x; [(x):1]", "map key must not be null");
@@ -905,7 +1043,7 @@ public class ListMapArrayTests extends BaseTest {
   }
 
   @Test public void longArrayMultipleDimensionsErrors() {
-    testError("long[][] a = new long[{ -> 7}][-4]; a[0][0]", "cannot convert");
+    testError("long[][] a = new long[{ -> 7}][4]; a[0][0]", "index must be numeric");
     testError("long[][] a = new long[10][-4]; a[0][0]", "negative");
     testError("long[][] a = new long[]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "need a size");
     testError("long[][] a = new long[][]; def i = -1; def x = 'abc'; a[i] = x; a[i]", "need a size");
@@ -1060,7 +1198,7 @@ public class ListMapArrayTests extends BaseTest {
   }
 
   @Test public void doubleArrayMultipleDimensions() {
-    testError("double[][] a = new double[{ -> 7}][-4]; a[0][0]", "cannot convert");
+    testError("double[][] a = new double[4][{ -> 7}]; a[0][0]", "index must be numeric");
     testError("double[][] a = new double[10][-4]; a[0][0]", "negative");
     testError("def x = -4; double[][] a = new double[10][x]; a[0][0]", "negative");
     test("double[][] a = new double[10][4]; a[0][0]", 0D);
@@ -1785,7 +1923,7 @@ public class ListMapArrayTests extends BaseTest {
     test("Map m = [:]; m.a.b += 4", 4);
     test("def m = [:]; m.a.b += 4", 4);
 
-    testError("def x = [:]; x.a['b'] = 1", "non-numeric value for index");
+    testError("def x = [:]; x.a['b'] = 1", "index must be numeric");
     test("Map m = [:]; m.a[1] = 4; m.a[1]", 4);
     test("Map m = [:]; m.a[1] += 4; m.a[1]", 4);
     test("def m = [:]; m.a[2].b += 4; m.a[2].b", 4);

@@ -1312,12 +1312,12 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void pipelineNegativeSkipLimit() {
-    testError("List list = [1,2,3,4]; list.skip(-30000000)", "buffer size too large");
-    testError("def x = -30000000; List list = [1,2,3,4]; list.skip(x)", "buffer size too large");
-    testError("def x = -30000000; def list = [1,2,3,4]; list.skip(x)", "buffer size too large");
-    testError("List list = [1,2,3,4]; list.limit(-30_000_000)", "buffer size too large");
-    testError("def list = [1,2,3,4]; list.limit(-30_000_000)", "buffer size too large");
-    testError("def list = [1,2,3,4]; def x = -30_000_000; list.limit(x)", "buffer size too large");
+    testError("List list = [1,2,3,4]; list.skip(-300_000_000)", "buffer size too large");
+    testError("def x = -300000000; List list = [1,2,3,4]; list.skip(x)", "buffer size too large");
+    testError("def x = -300000000; def list = [1,2,3,4]; list.skip(x)", "buffer size too large");
+    testError("List list = [1,2,3,4]; list.limit(-300_000_000)", "buffer size too large");
+    testError("def list = [1,2,3,4]; list.limit(-300_000_000)", "buffer size too large");
+    testError("def list = [1,2,3,4]; def x = -300_000_000; list.limit(x)", "buffer size too large");
     test("List list = [1,2,3,4]; list.skip(-3)", Utils.listOf(2, 3, 4));
     test("List list = [1,2,3,4]; list.skip(-3).limit(2).skip(-1)", Utils.listOf(3));
     test("def x = -3; def y = -1; List list = [1,2,3,4]; list.skip(x).limit(2).skip(y)", Utils.listOf(3));

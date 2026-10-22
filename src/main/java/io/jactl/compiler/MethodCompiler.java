@@ -18,13 +18,13 @@
 package io.jactl.compiler;
 
 import io.jactl.*;
+import io.jactl.Properties;
 import io.jactl.runtime.*;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
-import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.*;
 import java.math.BigDecimal;
@@ -1318,6 +1318,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           expect(2);
           box();
           loadConst(expr.originalOperator != null && expr.originalOperator.is(DOUBLE_LESS_THAN_EQUAL));
+          loadLocation(expr.operator);
           invokeMethod(RuntimeUtils.LIST_ADD_SINGLE_METHOD);
           return null;
         }
@@ -2955,7 +2956,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                () -> newInstance(expr.type, expr.dimensions.size(), expr.callInit, expr.args, expr.leftParen),
                () -> {
                  invokeMethod(THROWABLE_GET_MESSAGE_METHOD);
-                 throwErrorWithStringOrNull("Negative array index", expr.location);
+                 throwErrorWithStringOrNull("Array size cannot be negative", expr.location);
                });
     }
     return null;
@@ -3053,14 +3054,25 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (expr.isConst) {
       Object value = expr.constValue;
       if (value instanceof Number) {
-        if (((Number) value).intValue() < 0) {
-          throw new CompileError("Invalid array size (" + value + "): cannot be negative", expr.location);
+        long lval = ((Number)value).longValue();
+        if (lval < 0) {
+          throw new CompileError("Array size cannot be negative: " + value, expr.location);
         }
+        if (Properties.ENFORCE_LIMITS && lval > Properties.MAX_LIST_SIZE) {
+          throw new CompileError("Array size " + lval + " exceeds maximum size of " + Properties.MAX_LIST_SIZE, expr.location);
+        }
+        loadConst((int)lval);
         isDefinitelyPositive = true;
+        return isDefinitelyPositive;
       }
     }
     compile(expr);
-    convertToInt(expr.location);
+    if (!peek().is(INT) || Properties.ENFORCE_LIMITS) {
+      box();
+      loadLocation(expr.location);
+      invokeMethod(RuntimeUtils.ARRAY_SIZE_METHOD);
+      isDefinitelyPositive = true;
+    }
     return isDefinitelyPositive;
   }
 
@@ -3587,7 +3599,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void newInstance(JactlType type, int numDimensionsSepcified, Expr.MethodCall callInit, List<Expr> args, Token location) {
     if (type.is(ARRAY)) {
       expect(numDimensionsSepcified);
-      Utils.newArray(mv, type, numDimensionsSepcified);
+      Utils.newArray(mv, type, numDimensionsSepcified, location);
       popType(numDimensionsSepcified); // pop the array size(s)
       pushType(type);
     }
@@ -6142,7 +6154,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (ident.varDecl.isEffectivelyFinal) {
         int length = length(ident.varDecl.initialiser);
         if (length >= 0) {
-          int idx = ((Number)index.constValue).intValue();
+          int idx = RuntimeUtils.arrayIndex(index.constValue, index.location);
           int originalIdx = idx;
           if (idx < 0) {
             idx = idx + length;
@@ -6172,7 +6184,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void loadArrElemOrStringChar(Expr parent, Expr index, boolean simpleIndex) {
     JactlType parentType = parent.type;
     expect(2);
-    convertToInt(index.location);
+    if (!peek().is(INT)) {
+      box();
+      loadLocation(index.location);
+      invokeMethod(RuntimeUtils.ARRAY_INDEX_METHOD);
+    }
 
     if (simpleIndex) {
       unsafeLoadElem(parentType, null);
@@ -6301,7 +6317,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     storeLocal(parentVar);
     if (expr.field instanceof Expr.Literal && expr.field.type.isNumeric()) {
       Number value = (Number)((Expr.Literal) expr.field).value.getValue();
-      int    index = value.intValue();
+      int index = RuntimeUtils.arrayIndex(value, expr.field.location);
       int parentLength = length(expr.parent);
       if (parentLength >= 0) {
         if (index < 0) {
@@ -6345,18 +6361,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       compile(expr.field);
-      if (expr.field.type.is(ANY)) {
-        throwIfNotNumber("Array index must be numeric not ", expr.field.location);
-        mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
+      if (!expr.field.type.is(INT)) {
+        box();
+        loadLocation(expr.field.location);
+        invokeMethod(RuntimeUtils.ARRAY_INDEX_METHOD);
       }
       unbox();
-      switch (expr.field.type.getType()) {
-        case DECIMAL:
-        case ANY:      invokeMethod(NUMBER_INT_VALUE_METHOD);  break;
-        case LONG:     mv.visitInsn(L2I);                      break;
-        case DOUBLE:   mv.visitInsn(D2I);                      break;
-      }
-      setStackType(INT);
       _dupVal();
       Label NOT_NEGATIVE = new Label();
       mv.visitJumpInsn(IFGE, NOT_NEGATIVE);

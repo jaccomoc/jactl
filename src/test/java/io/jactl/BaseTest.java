@@ -576,6 +576,7 @@ public class BaseTest {
       throw e;
     }
     catch (Throwable e) {
+      e.printStackTrace();
       fail("Non JactlError: " + e);
     }
   }
