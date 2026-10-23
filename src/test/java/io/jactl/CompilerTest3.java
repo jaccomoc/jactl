@@ -536,6 +536,12 @@ public class CompilerTest3 extends BaseTest {
     JactlContext jactlContext3 = JactlContext.create()
                                              .maxLoopIterations(1000L)
                                              .build();
+    
+    JactlScript script = Jactl.compileScript("while (true) { for (i = 0; i < 100000; i++) { sleep(0,0); } }",  new HashMap(), jactlContext3);
+    assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
+    JactlScript script2 = Jactl.compileScript("while (true) { for (i = 0; i < 100000; i++) { } }",  new HashMap(), jactlContext3);
+    assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
+    
     assertThrows(TimeoutError.class, () -> Jactl.eval("while (true) { for (i = 0; i < 100000; i++) { sleep(0,0); } }", new HashMap(), jactlContext3));
     assertThrows(TimeoutError.class, () -> Jactl.eval("long x = 0; sleep(1, { while (true) { for (i = 0; i < 100; i++) { sleep(0, x++); } } }())", new HashMap(), jactlContext3));
   }
@@ -545,6 +551,11 @@ public class CompilerTest3 extends BaseTest {
     JactlContext jactlContext = JactlContext.create()
                                             .maxExecutionTime(100)
                                             .build();
+
+    JactlScript script = Jactl.compileScript("while (true) {}", new HashMap<>(), jactlContext);
+    assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
+    JactlScript script2 = Jactl.compileScript("while (true) { sleep(1) }", new HashMap<>(), jactlContext);
+    assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
 
     assertThrows(TimeoutError.class, () -> Jactl.eval("2.each{ sleep(200) }", new HashMap(), jactlContext));
     assertThrows(TimeoutError.class, () -> Jactl.eval("sleep(200)", new HashMap(), jactlContext));
