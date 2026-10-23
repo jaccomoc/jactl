@@ -1805,10 +1805,12 @@ public class Parser {
             // For List/Map literals that are constant values (no expressions) we compile as class
             // static consts if they are used in contexts where it is obvious that the values won't
             // be mutated:
-            // I.e. when operator is: 'in', '!in', '==', '!=', '===', '!==', '[', '?['
+            // I.e. when operator is: 'in', '!in', '==', '!=', '===', '!=='
+            // For '[' and '?[' we can treat them a constant if the result is not a list or map
+            // because lists and maps could then be subsequently mutated.
             switch (operator.getType()) {
               case IN: case BANG_IN: case EQUAL_EQUAL: case BANG_EQUAL: case TRIPLE_EQUAL:
-              case BANG_EQUAL_EQUAL: case LEFT_SQUARE: case QUESTION_SQUARE:
+              case BANG_EQUAL_EQUAL:
                 if (expr.isLiteral() && Utils.isConstListOrMap(expr)) {
                   expr.isConst = true;
                   expr.constValue = getLiteralValue(expr);
@@ -1819,6 +1821,14 @@ public class Parser {
                   rhs.constValue = getLiteralValue(rhs);
                   addClassConstant(rhs);
                 }
+                break;
+              case LEFT_SQUARE: case QUESTION_SQUARE:
+                if (expr.isLiteral() && Utils.isConstFlatListOrMap(expr)) {
+                  expr.isConst = true;
+                  expr.constValue = getLiteralValue(expr);
+                  addClassConstant(expr);
+                }
+                break;
             }
             
             // Check for lvalue for assignment operators

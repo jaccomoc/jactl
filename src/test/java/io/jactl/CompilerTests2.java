@@ -3120,6 +3120,17 @@ public class CompilerTests2 extends BaseTest {
     test("def x = 'a'; x + 1", "a1");
     test("def x = 'a';def y = 1;  x + y", "a1");
   }
+  
+  @Test public void listMapElementMutation() {
+    test("def x = [1,2,3]; x[0] = 4; x", Utils.listOf(4,2,3));
+    test("def x = [1,[2,3]]; x[1][0] = 4; x", Utils.listOf(1,Utils.listOf(4,3)));
+    test("def x = [1,[2,3]]; x[1] = 4; x", Utils.listOf(1,4));
+    test("def y = [[1,2],[3]]; def x = y[0]; x[0] = 99", 99);
+    test("def x = [[1,2],3][0]\nx[0] = 123", 123);
+    test("def x = [[1,2],[3]][0]; x[0] = 99; x", Utils.listOf(99,2));
+    test("def x = [a:[1,2],b:[3]]['a']; x[0] = 99; x", Utils.listOf(99,2));
+    test("def x = [a:[a:1,b:2],b:[3]]['a']; x['b'] = 99; x", Utils.mapOf("a",1,"b",99));
+  }
 
   @Test public void listAddSingle() {
     test("[] << 1", Utils.listOf(1));

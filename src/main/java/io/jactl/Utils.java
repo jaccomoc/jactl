@@ -19,7 +19,6 @@ package io.jactl;
 
 import io.jactl.compiler.MethodRef;
 import io.jactl.runtime.*;
-import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
@@ -1401,6 +1400,35 @@ public class Utils {
     if (expr instanceof Expr.MapLiteral) {
       for (Pair<Expr,Expr> p: ((Expr.MapLiteral) expr).entries) {
         if (!isConstListOrMap(p.first) || !isConstListOrMap(p.second)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * True if the list/map has values which are simple literal values
+   * (not lists or maps).
+   * @param expr  the expression
+   * @return true if list/map constians only simple literal values
+   */
+  public static boolean isConstFlatListOrMap(Expr expr) {
+    if (expr instanceof Expr.Literal) {
+      return true;
+    }
+    if (expr instanceof Expr.ListLiteral) {
+      for (Expr e: ((Expr.ListLiteral) expr).exprs) {
+        if (!(e instanceof Expr.Literal)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    if (expr instanceof Expr.MapLiteral) {
+      for (Pair<Expr,Expr> p: ((Expr.MapLiteral) expr).entries) {
+        if (!isConstListOrMap(p.first) || !(p.second instanceof Expr.Literal)) {
           return false;
         }
       }
