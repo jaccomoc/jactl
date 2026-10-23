@@ -162,10 +162,10 @@ public class RuntimeUtils {
   public static final MethodRef DECIMAL_BINARY_OPERATION_METHOD = Utils.getMethod(RuntimeUtils.class, "decimalBinaryOperation", BigDecimal.class, BigDecimal.class, String.class, int.class, String.class, int.class);
   public static BigDecimal decimalBinaryOperation(BigDecimal left, BigDecimal right, String operator, int minScale, String source, int offset) {
     if (left == null) {
-      throw new NullError("Left hand side of '" + operator + "' is null", source, offset);
+      throw new NullError("Left-hand side of '" + operator + "' is null", source, offset);
     }
     if (right == null) {
-      throw new NullError("Right hand side of '" + operator + "' is null", source, offset);
+      throw new NullError("Right-hand side of '" + operator + "' is null", source, offset);
     }
     BigDecimal result;
     switch (operator) {
@@ -979,7 +979,7 @@ public class RuntimeUtils {
       }
     }
     if (isShift) {
-      // Only left hand side matters for return type when shifting since shift amount is not relevant
+      // Only left-hand side matters for return type when shifting since shift amount is not relevant
       if (leftIsLong)              { return result; }
       if (left instanceof Integer) { return (int)result; }
       return (byte)result;
@@ -1057,7 +1057,7 @@ public class RuntimeUtils {
    */
   public static List listAdd(List list, Object obj, boolean isPlusEqual, String source, int offset) {
     if (list == null) {
-      throw new NullError("Left hand side of " + (isPlusEqual ? "'+='" : "'+'") + " is null", source, offset);
+      throw new NullError("Left-hand side of " + (isPlusEqual ? "'+='" : "'+'") + " is null", source, offset);
     }
     // If ++= then add to existing list rather than creating a new one
     List result = isPlusEqual ? list : new ArrayList<>(list);
@@ -1112,10 +1112,10 @@ public class RuntimeUtils {
    */
   public static Map mapAdd(Map map1, Map map2, boolean isPlusEqual, String source, int offset) {
     if (map1 == null) {
-      throw new NullError("Left hand side of " + (isPlusEqual ? "'+='" : "'+'") + " is null", source, offset);
+      throw new NullError("Left-hand side of " + (isPlusEqual ? "'+='" : "'+'") + " is null", source, offset);
     }
     if (map2 == null) {
-      throw new NullError("Right hand side of " + (isPlusEqual ? "'+='" : "'+'") + " is null", source, offset);
+      throw new NullError("Right-hand side of " + (isPlusEqual ? "'+='" : "'+'") + " is null", source, offset);
     }
     // If plusEqual then just merge map2 into map1
     Map result = isPlusEqual ? map1 : new LinkedHashMap(map1);

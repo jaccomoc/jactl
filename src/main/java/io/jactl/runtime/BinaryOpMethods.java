@@ -25,8 +25,8 @@ import java.math.BigDecimal;
 /**
  * Static methods that InvokeDynamic can dispatch to based on the runtime type of
  * the operands for the 6 arithmetic binary operators: +, -, *, /, %, and %%.
- * The left hand operand dictates which method is used and then each method checks
- * the type of the right hand side to decide how to perform the operation.
+ * The left-hand operand dictates which method is used and then each method checks
+ * the type of the right-hand side to decide how to perform the operation.
  * If non-numeric types are involved (e.g. adding lists together) the methods
  * fallback to invoking the appropriate RuntimeUtils.xxx() method that handles all
  * types.

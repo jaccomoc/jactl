@@ -1339,8 +1339,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
               mv.visitInsn(DUP);
               mv.visitMethodInsn(INVOKESPECIAL, "java/lang/StringBuilder", "<init>", "()V", false);
               pushType(STRING_BUILDER);
-              for (Expr part : parts) {
+              for (int i = 0; i < parts.size(); ++i) {
+                Expr part = parts.get(i);
                 compile(part);
+                if (i == 0 && couldBeNull(part)) {
+                  throwIfNull("Null operand for left-hand side of String concatenation", part.location);
+                }
                 expect(2);
                 convertToString();
                 mv.visitMethodInsn(INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false);
@@ -1353,7 +1357,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             }
             compile(expr.left);
             if (couldBeNull(expr.left)) {
-              throwIfNull("Null operand for left hand side of String concatenation", expr.left.location);
+              throwIfNull("Null operand for left-hand side of String concatenation", expr.left.location);
             }
             convertToString();
             desiredType = STRING;
@@ -1782,7 +1786,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       Expr.Binary binary = (Expr.Binary) expr;
       if (binary.operator.is(PLUS) && binary.type.is(STRING)) {
         gatherStringParts(binary.left, parts);
-        gatherStringParts(binary.right, parts);
+        if (binary.right.wasNested) {
+          // Don't flatten if expression was surrounded by parentheses
+          parts.add(binary.right);
+        }
+        else {
+          gatherStringParts(binary.right, parts);
+        }
         return;
       }
     }

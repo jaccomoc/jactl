@@ -103,6 +103,8 @@ public class CompilerTests2 extends BaseTest {
     test("'abc' + (byte)1", "abc1");
     test("'abc' + ('xxx' if true)", "abcxxx");
     test("'abc' + ('xxx' if false)", "abcnull");
+    testError("null + 'abc'" , "null operand");
+    testError("null + 'abc' + 'def'" , "null operand");
   }
 
   @Test
@@ -3061,7 +3063,12 @@ public class CompilerTests2 extends BaseTest {
     test("def x = 'ab'; def y = 2; x *= y; x", "abab");
     testError("'ab' * -1", "repeat count must be >= 0");
     testError("'ab' * -1.234", "repeat count must be >= 0");
-    test("('abcdefghij' * 10000).size()", 100000); 
+    test("('abcdefghij' * 10000).size()", 100000);
+    testError("def x; x + 'abc'", "null operand");
+    testError("def x; x + 'abc' + 'def'", "null operand");
+    testError("String x = null; x + 'abc'", "null operand");
+    testError("String x = null; x + 'abc' + 'def'", "null operand");
+    testError("String x = null; 'abc' + (x + 'def')", "null operand");
   }
 
   @Test public void listAdd() {
