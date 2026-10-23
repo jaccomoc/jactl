@@ -3109,6 +3109,16 @@ public class CompilerTests2 extends BaseTest {
     testError("def x = ['a','b']; x--", "non-numeric operand");
     testError("var x = ['a','b']; --x", "operator '--' cannot be applied to type list");
     testError("def x = ['a','b']; --x", "non-numeric operand");
+    test("[1,2] + 'ab'", Utils.listOf(1,2,"ab"));
+    test("[1,2] + 'a'", Utils.listOf(1,2,"a"));
+    test("def x = [1,2]; x + 'ab'", Utils.listOf(1,2,"ab"));
+    test("def x = [1,2]; def y = 'ab'; x + y", Utils.listOf(1,2,"ab"));
+    test("def x = [1,2]; def y = 'a'; x + y", Utils.listOf(1,2,"a"));
+    test("List x = [1,2]; x + 'ab'", Utils.listOf(1,2,"ab"));
+    testError("[a:1,b:2] + 'ab'", "cannot add string to map");
+    test("'a' + 1", "a1");
+    test("def x = 'a'; x + 1", "a1");
+    test("def x = 'a';def y = 1;  x + y", "a1");
   }
 
   @Test public void listAddSingle() {

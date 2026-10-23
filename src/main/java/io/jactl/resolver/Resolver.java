@@ -1097,16 +1097,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       error("Non-numeric operand for " + expr.originalOperator.getChars(), expr.operator);
     }
 
-    if (expr.operator.is(PLUS) && expr.right.type.is(STRING) && 
-        expr.right.isConst && ((String)expr.right.constValue).length() != 1 &&
-        (expr.originalOperator == null || !expr.originalOperator.is(PLUS_EQUAL))) {
-      // If we have xxx + 'yyy' and 'yyy' is not just a single char then we know
-      // result will be a string
-      expr.type = STRING;
-    }
-    else {
-      expr.type = resultType(expr.left.type, expr.operator, expr.right.type);
-    }
+    expr.type = resultType(expr.left.type, expr.operator, expr.right.type);
+    
     if (expr.type.is(STRING)) {
       expr.couldBeNull = false;
     }
