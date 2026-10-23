@@ -2444,18 +2444,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     if (expr.operator.getType().isBooleanOperator()) {
-      if (expr.operator.is(TRIPLE_EQUAL,BANG_EQUAL_EQUAL) && (leftValue instanceof List || leftValue instanceof Map)) {
-        expr.constValue = expr.operator.is(TRIPLE_EQUAL) == leftValue.equals(rightValue);
+      try {
+        expr.constValue = RuntimeUtils.booleanOp(leftValue, rightValue,
+                                                 RuntimeUtils.getOperatorType(expr.operator.getType()),
+                                                 expr.operator.getSource(), expr.operator.getOffset());
       }
-      else {
-        try {
-          expr.constValue = RuntimeUtils.booleanOp(leftValue, rightValue,
-                                                   RuntimeUtils.getOperatorType(expr.operator.getType()),
-                                                   expr.operator.getSource(), expr.operator.getOffset());
-        }
-        catch (RuntimeError e) {
-          error(e);
-        }
+      catch (RuntimeError e) {
+        error(e);
       }
       return expr.type = BOOLEAN;
     }

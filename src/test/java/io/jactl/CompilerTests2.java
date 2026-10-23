@@ -1356,14 +1356,16 @@ public class CompilerTests2 extends BaseTest {
     // into non-constants (because we don't know what will happen to return results)
     {
       useAsyncDecorator = false;
-      test("[1,2,3] === [1,2,3]", true);
-      test("[1,2,3] !== [1,2,3]", false);
-      test("[a:1,b:[1,2,3],c:[x:1]] === [a:1,b:[1,2,3],c:[x:1]]", true);
-      test("[a:1,b:[1,2,3],c:[x:1]] !== [a:1,b:[1,2,3],c:[x:1]]", false);
-      test("[] === []", true);
-      test("[] !== []", false);
+      test("[1,2,3] === [1,2,3]", false);
+      test("[1,2,3] !== [1,2,3]", true);
+      test("[a:1,b:[1,2,3],c:[x:1]] === [a:1,b:[1,2,3],c:[x:1]]", false);
+      test("[a:1,b:[1,2,3],c:[x:1]] !== [a:1,b:[1,2,3],c:[x:1]]", true);
+      test("[] === []", false);
+      test("[] !== []", true);
       test("[] === [:]", false);
       test("[] !== [:]", true);
+      test("[:] === [:]", false);
+      test("[:] !== [:]", true);
       useAsyncDecorator = true;
     }
 
