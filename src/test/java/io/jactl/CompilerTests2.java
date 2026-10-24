@@ -3074,6 +3074,8 @@ public class CompilerTests2 extends BaseTest {
     testError("String x = null; x + 'abc'", "null operand");
     testError("String x = null; x + 'abc' + 'def'", "null operand");
     testError("String x = null; 'abc' + (x + 'def')", "null operand");
+    test("String n = null; 'abc' + 'def' + n", "abcdefnull");
+    test("String n = null; 'abc' + n", "abcnull");
   }
 
   @Test public void listAdd() {

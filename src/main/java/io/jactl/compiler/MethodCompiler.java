@@ -1393,6 +1393,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             convertToString();
             desiredType = STRING;
             compile(expr.right);
+            if (couldBeNull(expr.right)) {
+              _dupVal();
+              Label NONNULL_ARG2 = new Label();
+              mv.visitJumpInsn(IFNONNULL, NONNULL_ARG2);
+              _popVal();
+              _loadConst("null");
+              mv.visitLabel(NONNULL_ARG2);
+            }
             convertToString();
             invokeMethod(STRING_CONCAT_METHOD);
             return null;
