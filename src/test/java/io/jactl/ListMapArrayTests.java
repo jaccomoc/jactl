@@ -2067,4 +2067,31 @@ public class ListMapArrayTests extends BaseTest {
     test("Map x = null; x?.i++", 0);  // due to auto-creation
     test("Map x = null; x.a += 3", 3);
   }
+  
+  @Test public void mapMethodKeys() {
+    test("Map m = [:]; m['size']", null);
+    test("Map m = [:]; def f = m.size; f()", 0);
+    test("def m = [:]; m.size = 123; m.size", 123);
+    test("def m = [:]; m?.size = 123; m.size", 123);
+    test("def m = [:]; m.s++; m.s", 1);
+    test("def m = [:]; m.s += 1; m.s", 1);
+    test("def m = [:]; ++m.s; m.s", 1);
+    testError("def m = [:]; m.size += 1; m.size", "non-numeric operand");
+    testError("def m = [:]; m.\"${'size'}\" += 1; m.size", "non-numeric operand");
+    testError("def m = [:]; m.size++; m.size", "non-numeric operand");
+    test("def m = [:]; m['size']++; m['size']", 1);
+    test("def m = [:]; m?['size']++; m['size']", 1);
+    test("Map m = [:]; m.size = 123; m.size", 123);
+    test("Map m = [:]; m?.size = 123; m?.size", 123);
+    test("Map m = [:]; m.s++; m.s", 1);
+    test("Map m = [:]; m.s += 1; m.s", 1);
+    test("Map m = [:]; ++m.s; m.s", 1);
+    testError("Map m = [:]; m.size += 1; m.size", "non-numeric operand");
+    testError("Map m = [:]; m?.size += 1; m.size", "non-numeric operand");
+    testError("Map m = [:]; m.size++; m.size", "non-numeric operand");
+    test("Map m = [:]; m['size']++; m['size']", 1);
+    test("Map m = [:]; m?['size']++; m['size']", 1);
+    test("Map m = [:]; def x = 'size'; m?[x]++; m?[x]", 1);
+    testError("Map m = [:]; def x = 'size'; m.(x)++; m?.(x)", "non-numeric operand");
+  }
 }

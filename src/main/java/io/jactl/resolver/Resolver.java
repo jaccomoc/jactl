@@ -1230,7 +1230,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           // Not INSTANCE or CLASS
 
           // Might be a built-in method...
-          if (lookupMethod(parent.type, (String) fieldName) != null) {
+          if (accessOperator.is(DOT,QUESTION_DOT) && lookupMethod(parent.type, (String) fieldName) != null) {
             type = FUNCTION;
           }
           else if (parent.type.is(MAP, ANY)) {

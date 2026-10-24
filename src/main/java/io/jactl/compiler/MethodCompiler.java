@@ -5997,6 +5997,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       if (peek2().is(MAP)) {
+        loadConst(accessOperator.is(QUESTION_DOT, DOT));
         loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
         loadConst(!insideTryCatchNullError());
         loadLocation(location);

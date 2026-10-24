@@ -1524,8 +1524,8 @@ public class RuntimeUtils {
     if (parent instanceof Map) {
       Object value = ((Map)parent).get(field);
       if (value == null && isDot && field instanceof String) {
-        // If we still can't find a field then if we have a method of the name return
-        // its method handle
+        // If we still can't find a field then if we have a method of the name and
+        // the access is via '.' or '?.' then return its method handle
         value = lookupWrapper(parent, (String)field, null, source, offset);
       }
       return value;
@@ -1776,8 +1776,8 @@ public class RuntimeUtils {
     return value;
   }
 
-  public static final MethodRef LOAD_MAP_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "loadMapField", Map.class, Object.class, Boolean.TYPE, boolean.class, String.class, Integer.TYPE);
-  public static Object loadMapField(Map parent, Object field, boolean isOptional, boolean captureStackTrace, String source, int offset) {
+  public static final MethodRef LOAD_MAP_FIELD_METHOD = Utils.getMethod(RuntimeUtils.class, "loadMapField", Map.class, Object.class, boolean.class, boolean.class, boolean.class, String.class, Integer.TYPE);
+  public static Object loadMapField(Map parent, Object field, boolean isDot, boolean isOptional, boolean captureStackTrace, String source, int offset) {
     if (parent == null) {
       if (isOptional) {
         return null;
@@ -1788,7 +1788,7 @@ public class RuntimeUtils {
       throw new NullError("Null value for field name", source, offset, captureStackTrace);
     }
     Object value = parent.get(field);
-    if (value == null && field instanceof String) {
+    if (value == null && field instanceof String && isDot) {
       // If we still can't find a field then if we have a method of the name return
       // its method handle
       value = lookupWrapper(parent, (String)field, null, source, offset);
