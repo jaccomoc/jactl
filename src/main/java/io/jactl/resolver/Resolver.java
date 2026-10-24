@@ -1858,6 +1858,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     // If we don't already know the parent type then assume type based on type of access being done
+    JactlType originalParentType = parent.type;
     if (parent.type.is(ANY) && parent instanceof Expr.Binary) {
       Expr.Binary binaryParent = (Expr.Binary) parent;
       if (binaryParent.createIfMissing) {
@@ -1906,7 +1907,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       return expr.type = ANY;
     }
 
-    if (parent.type.is(LIST,ARRAY) && !field.type.is(ANY) && !field.type.isNumeric()) {
+    if (originalParentType.is(LIST,ARRAY) && !field.type.is(ANY) && !field.type.isNumeric()) {
       error("Index must be numeric for " + (parent.type.is(LIST) ? "List" : "Array") + " access", field.location);
     }
 
@@ -1935,8 +1936,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         return expr.type = OBJECT_ARR;
       }
       JactlType elementType = elements.get(0).type;
+      // If elements are all of the same type then we construct an array of that type.
+      // Otherwise we use Object[].
       for (int i = 1; i < elements.size(); i++) {
-        elementType = JactlType.commonSuperType(elementType, elements.get(i).type);
+        if (!elementType.equals(elements.get(i).type)) {
+          elementType = ANY;
+          break;
+        }
       }
       expr.type = JactlType.arrayOf(elementType);
       
@@ -1947,7 +1953,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         expr.initExpr.isConst = true;
         expr.initExpr.constValue = Array.newInstance(elementType.classFromType(), list.size());
         for (int i = 0; i < list.size(); i++) {
-          Array.set(expr.initExpr.constValue, i, list.get(i));
+          Array.set(expr.initExpr.constValue, i, castToType(list.get(i), elementType, elements.get(i).location));
         }
         expr.initExpr.type = expr.type;
         currentClass().classConstants.add(expr.initExpr.constValue);

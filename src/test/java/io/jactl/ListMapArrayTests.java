@@ -2094,4 +2094,15 @@ public class ListMapArrayTests extends BaseTest {
     test("Map m = [:]; def x = 'size'; m?[x]++; m?[x]", 1);
     testError("Map m = [:]; def x = 'size'; m.(x)++; m?.(x)", "non-numeric operand");
   }
+  
+  @Test public void nestedMapKeys() {
+    test("def m = [a:[:]]; m.a.xxx = 3; m", Utils.mapOf("a", Utils.mapOf("xxx", 3)));
+    testError("def m = [:]; m['a']['xxx'] = 3; m", "index must be numeric");
+    test("def m = [a:[:]]; m['a']['xxx'] = 3; m.toString()", "[a:[xxx:3]]");
+    test("def m = [a:[:]]; m.a['xxx'] = 3; m.toString()", "[a:[xxx:3]]");
+    test("Map m = [a:[:]]; m.a.xxx = 3; m", Utils.mapOf("a", Utils.mapOf("xxx", 3)));
+    testError("Map m = [:]; m['a']['xxx'] = 3; m", "index must be numeric");
+    test("Map m = [a:[:]]; m['a']['xxx'] = 3; m.toString()", "[a:[xxx:3]]");
+    test("Map m = [a:[:]]; m.a['xxx'] = 3; m.toString()", "[a:[xxx:3]]");
+  }
 }
