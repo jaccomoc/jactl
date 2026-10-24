@@ -529,6 +529,37 @@ public class ListMapArrayTests extends BaseTest {
     test("def m1 = [([a:1,b:2,[1,2]:3]):1]; m1.toString()", "[([a:1, b:2, ([1, 2]):3]):1]");
   }
 
+  @Test public void arrayIndexing() {
+    testError("int i = 1; int[] a; a[i]", "null parent");
+    testError("int i = 1; int[] a; a[i]++; a.toString()", "null parent");
+    testError("int i = -1; int[] a; a[i]", "null parent");
+    testError("int i = -11; int[] a; a[i]++; a.toString()", "null parent");
+    test("int i = 1; int[] a = new int[3]; a[i]++; a.toString()", "[0, 1, 0]");
+    test("int i = 1; int[] a = new int[3]; a[sleep(0,i)]++; a.toString()", "[0, 1, 0]");
+    testError("int i = -4; int[] a = new int[3]; a[i]++; a.toString()", "index out of bounds");
+    test("def i = 1; int[] a = new int[3]; a[i]++; a.toString()", "[0, 1, 0]");
+    test("def i = 1; int[] a = new int[3]; a[i]+=2; a.toString()", "[0, 2, 0]");
+    test("int i = -1; int[] a = new int[3]; List x = a as List; x[i] += 2; x.toString()", "[0, 0, 2]");
+    test("int i = -1; int[] a = new int[3]; List x = a as List; x[i] += 2; x.toString()", "[0, 0, 2]");
+    test("int i = -1; int[] a = new int[3]; def x = a as List; x[i] += 2; x.toString()", "[0, 0, 2]");
+    test("int i = -1; int[] a = new int[3]; a[i] += 2; a.toString()", "[0, 0, 2]");
+    test("def i = -1; int[] a = new int[3]; a[i] += 2; a.toString()", "[0, 0, 2]");
+    test("int i = -1; int[] a = new int[3]; ++a[i]; a.toString()", "[0, 0, 1]");
+    test("int i = -1; int[] a = new int[3]; ++a[sleep(0,i)]; a.toString()", "[0, 0, 1]");
+    test("def i = -1; int[] a = new int[3]; ++a[i]; a.toString()", "[0, 0, 1]");
+    test("long i = 1; int[] a = new int[3]; a[i]++; a.toString()", "[0, 1, 0]");
+    test("def i = 1L; int[] a = new int[3]; a[i]++; a.toString()", "[0, 1, 0]");
+    test("def i = 1L; int[] a = new int[3]; a[i]+=2; a.toString()", "[0, 2, 0]");
+    test("long i = -1; int[] a = new int[3]; List x = a as List; x[i] += 2; x.toString()", "[0, 0, 2]");
+    test("long i = -1; int[] a = new int[3]; List x = a as List; x[i] += 2; x.toString()", "[0, 0, 2]");
+    test("long i = -1; int[] a = new int[3]; def x = a as List; x[i] += 2; x.toString()", "[0, 0, 2]");
+    test("long i = -1; int[] a = new int[3]; a[i] += 2; a.toString()", "[0, 0, 2]");
+    test("def i = -1L; int[] a = new int[3]; a[i] += 2; a.toString()", "[0, 0, 2]");
+    test("long i = -1; int[] a = new int[3]; ++a[i]; a.toString()", "[0, 0, 1]");
+    test("def i = -1L; int[] a = new int[3]; ++a[i]; a.toString()", "[0, 0, 1]");
+    testError("int[] a = new int[3]; a[-5] = 1", "not in range for array of size 3");
+  }
+  
   @Test public void arrayIndexOutOfBounds() {
     testError("boolean[] a = new boolean[0]; a[0] = 1; a[0]", "array index out of bounds");
     testError("boolean[] a = new boolean[0]; a[-1] = 1; a[0]", "array index out of bounds");

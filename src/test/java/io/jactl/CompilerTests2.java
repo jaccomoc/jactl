@@ -2466,6 +2466,8 @@ public class CompilerTests2 extends BaseTest {
     testError("for (i in null) { }", "null object");
     test("def sum = 0; for (i in [1,2,3].map{ sleep(0,it) }) { sum += i }; sum", 6);
     test("def sum = 0; for (i in [1,2,3].map{ sleep(0,it) }.map{ sleep(0,it) + sleep(0,it) }) { sum += i }; sum", 12);
+    test("int[] c = new int[3]; for (int i in 3) { c[i]++ }; c.toString()", "[1, 1, 1]");
+    test("int[] c = new int[3]; for (i in 3) { c[i]++ }; c.toString()", "[1, 1, 1]");
   }
   
   @Test public void destructuringForLoops() {

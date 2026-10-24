@@ -956,7 +956,32 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       simpleIndex = compileIndex(expr.parent, expr.field);
       if (arrayElem) {
-        unbox();
+        if (!simpleIndex && !peek().is(INT)) {
+          box();
+          loadLocation(expr.field.location);
+          invokeMethod(RuntimeUtils.ARRAY_INDEX_METHOD);
+        }
+        else {
+          unbox();
+        }
+        expect(2);
+        // Check for negative index and convert to offset from end
+        _dupVal();
+        Label NOT_NEGATIVE = new Label();
+        mv.visitJumpInsn(IFGE, NOT_NEGATIVE);
+        mv.visitInsn(DUP2);
+        mv.visitInsn(POP);
+        Label NONNULL_PARENT = new Label();
+        if (expr.parent.couldBeNull) {
+          mv.visitInsn(DUP);
+          mv.visitJumpInsn(IFNONNULL, NONNULL_PARENT);
+          mv.visitInsn(POP);
+          mv.visitJumpInsn(GOTO, NOT_NEGATIVE);
+        }
+        mv.visitLabel(NONNULL_PARENT);
+        mv.visitInsn(ARRAYLENGTH);
+        mv.visitInsn(IADD);
+        mv.visitLabel(NOT_NEGATIVE);
       }
       else {
         box();
@@ -965,6 +990,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // and field again to get value and to store value so duplicate parent and field on
       // stack to get:
       // ... parent, field, parent, field
+      expect(2);
       dupVal2();
     }
 
@@ -1023,7 +1049,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (arrayElem) {
       expect(3);
       convertTo(parentType.getArrayElemType(), expr.expr, false, expr.location);
-      Utils.storeArrayElement(mv, parentType.getArrayElemType());
+      tryCatch(ArrayIndexOutOfBoundsException.class, false,
+               () -> Utils.storeArrayElement(mv, parentType.getArrayElemType()),
+               () -> {
+                 invokeMethod(THROWABLE_GET_MESSAGE_METHOD);
+                 _throwErrorWithString("Array index out of bounds: ", expr.field.location);
+               });
       popType(3);
     }
     else if (isField) {
@@ -6335,7 +6366,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           index += parentLength;
         }
         if (index < 0 || index >= parentLength) {
-          error("Array index out of bounds: index " + index + " not in range for array of size " + parentVar, expr.field.location);
+          error("Array index out of bounds: index " + index + " not in range for array of size " + parentLength, expr.field.location);
           return;
         }
         else {
