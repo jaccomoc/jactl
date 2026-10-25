@@ -143,7 +143,7 @@ public class PipelineCompiler {
     // Normally, if a method call is on a type that is unknown we assume the worst and mark it as async.
     // Given that we have already done a runtime check for iterable, we only flag functions as async
     // if they invoke an async closure.
-    boolean isAsync = methodCompiler.asyncEnabled() && (parent.isAsync || fns.stream().anyMatch(InlineFn::couldBeAsync));
+    boolean isAsync = isAsyncPipeline(methodCompiler, parent, fns);
 
     // If last function returns an Iterator or needs a list to post process then we need to convert back to a list
     InlineFn lastFn        = fns.get(fns.size() - 1);
@@ -156,7 +156,11 @@ public class PipelineCompiler {
       compilePipelineSync(methodCompiler, exprs, fns, convertToList);
     }
   }
-  
+
+  public static boolean isAsyncPipeline(MethodCompiler methodCompiler, Expr parent, List<InlineFn> fns) {
+    return methodCompiler.asyncEnabled() && (parent.isAsync || fns.stream().anyMatch(InlineFn::couldBeAsync));
+  }
+
   public static void compilePipelineSync(MethodCompiler methodCompiler, List<Expr.MethodCall> exprs, List<InlineFn> fns, boolean convertToList) {
     // Allocate variable for our iterator
     int iteratorSlot = methodCompiler.stack.allocateSlot(ITERATOR);
@@ -313,7 +317,7 @@ public class PipelineCompiler {
         methodCompiler.mv.visitLabel(switchLabels[index++]);
         methodCompiler.loadLocal(contResultSlot);
         methodCompiler.checkCast(BOXED_BOOLEAN);
-        methodCompiler.unbox();
+        methodCompiler.unboxAlways();
         methodCompiler.popType();
         methodCompiler.mv.visitJumpInsn(IFEQ, endLabel);
         methodCompiler.mv.visitIincInsn(locationSlot, 1);

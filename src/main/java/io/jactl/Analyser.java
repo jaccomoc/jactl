@@ -905,6 +905,8 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (arg instanceof Expr.Call && ((Expr.Call)arg).isAsync)             { return true; }
     if (arg instanceof Expr.MethodCall && ((Expr.MethodCall)arg).isAsync) { return true; }
 
+    if (arg.type.is(FUNCTION) && arg.isAsync) { return true; }
+    
     // If type of variable is ANY then assume worst
     if (arg.type.is(ANY)) { return true; }
 

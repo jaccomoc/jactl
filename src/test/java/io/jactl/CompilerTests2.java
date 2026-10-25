@@ -2464,7 +2464,7 @@ public class CompilerTests2 extends BaseTest {
     test("int sum; for (i in ['1'])sum++; sum", 1);
     test("def sum = ''; for (i in 'abc')sum=i+sum; sum", "cba");
     test("def list = []; for (i in [a:1,b:2]) { list <<= i }; list", Utils.listOf(Utils.listOf("a",1),Utils.listOf("b",2)));
-    testError("for (i in null) { }", "null object");
+    test("int cnt = 0; for (i in null) { cnt++ }; cnt", 0);
     test("def sum = 0; for (i in [1,2,3].map{ sleep(0,it) }) { sum += i }; sum", 6);
     test("def sum = 0; for (i in [1,2,3].map{ sleep(0,it) }.map{ sleep(0,it) + sleep(0,it) }) { sum += i }; sum", 12);
     test("int[] c = new int[3]; for (int i in 3) { c[i]++ }; c.toString()", "[1, 1, 1]");

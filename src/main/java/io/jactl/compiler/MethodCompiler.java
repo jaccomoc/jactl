@@ -962,7 +962,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           invokeMethod(RuntimeUtils.ARRAY_INDEX_METHOD);
         }
         else {
-          unbox();
+          unbox(expr.field);
         }
         expect(2);
         // Check for negative index and convert to offset from end
@@ -1658,11 +1658,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       desiredType = operandType;
       compile(expr.left);
       convertTo(operandType, expr.left, false, expr.left.location);
-      unbox();
+      unbox(expr.left);
       desiredType = operandType;
       compile(expr.right);
       convertTo(operandType, expr.right, false, expr.right.location);
-      unbox();
+      unbox(expr.right);
       expect(2);
       Label IS_TRUE = new Label();
       if (operandType.is(INT)) {
@@ -1706,7 +1706,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Everything else
     compile(expr.left);
-    unbox();
+    unbox(expr.left);
     JactlType lhsType = peek();
     if (expr.operator.getType().isBitOperator() && expr.left.type.is(ANY)) {
       // Don't do any conversion yet for bit manipulation ops since if we have ANY we don't know whether
@@ -1718,7 +1718,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       convertTo(expr.type, expr.left, true, expr.left.location);
     }
     compile(expr.right);
-    unbox();
+    unbox(expr.right);
     if (expr.operator.getType().isBitShift()) {
       if (!expr.left.type.is(LIST, ANY)) {
         assert lhsType.isNumeric();
@@ -2089,6 +2089,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     compile(expr.expr);
+    if (!peek().isPrimitive()) {
+      unbox(expr.expr);
+    }
 
     switch (expr.operator.getType()) {
       case BANG:    convertToBoolean(true, expr.expr);      break;
@@ -2503,9 +2506,22 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
         else {
           box();
-          loadLocation(parent.location);
-          invokeMethod(RuntimeUtils.CREATE_ITERATOR_METHOD);
-          PipelineCompiler.compilePipeline(parent, this, pipeline, pipelineFns);
+          if (pipeline.get(0).accessOperator.is(QUESTION_DOT) && parent.couldBeNull) {
+            Expr finalParent = parent;
+            emitIf(PipelineCompiler.isAsyncPipeline(this, parent, pipelineFns), true, IfTest.IS_NOTNULL,
+                   () -> dupVal(),
+                   () -> {
+                     loadLocation(finalParent.location);
+                     invokeMethod(RuntimeUtils.CREATE_ITERATOR_METHOD);
+                     PipelineCompiler.compilePipeline(finalParent, this, pipeline, pipelineFns);
+                   },
+                   () -> checkCast(pipelineFns.get(pipelineFns.size() - 1).expr.type.boxed()));
+          }
+          else {
+            loadLocation(parent.location);
+            invokeMethod(RuntimeUtils.CREATE_ITERATOR_METHOD);
+            PipelineCompiler.compilePipeline(parent, this, pipeline, pipelineFns);
+          }
         }
 
         return null;
@@ -2518,11 +2534,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   Void _visitMethodCall(Expr.MethodCall expr) {
     JactlType parentType = expr.parent.type;
-    
-//    loadConst("not pipeline");
-//    loadConst("not pipeline");
-//    invokeMethod(RuntimeUtils.class, RuntimeUtils.DEBUG_BREAK_POINT, Object.class, String.class);
-//    popVal();
     
     // If we know what method to invoke
     if (expr.methodDescriptor != null) {
@@ -2623,16 +2634,27 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
     }
     else {
-      invokeMaybeAsync(asyncEnabled(), ANY, 0, expr.location,
-                       () -> {
-                         loadConst(expr.methodName);
-                         loadConst(!expr.parent.type.is(ANY));              // Whether must be field
-                         loadConst(expr.accessOperator.is(QUESTION_DOT));   // whether x?.a() or x.a()
-                         loadArgsAsObjectArr(expr.args);
-                         loadConst(!insideTryCatchNullError());
-                         loadLocation(expr.methodNameLocation);
-                       },
-                       () -> invokeMethod(RuntimeUtils.INVOKE_METHOD_OR_FIELD_METHOD));
+      Runnable invoker = () -> {
+        invokeMaybeAsync(asyncEnabled(), ANY, 0, expr.location,
+                         () -> {
+                           loadConst(expr.methodName);
+                           loadConst(!expr.parent.type.is(ANY));              // Whether must be field
+                           loadConst(expr.accessOperator.is(QUESTION_DOT));   // whether x?.a() or x.a()
+                           loadArgsAsObjectArr(expr.args);
+                           loadConst(!insideTryCatchNullError());
+                           loadLocation(expr.methodNameLocation);
+                         },
+                         () -> invokeMethod(RuntimeUtils.INVOKE_METHOD_OR_FIELD_METHOD));
+      };
+      if (expr.accessOperator.is(QUESTION_DOT) && expr.parent.couldBeNull) {
+        emitIf(asyncEnabled(), true, IfTest.IS_NOTNULL,
+               () -> dupVal(), 
+               invoker, 
+               () -> checkCast(expr.type.boxed()));
+      }
+      else {
+        invoker.run();
+      }
     }
 
     if (!expr.isMethodCallTarget) {
@@ -2693,104 +2715,126 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // will all be simple constants that we generate code for here.
     //Utils.isInvokeWrapper(
     if (method.isBuiltin || !Utils.isInvokeWrapper(expr.args, expr.validateArgsAtCompileTime, method)) {
-      // We can invoke the method directly as we have exact number of args required
-      invokeMaybeAsync(isAsync, method.returnType, 0, expr.location,
-                       () -> {
-                         if (couldBeNull(parent)) {
-                           throwIfNull("Cannot invoke method " + method.name + "() on null object", expr.methodNameLocation);
-                         }
-                         if (method.isBuiltin && method.firstArgtype != null) {
-                           // If we are calling a "method" that is ANY but we have a primitive then we need to box it
-                           if (method.firstArgtype.is(ANY, NUMBER)) {
-                             box();
+      Runnable invoker = () -> {
+        invokeMaybeAsync(isAsync, expr.accessOperator.is(QUESTION_DOT) ? method.returnType.boxed() : method.returnType, 0, expr.location,
+                         () -> {
+                           if (couldBeNull(parent) && !expr.accessOperator.is(QUESTION_DOT)) {
+                             throwIfNull("Cannot invoke method " + method.name + "() on null object", expr.methodNameLocation);
                            }
-                         }
-                         else if (method.isStaticImplementation && !parent.type.is(CLASS)) {
-                           popVal();
-                         }
+                           if (method.isBuiltin && method.firstArgtype != null) {
+                             // If we are calling a "method" that is ANY but we have a primitive then we need to box it
+                             if (method.firstArgtype.is(ANY, NUMBER)) {
+                               box();
+                             }
+                           }
+                           else if (method.isStaticImplementation && !parent.type.is(CLASS)) {
+                             popVal();
+                           }
 
-                         if (method.isAsync()) {
-                           loadNullContinuation();
-                         }
-                         if (method.needsLocation) {
-                           loadLocation(expr.methodNameLocation);
-                         }
-                         // Get the args
-                         for (int i = 0; i < method.paramCount; i++) {
-                           JactlType paramType = method.paramTypes.get(i);
-                           desiredType = paramType;
-                           if (i < expr.args.size()) {
-                             Expr arg = expr.args.get(i);
-                             compile(arg);
-                             convertTo(paramType, arg, !arg.type.isPrimitive(), arg.location);
+                           if (method.isAsync()) {
+                             loadNullContinuation();
                            }
-                           else {
-                             // Must have simple constant for default value (built-in function or simple default value for user method)
-                             Object        defaultValue  = method.defaultVals[i];
-                             assert defaultValue != NON_TRIVIAL;
-                             loadConst(defaultValue);
-                             if (defaultValue != null) {
-                               convertTo(paramType, null, !peek().isPrimitive(), expr.leftParen);
+                           if (method.needsLocation) {
+                             loadLocation(expr.methodNameLocation);
+                           }
+                           // Get the args
+                           for (int i = 0; i < method.paramCount; i++) {
+                             JactlType paramType = method.paramTypes.get(i);
+                             desiredType = paramType;
+                             if (i < expr.args.size()) {
+                               Expr arg = expr.args.get(i);
+                               compile(arg);
+                               convertTo(paramType, arg, !arg.type.isPrimitive(), arg.location);
                              }
                              else {
-                               popType();
-                               pushType(paramType);
+                               // Must have simple constant for default value (built-in function or simple default value for user method)
+                               Object defaultValue = method.defaultVals[i];
+                               assert defaultValue != NON_TRIVIAL;
+                               loadConst(defaultValue);
+                               if (defaultValue != null) {
+                                 convertTo(paramType, null, !peek().isPrimitive(), expr.leftParen);
+                               }
+                               else {
+                                 popType();
+                                 pushType(paramType);
+                               }
                              }
                            }
-                         }
-                       },
-                       () -> {
-                         if (methodClass.equals(method.implementingClassName)) {
-                           invokeMethod(method, invokeSpecial);
-                         }
-                         else {
-                           invokeMethod(method.isStaticImplementation, invokeSpecial, methodClass, method.implementingMethod,
-                                        method.returnType, method.methodParamTypes(), getMethodDescriptor(method.returnType, method.methodParamTypes()));
-                         }
-                       });
+                         },
+                         () -> {
+                           if (methodClass.equals(method.implementingClassName)) {
+                             invokeMethod(method, invokeSpecial);
+                           }
+                           else {
+                             invokeMethod(method.isStaticImplementation, invokeSpecial, methodClass, method.implementingMethod,
+                                          method.returnType, method.methodParamTypes(), getMethodDescriptor(method.returnType, method.methodParamTypes()));
+                           }
+                           if (expr.accessOperator.is(QUESTION_DOT)) {
+                             box();
+                           }
+                         });
+      };
+      if (expr.accessOperator.is(QUESTION_DOT) && expr.parent.couldBeNull) {
+        emitIf(asyncEnabled(), true, IfTest.IS_NOTNULL,
+               () -> dupVal(),
+               invoker,
+               () -> checkCast(expr.type.boxed()));
+      }
+      else {
+        invoker.run();
+      }
     }
     else {
       // Need to invoke the wrapper
-      invokeMaybeAsync(isAsync, method.returnType, 0, expr.location,
-                       () -> {
-                         if (couldBeNull(parent)) {
-                           throwIfNull("Cannot invoke method " + method.name + "() on null object", expr.methodNameLocation);
-                         }
-                         if (!method.isBuiltin && method.isStaticImplementation && !parent.type.is(CLASS)) {
-                           popVal();
-                         }
-                         if (parent.type.isPrimitive()) {
-                           box();
-                         }
-                         if (method.isBuiltin) {
-                           loadClassField(method.getWrapperHandleClassName(), method.wrapperHandleField, FUNCTION, true);
-                           if (!method.isGlobalFunction && method.isInstanceMethod()) {
-                             // Is "method" so bind to parent object
-                             swap();
-                             invokeMethod(JactlMethodHandle.BIND_TO_METHOD);
+      Runnable invoker = () -> {
+        JactlType returnType = method.returnType.boxed();  // use boxed type for wrapper calls since wrappers return Object
+        invokeMaybeAsync(isAsync, returnType, 0, expr.location,
+                         () -> {
+                           if (couldBeNull(parent) && !expr.accessOperator.is(QUESTION_DOT)) {
+                             throwIfNull("Cannot invoke method " + method.name + "() on null object", expr.methodNameLocation);
                            }
-                         }
-                         loadNullContinuation();
-                         loadLocation(expr.methodNameLocation);
-                         loadArgsAsObjectArr(expr.args);
-                       },
-                       () -> {
-                         List<JactlType> paramTypes = Utils.listOf(CONTINUATION, STRING, INT, OBJECT_ARR);
-                         if (method.isBuiltin && !method.isGlobalFunction) {
-                           paramTypes = RuntimeUtils.concat(method.firstArgtype, paramTypes);
-                         }
-                         if (method.isBuiltin) {
-                           invokeMethodHandle();
-                         }
-                         else {
-                           invokeMethod(method.isStaticImplementation, invokeSpecial, methodClass, method.wrapperMethod, ANY, paramTypes, getMethodDescriptor(ANY, paramTypes));
-                         }
-                         // Convert Object returned by wrapper back into return type of the function
-                         checkCast(method.returnType);
-                         if (method.returnType.isPrimitive()) {
-                           unbox();
-                         }
-                       });
+                           if (!method.isBuiltin && method.isStaticImplementation && !parent.type.is(CLASS)) {
+                             popVal();
+                           }
+                           if (parent.type.isPrimitive()) {
+                             box();
+                           }
+                           if (method.isBuiltin) {
+                             loadClassField(method.getWrapperHandleClassName(), method.wrapperHandleField, FUNCTION, true);
+                             if (!method.isGlobalFunction && method.isInstanceMethod()) {
+                               // Is "method" so bind to parent object
+                               swap();
+                               invokeMethod(JactlMethodHandle.BIND_TO_METHOD);
+                             }
+                           }
+                           loadNullContinuation();
+                           loadLocation(expr.methodNameLocation);
+                           loadArgsAsObjectArr(expr.args);
+                         },
+                         () -> {
+                           List<JactlType> paramTypes = Utils.listOf(CONTINUATION, STRING, INT, OBJECT_ARR);
+                           if (method.isBuiltin && !method.isGlobalFunction) {
+                             paramTypes = RuntimeUtils.concat(method.firstArgtype, paramTypes);
+                           }
+                           if (method.isBuiltin) {
+                             invokeMethodHandle();
+                           }
+                           else {
+                             invokeMethod(method.isStaticImplementation, invokeSpecial, methodClass, method.wrapperMethod, ANY, paramTypes, getMethodDescriptor(ANY, paramTypes));
+                           }
+                           // Convert Object returned by wrapper back into return type of the function
+                           checkCast(returnType);
+                         });
+      };
+      if (expr.accessOperator.is(QUESTION_DOT) && expr.parent.couldBeNull) {
+        emitIf(asyncEnabled(), true, IfTest.IS_NOTNULL,
+               () -> dupVal(),
+               invoker,
+               () -> checkCast(expr.type.boxed()));
+      }
+      else {
+        invoker.run();
+      }
     }
 
     // If method was an async built-in and we are in sync mode then check for timeout if timeout configured
@@ -2803,7 +2847,8 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        },
                        () -> {
                          loadNullContinuation();
-                         invokeMethod(RuntimeUtils.CONVERT_ITERATOR_TO_LIST_METHOD);
+                         invokeMethod(expr.accessOperator.is(QUESTION_DOT) ? RuntimeUtils.CONVERT_ITERATOR_TO_LIST_OR_NULL_METHOD
+                                                                           : RuntimeUtils.CONVERT_ITERATOR_TO_LIST_METHOD);
                        });
     }
   }
@@ -2870,8 +2915,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     else {
       loadLocal(expr.iterableVarDecl.slot);
       box();
-      loadLocation(expr.location);
-      invokeMethod(RuntimeUtils.CREATE_ITERATOR_METHOD);
+      invokeMethod(RuntimeUtils.CREATE_ITERATOR_NULLABLE_METHOD);
     }
     return null;
   }
@@ -4027,7 +4071,19 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   /**
    * Unbox value on the stack based on the type
    */
-  void unbox() {
+  void unbox(Expr expr) {
+    JactlType type = peek();
+    if (type.isPrimitive()) {
+      // Nothing to do if not boxed
+      return;
+    }
+    if (type.unboxed().isPrimitive() && expr.couldBeNull) {
+      throwIfNull("Null value found where " + type.unboxed() + " needed", expr.location);
+    }
+    unboxAlways();
+  }
+
+  void unboxIfNeeded() {
     JactlType type = peek();
     if (type.isPrimitive()) {
       // Nothing to do if not boxed
@@ -4036,7 +4092,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     unboxAlways();
   }
 
-  private void unboxAlways() {
+  void unboxAlways() {
     expect(1);
     switch (peek().getType()) {
       case BOOLEAN:
@@ -4253,12 +4309,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @param negated  if true conversion is negated
    */
   private Void convertToBoolean(boolean negated) {
-    if (peek().isBoxedOrUnboxed(BOOLEAN) && !negated) {
-      unbox();
+    if (peek().is(BOOLEAN) && !negated) {
       return null;     // Nothing to do
     }
-
+    
     expect(1);
+
+    // For any type that is an Object
+    if (!peek().isPrimitive()) {
+      loadConst(negated ? true : false);
+      invokeMethod(RuntimeUtils.IS_TRUTH_METHOD);
+      return null;
+    }
 
     Consumer<Integer> emitConvertToBoolean = opCode -> {
       Label isZero = new Label();
@@ -4270,13 +4332,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       _loadConst(negated ? 1 : 0);
       mv.visitLabel(end);
     };
-
-    // For any type that is an Object
-    if (!peek().isPrimitive()) {
-      loadConst(negated ? true : false);
-      invokeMethod(RuntimeUtils.IS_TRUTH_METHOD);
-      return null;
-    }
 
     switch (peek().getType()) {
       case BOOLEAN:
@@ -4310,8 +4365,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private Void convertToByte(SourceLocation location) {
-    if (peek().isBoxedOrUnboxed(BYTE,BOOLEAN)) {
-      unbox();
+    if (peek().is(BYTE,BOOLEAN)) {
       setStackType(BYTE);
       return null;
     }
@@ -4349,9 +4403,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private Void convertToInt(SourceLocation location) {
-    if (peek().isBoxedOrUnboxed(INT,BYTE,BOOLEAN)) {
-      unbox();
-      if (peek().is(BYTE)) {
+    JactlType type = peek();
+    if (type.is(INT,BYTE,BOOLEAN)) {
+      if (type.is(BYTE)) {
         _loadConst(255);
         mv.visitInsn(IAND);
       }
@@ -4360,18 +4414,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     expect(1);
-    if (peek().is(ANY, STRING)) {
+    if (type.is(ANY, STRING)) {
       loadConst(!insideTryCatchNullError());
       loadLocation(location);
       invokeMethod(RuntimeUtils.CAST_TO_INT_METHOD);
     }
     else
-    if (peek().isBoxed() || peek().is(DECIMAL)) {
+    if (type.isBoxed() || peek().is(DECIMAL)) {
       mv.visitTypeInsn(CHECKCAST, "java/lang/Number");
       invokeMethod(NUMBER_INT_VALUE_METHOD);
     }
     else {
-      switch (peek().getType()) {
+      switch (type.getType()) {
         case LONG:    mv.visitInsn(L2I);   break;
         case DOUBLE:  mv.visitInsn(D2I);   break;
         default:      error("Cannot convert " + peek() + " to int", (Token)location);
@@ -4383,8 +4437,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private Void convertToLong(SourceLocation location) {
-    if (peek().isBoxedOrUnboxed(LONG)) {
-      unbox();
+    if (peek().is(LONG)) {
       return null;
     }
     expect(1);
@@ -4422,8 +4475,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private Void convertToDouble(SourceLocation location) {
-    if (peek().isBoxedOrUnboxed(DOUBLE)) {
-      unbox();
+    if (peek().is(DOUBLE)) {
       return null;
     }
     expect(1);
@@ -4573,7 +4625,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void arithmeticNot(Token location) {
     expect(1);
-    unbox();
     switch (peek().getType()) {
       case BYTE:
         _loadConst((int)-1);
@@ -4600,7 +4651,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private void arithmeticNegate(Token location) {
     expect(1);
-    unbox();
     switch (peek().getType()) {
       case BYTE:    mv.visitInsn(INEG);  _loadConst(255); mv.visitInsn(IAND); break;
       case INT:     mv.visitInsn(INEG);  break;
@@ -4626,6 +4676,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       compile(expr);
+      unbox(expr);
       if (!isPrefix) {
         if (isResultUsed) {
           dupVal();
@@ -4666,7 +4717,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Helper to do the inc/dec based on the type of the value
     Consumer<Runnable> incOrDec = (runnable) -> {
       loadVar(varDecl);
-      unbox();
+      unbox(identifierExpr);
       convertTo(type, null, identifierExpr.couldBeNull, operator);
 
       // If amount is null then value is already on the stack so swap otherwise
@@ -4745,7 +4796,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    */
   private void incOrDecValue(boolean isInc, Object amount, Token operator) {
     expect(1);
-    unbox();
     if (peek().is(ANY, STRING, LIST)) {
       if (amount != null) {
         // Special case if amount is 1
@@ -5232,6 +5282,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Convert result to return type of function we invoked.
     loadLocal(continuationVar);
     invokeMethod(Continuation.GET_RESULT_METHOD);
+    if (returnType.isBoxed() && peek().is(returnType.unboxed())) {
+      box();
+    }
+    else
     if (returnType.isPrimitive()) {
       convertTo(returnType, null, false, location);
     }
@@ -5390,7 +5444,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                          invokeMethodHandle();
                          checkCast(func.returnType.boxed());
                          if (func.returnType.isPrimitive()) {
-                           unbox();
+                           unbox(expr);
                          }
                        });
     }
@@ -5568,13 +5622,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                    functionDescriptor.returnType,
                    paramTypes,
                    functionDescriptor.getMethodDescriptor(functionDescriptor.returnType, paramTypes));
-//                   getMethodDescriptor(functionDescriptor.returnType, paramTypes));
       if (functionDescriptor.isWrapper) {
         // Convert Object returned by wrapper back into return type of the function
         checkCast(functionDescriptor.returnType.boxed());
-        if (functionDescriptor.returnType.isPrimitive()) {
-          unbox();
-        }
       }
     }
   }
@@ -5806,7 +5856,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     popType();
     pushType(varDecl.type);
-    unbox();
+    unboxAlways();
     storeLocal(slot);
   }
 
@@ -5930,7 +5980,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (varDecl.isGlobal) {
       if (globalAliases()) {
         int slot = stack.globalVarSlot(varName);
-        unbox();
+        unboxIfNeeded();
         storeLocal(slot);
         loadLocal(slot);
       }
@@ -6416,7 +6466,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         loadLocation(expr.field.location);
         invokeMethod(RuntimeUtils.ARRAY_INDEX_METHOD);
       }
-      unbox();
+      unbox(expr.field);
       _dupVal();
       Label NOT_NEGATIVE = new Label();
       mv.visitJumpInsn(IFGE, NOT_NEGATIVE);

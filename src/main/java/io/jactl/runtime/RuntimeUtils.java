@@ -2168,6 +2168,13 @@ public class RuntimeUtils {
     if (obj == null) { throw new NullError("Cannot iterate over null object", source, offset); }
     return createIterator(obj);
   }
+
+  public static final MethodRef CREATE_ITERATOR_NULLABLE_METHOD = Utils.getMethod(RuntimeUtils.class, "createIteratorNullable", Object.class);
+  public static JactlIterator createIteratorNullable(Object obj) {
+    // Allow null object which turns into an empty iterator
+    if (obj == null) { return JactlIterator.of(); }
+    return createIterator(obj);
+  }
   
   public static JactlIterator createIterator(Object obj) {
     JactlIterator iter = createCollectionIteratorOrNull(obj);
@@ -2353,8 +2360,20 @@ public class RuntimeUtils {
     return convertIteratorToList(c.localObjects[1], c);
   }
 
+  public static final MethodRef CONVERT_ITERATOR_TO_LIST_OR_NULL_METHOD = Utils.getMethod(RuntimeUtils.class, "convertIteratorToListOrNull", Object.class, Continuation.class);
+  public static List convertIteratorToListOrNull(Object iterable, Continuation c) {
+    if (iterable == null) {
+      return null;
+    }
+    return _convertIteratorToList(iterable, c);
+  }
+
   public static final MethodRef CONVERT_ITERATOR_TO_LIST_METHOD = Utils.getMethod(RuntimeUtils.class, "convertIteratorToList", Object.class, Continuation.class);
   public static List convertIteratorToList(Object iterable, Continuation c) {
+    return _convertIteratorToList(iterable, c);
+  }
+  
+  private static List _convertIteratorToList(Object iterable, Continuation c) {
     JactlIterator iter = createIterator(iterable);
     
     if (!RuntimeState.getState().getContext().isAsync) {

@@ -22,7 +22,7 @@ import static org.objectweb.asm.Opcodes.*;
 public class SwitchCompiler {
   public static Void visitSwitch(MethodCompiler mc, Expr.Switch expr) {
     mc.compile(expr.subject);
-    mc.unbox();
+    mc.unbox(expr.subject);
     mc.defineVar(expr.itVar);
     mc.storeVar(expr.itVar);
 

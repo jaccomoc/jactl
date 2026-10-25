@@ -317,7 +317,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         }
         JactlType result = expr.accept(this);
         JactlType type   = expr.type;
-        if (type != null && (type.unboxed().isPrimitive() || type.is(CLASS)) ||
+        if (type != null && (type.unboxed().isPrimitive() && !isNullSafeCall(expr) || type.is(CLASS)) ||
             expr instanceof Expr.Literal && ((Expr.Literal)expr).value.getValue() != null ||
             expr instanceof Expr.MapLiteral || expr instanceof Expr.ListLiteral) {
           expr.couldBeNull = false;
@@ -330,6 +330,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return null;
   }
 
+  private boolean isNullSafeCall(Expr expr) {
+    return expr instanceof Expr.MethodCall && ((Expr.MethodCall) expr).accessOperator.is(QUESTION_DOT);
+  }
+  
   private void resolve(JactlType type) {
     if (type == null)                      { return; }
     if (type.is(ARRAY)) {
@@ -2131,8 +2135,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           error("No static method '" + expr.methodName + "' exists for " + parentType, expr.location);
         }
         expr.methodDescriptor = descriptor;
-        expr.type = descriptor.returnType;
-        return expr.type;
+        expr.couldBeNull = expr.accessOperator.is(QUESTION_DOT);
+        return expr.type = expr.accessOperator.is(QUESTION_DOT) ? descriptor.returnType.boxed() 
+                                                                : descriptor.returnType;
       }
       // Could be a field that has a MethodHandle in it
       if (parentType.is(INSTANCE) && !parentType.isHostClass()) {

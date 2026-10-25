@@ -43,7 +43,8 @@ public class CompilerTest3 extends BaseTest {
     testError("die", "die");
   }
 
-  @Test public void eval() {
+  @Test
+  public void eval() {
     test("eval('1',[:])", 1);
     test("eval('1')", 1);
     test("eval('x',[x:null])", null);
@@ -62,7 +63,8 @@ public class CompilerTest3 extends BaseTest {
     test("eval('x + y', [x:1,y:2]); def m = [y:2]; eval('x + y', m); m.'$error' =~ /reference to unknown variable 'x'/i", true);
   }
 
-  @Test public void evalWithTimeout() {
+  @Test
+  public void evalWithTimeout() {
     JactlContext context = getJactlContext(true, false, false, 2000, 10);
     JactlScript  script  = Jactl.compileScript("eval('10.each{ sleep(20) }')", new HashMap(), context);
     assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
@@ -72,14 +74,16 @@ public class CompilerTest3 extends BaseTest {
     assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
   }
 
-  @Test public void evalWithLoopLimit() {
+  @Test
+  public void evalWithLoopLimit() {
     JactlContext context = getJactlContext(true, false, false, 1000, 10000);
-    JactlScript script = Jactl.compileScript("eval('int i; for (i=0; i<2000; i++) { }; i')", new HashMap(), context);
+    JactlScript  script  = Jactl.compileScript("eval('int i; for (i=0; i<2000; i++) { }; i')", new HashMap(), context);
     assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
     assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
   }
 
-  @Test public void evalWithAsync() {
+  @Test
+  public void evalWithAsync() {
     test("eval('sleep(0,1)')", 1);
     test("eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')", 10);
     test("eval('''['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }''')", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3)));
@@ -87,10 +91,11 @@ public class CompilerTest3 extends BaseTest {
     test("eval('''eval('sleep(0,1)+sleep(0,2)')+eval('sleep(0,3)+sleep(0,4)')''')", 10);
   }
 
-  @Test public void evalTimeoutSyncMode() {
+  @Test
+  public void evalTimeoutSyncMode() {
     isAsync = false;
     JactlContext context = getJactlContext(true, false, false, 2000, 10);
-    JactlScript script = Jactl.compileScript("eval('10.each{ sleep(20) }')", new HashMap(), context);
+    JactlScript  script  = Jactl.compileScript("eval('10.each{ sleep(20) }')", new HashMap(), context);
     assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
     assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
     JactlScript script2 = Jactl.compileScript("eval('def f = true ? sleep : null; 10.each{ f(20) }')", new HashMap(), context);
@@ -98,15 +103,77 @@ public class CompilerTest3 extends BaseTest {
     assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
   }
 
-  @Test public void timeoutSyncMode() {
+  @Test
+  public void timeoutSyncMode() {
     isAsync = false;
     JactlContext context = getJactlContext(true, false, false, 2000, 10);
-    JactlScript script = Jactl.compileScript("10.each{ sleep(20) }", new HashMap(), context);
+    JactlScript  script  = Jactl.compileScript("10.each{ sleep(20) }", new HashMap(), context);
     assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
     assertThrows(TimeoutError.class, () -> script.eval(new HashMap<>()));
     JactlScript script2 = Jactl.compileScript("def f = true ? sleep : null; 10.each{ f(20) }", new HashMap(), context);
     assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
     assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
+  }
+  
+  @Test public void questionDotMethod() {
+    Runnable tests = () -> {
+      testError("def x = null; x.size()", "null value");
+      test("def x = null; x?.size()", null);
+      testError("List x = null; x.size()", "null object");
+      test("List x = null; x?.size()", null);
+      testError("List x = null; int n = x?.size(); n", "cannot convert null");
+      testError("List x = null; long n = x?.size(); n", "cannot convert null");
+      test("List x = null; def n = x?.size(); n", null);
+      testError("List x = null; x?.size() + 1", "null value");
+      testError("List x = null; -(x?.size())", "null value");
+      test("List x = null; x?.map()", null);
+      test("List x = null; x?.map{ it }", null);
+      test("List x = null; x?.map{ sleep(0,it) }", null);
+      test("List x = null; x?.map{ sleep(0,it) }?.size()", null);
+      test("List x = null; x?.map()?.size()", null);
+      test("List x = [1,2,3]; x?.size()", 3);
+      test("Map x = null; x?.size()", null);
+      test("String x = null; x?.size()", null);
+      testError("class X { List x = null; List f() { x } }; X x = null; x?.f()?.toChar()", "no such method 'toChar'");
+      test("class X { List x = null; List f() { x } }; def x = null; x?.f()?.size()", null);
+      test("class X { List x = null; List f() { x } }; def x = null; [1, x?.f()]", Utils.listOf(1, null));
+      test("class X { List x = null; List f() { sleep(0,x) } }; def x = null; [1, x?.f()]", Utils.listOf(1, null));
+      test("class X { List x = null; List f() { x } }; def x = null; [1, x?.f()?.size()]", Utils.listOf(1, null));
+      test("class X { List x = null; List f() { x } }; def x = null; [1, x?.f()?.map{ sleep(0,it) }]", Utils.listOf(1, null));
+      test("class X { List x = null; List f() { x } }; X x = null; [1, x?.f()]", Utils.listOf(1, null));
+      test("class X { List x = null; List f() { sleep(0,x) } }; X x = null; [1, x?.f()]", Utils.listOf(1, null));
+      test("class X { List x = null; List f() { x } }; X x = null; [1, x?.f()?.size()]", Utils.listOf(1, null));
+      test("class X { List x = null; List f() { x } }; X x = null; [1, x?.f()?.map{ sleep(0,it) }]", Utils.listOf(1, null));
+      test("class X { List x = null; List f(i) { x } }; int i = 0; X x = null; x?.f(i++)?.size()", null);
+      test("class X { List x = null; List f(i) { x } }; int i = 0; X x = null; x?.f(i++)?.size(); i", 0);
+      test("class X { List x = null; int f() { 3 } }; def x = null; x?.f()", null);
+      test("class X { int f(a, b = [1]) { a } }; X x = new X(); int n = x.f(5) + 1", 6);
+      test("class X { int f(a, b = [1]) { a } }; X x = new X(); x?.f(5)", 5);
+      test("class X { int f(a, b = [1]) { a } }; X x = new X(); int n = x?.f(5); n + 1", 6);
+      test("class X { def f(a, b = 2) { a } }; X x = null; x?.f(1)", null);
+      test("class X { def f(a, b = [1]) { a } }; X x = null; x?.f(1)", null);
+      test("List x = null; int i = 0; x?.max(i++ ? {} : {}); i", 0);
+      test("List x = null; int i = 0; x?.max(i++ ? { sleep(0,it) } : { sleep(0,it) }); i", 0);
+      test("def x = null; int i = 0; x?.max(i++ ? {} : {}); i", 0);
+      test("List x = null; for (i in x?.map()) {}", null);
+      test("List x = null; for (i in x?.map()) { sleep(0,i) }", null);
+      test("int x = 3; x?.toString()", "3");
+      test("long x = 4; x?.sqrt()", 2);
+      test("4?.sqr()", 16);
+      test("def f(List l) { l?.size() + 1 }; f([1,2])", 3);
+      testError("def f(List l) { l?.size() + 1 }; f(null)", "null value");
+      test("def f(Map m) { m?.size() + 1 }; f([a:1])", 2);
+      testError("def f(Map m) { m?.size() + 1 }; f(null)", "null value");
+      test("def f(List l) { String s = l?.join(','); s.size() }; f([1,2,3])", 5);
+      testError("def f(List l) { String s = l?.join(','); s.size() }; f(null)", "null object");
+      test("List l = [1,2]; l = [3,4,5]; l?.size() + 1", 4);
+      test("class X { int f(a, b = [1]) { a } }; def g(X x) { x?.f(5) }; g(new X())", 5);
+      test("class X { int f(a, b = [1]) { a } }; def g(X x) { x?.f(5) }; g(null)", null);
+    };
+    invokeDynamic = true;
+    tests.run();
+    invokeDynamic = false;
+    tests.run();
   }
 
   @Test public void asyncFunctions() {
@@ -285,8 +352,7 @@ public class CompilerTest3 extends BaseTest {
     testError("def ntimes(n,x) {\n for (int i = 0; i < n; i++) {\n", "unexpected end-of-file");
   }
 
-  @Test
-  public void globalsOptimisation() {
+  @Test public void globalsOptimisation() {
     globals.put("x", "abc");
     test("sleep(0,x) + sleep(0,'d')", "abcd");
     test("sleep(0,x) + sleep(0,'d') + sleep(0,x)", "abcdabc");
