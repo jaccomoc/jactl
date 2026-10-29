@@ -697,7 +697,6 @@ public class JactlType extends JactlUserDataHolder {
       }
         
       case EQUAL:
-      case QUESTION_COLON:
       case QUESTION: {
         if (type1 == type2)                                         { return type1; }
         if (!type2.isCastableTo(type1)) {
@@ -713,6 +712,9 @@ public class JactlType extends JactlUserDataHolder {
         }
         return type1;
       }
+      
+      case QUESTION_COLON:
+        return commonSuperType(type1, type2);
 
       case DOUBLE_LESS_THAN: {
         if (type1.is(LIST,ITERATOR))                             { return LIST; }
@@ -769,6 +771,15 @@ public class JactlType extends JactlUserDataHolder {
   public static JactlType commonSuperType(JactlType type1, JactlType type2) {
     if (type1 == null)                                                  { return type2;  }
     if (type2 == null)                                                  { return type1;  }
+
+    JactlType result = _commonSuperType(type1.unboxed(), type2.unboxed());
+    if (type1.isBoxed() || type2.isBoxed()) {
+      result = result.boxed();
+    }
+    return result;
+  }
+  
+  private static JactlType _commonSuperType(JactlType type1, JactlType type2) {
     if (type1.equals(type2))                                            { return type1;  }
     if (type1.is(CLASS) && type2.is(CLASS))                             { return CLASS;  }
     if (type1.is(CLASS) || type2.is(CLASS))                             { return ANY;    }

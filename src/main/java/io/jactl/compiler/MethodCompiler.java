@@ -2726,6 +2726,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                              if (method.firstArgtype.is(ANY, NUMBER)) {
                                box();
                              }
+                             else if (peek().isBoxed() && !method.firstArgtype.isBoxed()) {
+                               unboxAlways();
+                             }
                            }
                            else if (method.isStaticImplementation && !parent.type.is(CLASS)) {
                              popVal();
@@ -4234,12 +4237,30 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
   
   Void convertOrCastTo(JactlType type, Expr expr, boolean couldBeNull, boolean castOnly, Location location) {
+    JactlType stackType = peek();
+    if (type.equals(stackType)) {
+      return null;
+    }
     if (type.isBoxedOrUnboxed(BOOLEAN)) { return convertToBoolean(); }   // null is valid for boolean conversion
-    if (type.isPrimitive() && !peek().isPrimitive() && couldBeNull && couldBeNull(expr)) {
+    if (type.isPrimitive() && !stackType.isPrimitive() && couldBeNull && couldBeNull(expr)) {
       if (expr.isNull()) {
         error("Cannot convert null value to " + type, location);
       }
       throwIfNull("Cannot convert null value to " + type, location);
+    }
+    if (type.isBoxed() && type.unboxed().isNumeric() && !stackType.is(ANY)) {
+      if (stackType.isPrimitive()) {
+        convertTo(type.unboxed(), expr, false, location);
+        box();
+      }
+      else {
+        // Two boxed types, allow null to convert
+        emitIf(false, IfTest.IS_NULL,
+               () -> dupVal(),
+               () -> { popVal(); loadNull(type); },
+               () -> { convertTo(type.unboxed(), expr, false, location); box(); });
+      }
+      return null;
     }
     switch (type.getType()) {
       case BYTE:       return convertToByte(location);
@@ -4404,6 +4425,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   private Void convertToInt(SourceLocation location) {
     JactlType type = peek();
+    if (type.isBoxed() && type.unboxed().is(INT)) {
+      unboxAlways();
+      return null;
+    }
     if (type.is(INT,BYTE,BOOLEAN)) {
       if (type.is(BYTE)) {
         _loadConst(255);
@@ -4718,13 +4743,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     Consumer<Runnable> incOrDec = (runnable) -> {
       loadVar(varDecl);
       unbox(identifierExpr);
-      convertTo(type, null, identifierExpr.couldBeNull, operator);
+      convertTo(type.unboxed(), null, identifierExpr.couldBeNull, operator);
 
       // If amount is null then value is already on the stack so swap otherwise
       // load the inc/dec amount
       if (amount == null) {
         swap();
-        convertTo(varDecl.type, null, true, operator);
+        convertTo(varDecl.type.unboxed(), null, true, operator);
       }
       else {
         loadConst(Utils.convertNumberTo(type, amount));
@@ -4734,14 +4759,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (isResultUsed && !isPostfix) {
         dupVal();
       }
-      convertTo(varDecl.type, null, false, operator);
+      convertTo(varDecl.type.unboxed(), null, false, operator);
       storeVar(varDecl);
     };
 
     switch (type.getType()) {
       case BYTE:
       case INT:
-        if (varDecl.type.isBoxed() || varDecl.isHeapLocal || varDecl.isField || amount == null) {
+        if (varDecl.type.isBoxed() || varDecl.isGlobal ||  varDecl.isHeapLocal || varDecl.isField || amount == null) {
           incOrDec.accept(() -> {
             mv.visitInsn(isInc ? IADD : ISUB);
             popType();
@@ -5849,14 +5874,14 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       else {
         Utils.checkCast(mv, varDecl.type);
       }
+      popType();
+      pushType(varDecl.type);
     }
     else {
       loadLocation(varDecl.location);
       invokeMethod(method);
     }
-    popType();
-    pushType(varDecl.type);
-    unboxAlways();
+    unbox(varDecl);
     storeLocal(slot);
   }
 
@@ -5883,8 +5908,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         loadLocation(varDecl.location);
         invokeMethod(method);
       }
-      popType();
-      pushType(varDecl.type.boxed());
+      //unbox(varDecl);
       if (slot != -1) {
         storeLocal(slot);
         loadLocal(slot);
@@ -5915,25 +5939,32 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (varDecl.isHeapLocal) {
       loadLocal(varDecl.slot);
       MethodRef method;
-      switch (varDecl.type.getType()) {
-        case BYTE:         method = HeapLocal.BYTE_VALUE_METHOD;         break;
-        case INT:          method = HeapLocal.INT_VALUE_METHOD;          break;
-        case LONG:         method = HeapLocal.LONG_VALUE_METHOD;         break;
-        case DOUBLE:       method = HeapLocal.DOUBLE_VALUE_METHOD;       break;
-        case DECIMAL:      method = HeapLocal.DECIMAL_VALUE_METHOD;      break;
-        case STRING:       method = HeapLocal.STRING_VALUE_METHOD;       break;
-        case MATCHER:      method = HeapLocal.MATCHER_VALUE_METHOD;      break;
-        default:           method = HeapLocal.GET_VALUE_METHOD;          break;
-      }
-      invokeMethod(method);
-      if (varDecl.type.is(BYTE)) {
-        _loadConst(255);
-        mv.visitInsn(IAND);
-      }
-      if (varDecl.type.is(INSTANCE,ARRAY,MAP,LIST)) {
+      if (varDecl.type.isBoxed()) {
+        invokeMethod(HeapLocal.GET_VALUE_METHOD);
         checkCast(varDecl.type);
+        return;
       }
-      return;
+      else {
+        switch (varDecl.type.getType()) {
+          case BYTE:         method = HeapLocal.BYTE_VALUE_METHOD;         break;
+          case INT:          method = HeapLocal.INT_VALUE_METHOD;          break;
+          case LONG:         method = HeapLocal.LONG_VALUE_METHOD;         break;
+          case DOUBLE:       method = HeapLocal.DOUBLE_VALUE_METHOD;       break;
+          case DECIMAL:      method = HeapLocal.DECIMAL_VALUE_METHOD;      break;
+          case STRING:       method = HeapLocal.STRING_VALUE_METHOD;       break;
+          case MATCHER:      method = HeapLocal.MATCHER_VALUE_METHOD;      break;
+          default:           method = HeapLocal.GET_VALUE_METHOD;          break;
+        }
+        invokeMethod(method);
+        if (varDecl.type.is(BYTE)) {
+          _loadConst(255);
+          mv.visitInsn(IAND);
+        }
+        if (varDecl.type.is(INSTANCE,ARRAY,MAP,LIST)) {
+          checkCast(varDecl.type);
+        }
+        return;
+      }
     }
 
     // Otherwise just load the value from the locals slot
@@ -6011,6 +6042,12 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     // Otherwise normal local var
+    if (varDecl.type.isBoxed()) {
+      box();
+    }
+    else if (peek().isBoxed()) {
+      unboxAlways();
+    }
     storeLocal(varDecl.slot);
   }
 

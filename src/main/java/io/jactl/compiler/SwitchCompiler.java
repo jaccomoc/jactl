@@ -22,7 +22,6 @@ import static org.objectweb.asm.Opcodes.*;
 public class SwitchCompiler {
   public static Void visitSwitch(MethodCompiler mc, Expr.Switch expr) {
     mc.compile(expr.subject);
-    mc.unbox(expr.subject);
     mc.defineVar(expr.itVar);
     mc.storeVar(expr.itVar);
 
@@ -175,12 +174,20 @@ public class SwitchCompiler {
       mc.loadConst(true);
     }
     else if (pattern instanceof Expr.TypeExpr || pattern instanceof Expr.Identifier || pattern instanceof Expr.VarDecl) {
-      if (subjectType.equals(patternType)) {
-        if (pattern instanceof Expr.TypeExpr) {
-          mc.loadConst(true);
+      if (pattern instanceof Expr.TypeExpr) {
+        if (subjectType.isBoxedOrUnboxed(patternType)) {
+          if (subjectType.equals(patternType)) {
+            mc.loadConst(true);
+          }
+          else {
+            // Check for boxed null not matching primitive
+            mc.emitIf(false, MethodCompiler.IfTest.IS_NOTNULL, () -> loadValue.accept(null), () -> mc.loadConst(true), () -> mc.loadConst(false));
+          }
+          return;
         }
       }
-      else if (!pattern.isStar() && !patternType.is(ANY) && !subjectType.is(patternType) && !(subjectType.isNumeric() && patternType.isNumeric())) {
+      
+      if (!pattern.isStar() && !patternType.is(ANY) && !subjectType.is(patternType) && (subjectType.is(ANY) || subjectType.isBoxed())) {
         loadValue.accept(ANY);
         mc.isInstanceOf(patternType);
         if (!(pattern instanceof Expr.TypeExpr)) {
@@ -211,7 +218,20 @@ public class SwitchCompiler {
         if (!patternType.equals(subjectType) && subjectType.is(ANY)) {
           ifCanConvertTo.accept(patternType);
         }
-        loadValue.accept(patternType);
+        if (patternType.isNumeric() && subjectType.isBoxed()) {
+          loadValue.accept(null);
+          mc.emitIf(false, MethodCompiler.IfTest.IS_NULL,
+                    mc::dupVal,
+                    () -> {
+                      mc.popVal();
+                      mc.loadConst(false);
+                      mc.mv.visitJumpInsn(GOTO, endCheck);
+                    },
+                    () -> mc.castTo(pattern.type, pattern, false, pattern.location));
+        }
+        else {
+          loadValue.accept(patternType);
+        }
         mc.compile(pattern);
         mc.expect(2);
         checkForEquality(mc, patternType);
@@ -554,7 +574,17 @@ public class SwitchCompiler {
             mc.invokeMethod(MethodCompiler.INT_VALUE_METHOD);
             break;
           }
-          case BYTE: case INT:     break;
+          case BYTE: case INT:
+            if (mc.peek().isBoxed()) {
+              mc._dupVal();
+              Label nonNull = new Label();
+              mc.mv.visitJumpInsn(IFNONNULL, nonNull);
+              mc._popVal();
+              mc.mv.visitJumpInsn(GOTO, noMatch);
+              mc.mv.visitLabel(nonNull);
+              mc.unboxAlways();
+            }
+            break;
           default: throw new IllegalStateException("Internal error: Unexpected type for int based switch: " + mc.peek());
         }
 

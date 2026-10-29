@@ -62,6 +62,7 @@ public class BaseTest {
   protected long               maxIterations = 1_000_000_000L;
   protected int                maxExecutionTimeMs = 1_000_000;
   protected boolean            limitsSet = false;
+  protected boolean            globalAliases = true;
   
   protected static int testCounter = 0;
   protected static int testVariationCounter = 0;
@@ -78,6 +79,8 @@ public class BaseTest {
     replModeEnabled      = true;
     skipCheckpointTests  = false;
     jactlEnv             = new DefaultEnv();
+    invokeDynamic        = true;
+    globalAliases        = true;
 
     Jactl.function()
          .name("_checkpoint")
@@ -338,6 +341,7 @@ public class BaseTest {
                                             .allowHostClassLookup(allowHostClassLookup)
                                             .maxLoopIterations(maxIterations)
                                             .maxExecutionTime(timeoutMs)
+                                            .localAliasesForGlobals(globalAliases)
                                             .build();
     return jactlContext;
   }

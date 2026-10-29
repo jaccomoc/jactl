@@ -114,13 +114,51 @@ public class CompilerTest3 extends BaseTest {
     assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
     assertThrows(TimeoutError.class, () -> script2.eval(new HashMap<>()));
   }
+
+  @Test public void questionDotSquare() {
+    test("int[] a = [1]; boolean t = false; def y = do { if (t) { a?[0] } else { 3000000000L } }; y", 3000000000L);
+    test("int[] a = [1]; boolean t = false; def y = do { if (t) { a?[0] } else { 2.5D } }; y", 2.5D);
+    test("class X { int i = 1 }; X x = new X(); boolean t = false; def y = do { if (t) { x?.i } else { 3000000000L } }; y", 3000000000L);
+    test("def f(List l, boolean t) { def y = do { if (t) { l?.size() } else { 3000000000L } }; y }; f([1], false)", 3000000000L);
+    test("def f(List l, boolean t) { def y = do { if (t) { l?.size() } else { 3000000000L } }; y }; f(null, true)", null);
+    useAsyncDecorator = false;
+    test("def f(List l, boolean t) { def y = do { if (t) { l?.size() } else { 3000000000L } }; y }; f([1,2], true)", 2L);
+  }
+  
+  @Test public void questionDotSwitch() {
+    test("class X { int i = 1 }; X x = new X(); switch (x?.i) { int j -> j + 1; default -> 'null' }", 2);
+    test("class X { int i = 1 }; X x = null; switch (x?.i) { int j -> j + 1; default -> 'null' }", "null");
+    test("def f(List l) { switch (l?.size()) { 1 -> 10; 2 -> 20; default -> 'none' } }; f([1,2])", 20);
+    test("def f(List l) { switch (l?.size()) { 2 -> it * 10; default -> 'none' } }; f([1,2])", 20);
+    test("def f(List l) { switch (l?.size()) { int n -> n * 10; default -> 'none' } }; f([1,2])", 20);
+    test("def f(List l) { switch (l?.size()) { int n -> n * 10; default -> 'none' } }; f(null)", "none");
+    test("def f(List l) { switch (l?.size()) { 1 -> 'a'; 2 -> 'b'; 3 -> 'c'; default -> 'n' } }; f([1])", "a");
+    test("def f(List l) { switch (l?.size()) { 1 -> 'a'; 2 -> 'b'; 3 -> 'c'; default -> 'n' } }; f(null)", "n");
+    test("class X { int i = 1 }; def f(X x) { switch (x?.i) { 1 -> 'a'; 2 -> 'b'; 3 -> 'c'; default -> 'n' } }; f(new X())", "a");
+    test("int[] a = [5]; switch (a?[0]) { int j -> j; default -> 'none' }", 5);
+    test("class X { long l = 3 }; X x = new X(); switch (x?.l) { long v -> v * 2; default -> 'none' }", 6L);
+    test("class X { long l = 3 }; X x = new X(); switch (x?.l) { long v if v == 3 -> v * 2; default -> 'none' }", 6L);
+    test("class X { long l = 3 }; X x = null; switch (x?.l) { long v -> v * 2; default -> 'none' }", "none");
+    test("class X { long l = 3 }; X x = null; switch (x?.l) { long v if v == 3 -> v * 2; default -> 'none' }", "none");
+    test("def f(List l) { switch (l?.size()) { 2 -> 'two'; default -> 'other' } }; f(null)", "other");
+    test("class X { int i = 1 }; X x = null; switch (x?.i) { 1 -> 'one'; null -> 'null'; default -> 'other' }", "null");
+  }
   
   @Test public void questionDotMethod() {
     Runnable tests = () -> {
+      test("def x = null; var v = x?.i; def f() { v }; f(); v", null);
+      test("class X { int i }; X x = null; var v = x?.i; def f() { v }; f(); v", null);
+      test("class X { int i }; X x = null; var v = x?.i; def f() { v }; f(); v", null);
+      test("class X { int i = 3 }; X x = new X(); var v = x?.i; def f() { v }; f(); v", 3);
+      testError("def x = null; var v = x?.i; def f() { v++ }; f(); v", "null value");
+      testError("class X { int i }; X x = null; var v = x?.i; def f() { v++ }; f(); v", "null value");
+      testError("class X { int i = 3 }; X x = null; var v = x?.i; def f() { v++ }; f(); v", "null value");
+      test("class X { int i = 3 }; X x = new X(); var v = x?.i; def f() { v++ }; f(); v", 4);
       testError("def x = null; x.size()", "null value");
       test("def x = null; x?.size()", null);
       testError("List x = null; x.size()", "null object");
       test("List x = null; x?.size()", null);
+      test("List x = null; var v = x?.size()", null);
       testError("List x = null; int n = x?.size(); n", "cannot convert null");
       testError("List x = null; long n = x?.size(); n", "cannot convert null");
       test("List x = null; def n = x?.size(); n", null);
@@ -169,10 +207,24 @@ public class CompilerTest3 extends BaseTest {
       test("List l = [1,2]; l = [3,4,5]; l?.size() + 1", 4);
       test("class X { int f(a, b = [1]) { a } }; def g(X x) { x?.f(5) }; g(new X())", 5);
       test("class X { int f(a, b = [1]) { a } }; def g(X x) { x?.f(5) }; g(null)", null);
+      test("def f(List l) { var v = l?.size(); v }; f([1,2])", 2);
+      test("def f(List l) { var v = l?.size(); v }; f(null)", null);
+      test("def f(List l) { l?.size()?.sqr() }; f([1,2])", 4);
+      test("def f(List l) { l?.size()?.sqr() }; f(null)", null);
+      test("def f(List l) { def r = []; for (x in [l?.size()]) { r <<= x }; r }; f([4])", Utils.listOf(1));
+      test("def f(List l) { def r = []; for (x in [l?.size()]) { r <<= x }; r }; f(null)", Utils.listOf((Object) null));
+      test("def f(List l) { l?.size() ?: 3000000000L }; f(null)", 3000000000L);
+      test("int[] a = [1]; boolean t = false; def y = do { if (t) { a?[0] } else { 3000000000L } }; y", 3000000000L);
+      test("int[] a = [1]; boolean t = false; def y = do { if (t) { a?[0] } else { 2.5D } }; y", 2.5D);
+      test("class X { int i = 1 }; X x = new X(); boolean t = false; def y = do { if (t) { x?.i } else { 3000000000L } }; y", 3000000000L);
+      test("def f(List l, boolean t) { def y = do { if (t) { l?.size() } else { 3000000000L } }; y }; f([1], false)", 3000000000L);
+      test("def f(List l, boolean t) { def y = do { if (t) { l?.size() } else { 3000000000L } }; y }; f(null, true)", null);
     };
     invokeDynamic = true;
     tests.run();
     invokeDynamic = false;
+    tests.run();
+    globalAliases = false;
     tests.run();
   }
 

@@ -150,7 +150,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         if (!globalVarDecls.containsKey(name)) {
           Object obj = globals.get(name);
           JactlType type = obj instanceof JactlType ? jactlContext.typeFromClass(((JactlType)obj).getJavaClass()) : JactlContext.typeOf(obj, jactlContext);
-          createGlobalVarDecl(name, type.boxed(), location);
+          createGlobalVarDecl(name, type.unboxed(), location);
         }
       });
     }
@@ -317,7 +317,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         }
         JactlType result = expr.accept(this);
         JactlType type   = expr.type;
-        if (type != null && (type.unboxed().isPrimitive() && !isNullSafeCall(expr) || type.is(CLASS)) ||
+        if (type != null && (type.isPrimitive() || type.is(CLASS)) ||
             expr instanceof Expr.Literal && ((Expr.Literal)expr).value.getValue() != null ||
             expr instanceof Expr.MapLiteral || expr instanceof Expr.ListLiteral) {
           expr.couldBeNull = false;
@@ -330,10 +330,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return null;
   }
 
-  private boolean isNullSafeCall(Expr expr) {
-    return expr instanceof Expr.MethodCall && ((Expr.MethodCall) expr).accessOperator.is(QUESTION_DOT);
-  }
-  
   private void resolve(JactlType type) {
     if (type == null)                      { return; }
     if (type.is(ARRAY)) {
@@ -1940,12 +1936,18 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         return expr.type = OBJECT_ARR;
       }
       JactlType elementType = elements.get(0).type;
+      if (elementType.isBoxed()) {
+        // If type is potentially null then we can't use a primitive array
+        elementType = ANY;
+      }
       // If elements are all of the same type then we construct an array of that type.
       // Otherwise we use Object[].
-      for (int i = 1; i < elements.size(); i++) {
-        if (!elementType.equals(elements.get(i).type)) {
-          elementType = ANY;
-          break;
+      if (!elementType.is(ANY)) {
+        for (int i = 1; i < elements.size(); i++) {
+          if (!elementType.equals(elements.get(i).type)) {
+            elementType = ANY;
+            break;
+          }
         }
       }
       expr.type = JactlType.arrayOf(elementType);
@@ -2698,7 +2700,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // and their actual values will be stored in the globals map.
     if (!decl.isParam && !decl.isConstVar && isAtTopLevel() && replMode && !decl.name.getStringValue().startsWith(JACTL_PREFIX)) {
       decl.isGlobal = true;
-      decl.type = decl.type.boxed();
     }
     // Remember at what nesting level this variable is declared. This allows us to work
     // out when looking up vars whether this belongs to the current function or not.
@@ -3167,7 +3168,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           else {
             type = JactlContext.typeOf(globalVar, jactlContext);
           }
-          varDecl = createGlobalVarDecl(name, type.boxed(), location);
+          varDecl = createGlobalVarDecl(name, type.unboxed(), location);
         }
         else if (jactlContext.allowUndeclaredGlobals) {
           varDecl = createGlobalVarDecl(name, ANY, location);

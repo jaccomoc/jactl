@@ -3412,13 +3412,13 @@ public class RuntimeUtils {
   }
 
   public static final MethodRef GET_GLOBAL_BOOLEAN = Utils.getMethod(RuntimeUtils.class, "getGlobalBoolean", Map.class, String.class, String.class, int.class);
-  public static Boolean getGlobalBoolean(Map globals, String name, String source, int offset) {
+  public static boolean getGlobalBoolean(Map globals, String name, String source, int offset) {
     Object value = globals.get(name);
     if (value == null) {
       throw new NullError("Null value for global variable '" + name + "' of type Boolean", source, offset);
     }
     if (value instanceof Boolean) {
-      return (Boolean)value;
+      return (boolean)value;
     }
     throw new RuntimeError("Global variable '" + name + "' not of type Boolean", source, offset);
   }
@@ -3436,37 +3436,37 @@ public class RuntimeUtils {
   }
 
   public static final MethodRef GET_GLOBAL_INT = Utils.getMethod(RuntimeUtils.class, "getGlobalInt", Map.class, String.class, String.class, int.class);
-  public static Integer getGlobalInt(Map globals, String name, String source, int offset) {
+  public static int getGlobalInt(Map globals, String name, String source, int offset) {
     Object value = globals.get(name);
     if (value == null) {
       throw new NullError("Null value for global variable '" + name + "' of type Integer", source, offset);
     }
     if (value instanceof Integer) {
-      return (Integer)value;
+      return (int)value;
     }
     throw new RuntimeError("Global variable " + name + "' not of type Integer", source, offset);
   }
 
   public static final MethodRef GET_GLOBAL_LONG = Utils.getMethod(RuntimeUtils.class, "getGlobalLong", Map.class, String.class, String.class, int.class);
-  public static Long getGlobalLong(Map globals, String name, String source, int offset) {
+  public static long getGlobalLong(Map globals, String name, String source, int offset) {
     Object value = globals.get(name);
     if (value == null) {
       throw new NullError("Null value for global variable '" + name + "' of type Long", source, offset);
     }
     if (value instanceof Long) {
-      return (Long)value;
+      return (long)value;
     }
     throw new RuntimeError("Global variable " + name + "' not of type Long", source, offset);
   }
 
   public static final MethodRef GET_GLOBAL_DOUBLE = Utils.getMethod(RuntimeUtils.class, "getGlobalDouble", Map.class, String.class, String.class, int.class);
-  public static Double getGlobalDouble(Map globals, String name, String source, int offset) {
+  public static double getGlobalDouble(Map globals, String name, String source, int offset) {
     Object value = globals.get(name);
     if (value == null) {
       throw new NullError("Null value for global variable '" + name + "' of type Double", source, offset);
     }
     if (value instanceof Double) {
-      return (Double)value;
+      return (double)value;
     }
     throw new RuntimeError("Global variable " + name + "' not of type Double", source, offset);
   }
@@ -3520,11 +3520,11 @@ public class RuntimeUtils {
   }
 
   private static final Map<JactlType, MethodRef> GLOBAL_VAR_METHODS = new HashMap() {{
-    put(JactlType.BOXED_BOOLEAN, GET_GLOBAL_BOOLEAN);
-    put(JactlType.BOXED_BYTE, GET_GLOBAL_BYTE);
-    put(JactlType.BOXED_INT, GET_GLOBAL_INT);
-    put(JactlType.BOXED_LONG, GET_GLOBAL_LONG);
-    put(JactlType.BOXED_DOUBLE, GET_GLOBAL_DOUBLE);
+    put(JactlType.BOOLEAN, GET_GLOBAL_BOOLEAN);
+    put(JactlType.BYTE, GET_GLOBAL_BYTE);
+    put(JactlType.INT, GET_GLOBAL_INT);
+    put(JactlType.LONG, GET_GLOBAL_LONG);
+    put(JactlType.DOUBLE, GET_GLOBAL_DOUBLE);
     put(JactlType.DECIMAL, GET_GLOBAL_DECIMAL);
     put(JactlType.STRING, GET_GLOBAL_STRING);
     put(JactlType.LIST, GET_GLOBAL_LIST);

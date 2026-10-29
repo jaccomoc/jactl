@@ -26,7 +26,7 @@ public class SwitchResolver {
     expr.cases.forEach(c -> c.patterns = validateSwitchPatterns(resolver, c.patterns));
 
     JactlType    subjectType = expr.subject.type;
-    Stmt.VarDecl itVar       = resolver.createVarDecl(expr.matchToken, Utils.IT_VAR, subjectType.unboxed(), expr.subject);
+    Stmt.VarDecl itVar       = resolver.createVarDecl(expr.matchToken, Utils.IT_VAR, subjectType, expr.subject);
     expr.itVar = itVar.declExpr;
     // Block to hold our it var
     Stmt.Block block = new Stmt.Block(expr.location, null);
@@ -149,7 +149,7 @@ public class SwitchResolver {
       if (subjectType.is(INSTANCE) && patType.is(INSTANCE)) {
         return subjectType.isConvertibleTo(patType, true);
       }
-      return subjectType.equals(patType);
+      return subjectType.isBoxedOrUnboxed(patType);
     }
     if (subjectType.isNumeric() && !patType.isNumeric() || patType.isNumeric() && !subjectType.isNumeric()) {
       return false;
