@@ -1911,7 +1911,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       error("Index must be numeric for " + (parent.type.is(LIST) ? "List" : "Array") + " access", field.location);
     }
 
-    expr.type = valueExpr.type.boxed();
+    expr.type = valueExpr.type;
     
     // If array then return the array element type but set the expr.type to be value of rhs since
     // the type of the assignment is always the type of the rhs
