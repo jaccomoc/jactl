@@ -126,7 +126,7 @@ class JactlScriptEngineTest {
       engine.eval("x + x", bindings);
     }
     catch (ScriptException e) {
-      assertTrue(e.getMessage().toLowerCase().contains("reference to unknown variable 'x'"));
+      assertTrue(e.getMessage().toLowerCase().contains("missing variable 'x'"));
     }
   }
   
@@ -375,7 +375,7 @@ class JactlScriptEngineTest {
     assertEquals(4, script.eval());
     assertEquals(2, engine.eval("z - x", ctx));
     mgr.getBindings().remove("z");
-    assertThrows(() -> script.eval(), ScriptException.class, "null operand");
+    assertThrows(() -> script.eval(), ScriptException.class, "missing variable 'z'");
   }
   
   @Test void compileWithBindingTypeChange() throws ScriptException {
@@ -483,7 +483,7 @@ class JactlScriptEngineTest {
     CompiledScript script = engine.compile("x + z");
     assertEquals(11, script.eval());
     engine.getBindings(ScriptContext.ENGINE_SCOPE).remove("x");
-    assertThrows(script::eval, ScriptException.class, "null operand");
+    assertThrows(script::eval, ScriptException.class, "missing variable 'x'");
   }
   
   @Test void compileWithSyntaxError() throws ScriptException {

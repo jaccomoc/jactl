@@ -60,7 +60,7 @@ public class CompilerTest3 extends BaseTest {
     test("eval('''result = 0; for(int i = 0; i < 5; i++) result += i; result''',[result:null])", 10);
     test("['[1,2]','[3]'].map{ eval(it,[:]) }", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3)));
     test("['[1,2]','[3]'].map{ sleep(0,it) }.map{ eval(it,[:]) }", Utils.listOf(Utils.listOf(1, 2), Utils.listOf(3)));
-    test("eval('x + y', [x:1,y:2]); def m = [y:2]; eval('x + y', m); m.'$error' =~ /reference to unknown variable 'x'/i", true);
+    test("eval('x + y', [x:1,y:2]); def m = [y:2]; eval('x + y', m); m.'$error' =~ /reference to missing variable 'x'/i", true);
   }
 
   @Test
@@ -506,7 +506,7 @@ public class CompilerTest3 extends BaseTest {
     replTest.accept("x = (byte)1", "", (byte) 1, "");
     replTest.accept("x = 1", "", 1, "");
     replTest.accept("x = 1; x", "", 1, "");
-    replTest.accept("x = x", "", null, "");
+    replError("x = x", "missing variable 'x'");
   }
 
   @Test
@@ -1051,8 +1051,8 @@ public class CompilerTest3 extends BaseTest {
         fail("Expected error");
       }
     }
-    catch (NullError e) {
-      // Success
+    catch (RuntimeError e) {
+      assertTrue(e.getMessage().toLowerCase().contains("missing variable"));
     }
     try {
       script.eval(new HashMap() {{
@@ -1081,8 +1081,8 @@ public class CompilerTest3 extends BaseTest {
       script.eval(new HashMap<>());
       fail("Expected error");
     }
-    catch (NullError e) {
-      assertTrue(e.getMessage().contains("Null value for global variable"));
+    catch (RuntimeError e) {
+      assertTrue(e.getMessage().contains("missing variable 'x'"));
     }
     try {
       script.eval(new HashMap() {{
@@ -1111,8 +1111,8 @@ public class CompilerTest3 extends BaseTest {
       script.eval(new HashMap<>());
       fail("Expected error");
     }
-    catch (NullError e) {
-      assertTrue(e.getMessage().contains("Left-hand side of '+' is null"));
+    catch (RuntimeError e) {
+      assertTrue(e.getMessage().contains("missing variable 'x'"));
     }
     try {
       script.eval(new HashMap() {{

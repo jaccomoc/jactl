@@ -54,7 +54,7 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
   public static String JACTL_MAX_LOOP_ITERATIONS      = "jactl.maxLoopIterations";
   public static String JACTL_MAX_EXECUTION_TIME       = "jactl.maxExecutionTime";
   
-  private final Map<Pair<String,Object>, JactlScript> scriptCache = Collections.synchronizedMap(
+  private final Map<String, JactlScript> scriptCache = Collections.synchronizedMap(
     new LinkedHashMap(16, 0.75f, true) {
       @Override
       protected boolean removeEldestEntry(Map.Entry eldest) {
@@ -95,10 +95,10 @@ public class JactlScriptEngine extends AbstractScriptEngine implements Invocable
     JactlScript jactlScript;
     synchronized (scriptCache) {
       if (untypedGlobals) {
-        jactlScript = scriptCache.get(Pair.of(script, ctxGlobals.keySet()));
+        jactlScript = scriptCache.get(script);
         if (jactlScript == null) {
           jactlScript = compileScript(script, ctxGlobals, context);
-          scriptCache.put(Pair.of(script, new HashSet(ctxGlobals.keySet())), jactlScript);
+          scriptCache.put(script, jactlScript);
         }
       }
       else {

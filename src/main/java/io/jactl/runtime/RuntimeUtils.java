@@ -3411,70 +3411,66 @@ public class RuntimeUtils {
     list.add(value);
   }
 
-  public static final MethodRef GET_GLOBAL_BOOLEAN = Utils.getMethod(RuntimeUtils.class, "getGlobalBoolean", Map.class, String.class, String.class, int.class);
-  public static boolean getGlobalBoolean(Map globals, String name, String source, int offset) {
+  public static final MethodRef GET_GLOBAL_BOOLEAN = Utils.getMethod(RuntimeUtils.class, "getGlobalBoolean", Map.class, String.class, boolean.class, String.class, int.class);
+  public static boolean getGlobalBoolean(Map globals, String name, boolean allowUndeclaredGlobals, String source, int offset) {
     Object value = globals.get(name);
-    if (value == null) {
-      throw new NullError("Null value for global variable '" + name + "' of type Boolean", source, offset);
-    }
+    if (value == null) { missingValue(globals, name, "Boolean", allowUndeclaredGlobals, source, offset); }
     if (value instanceof Boolean) {
       return (boolean)value;
     }
     throw new RuntimeError("Global variable '" + name + "' not of type Boolean", source, offset);
   }
 
-  public static final MethodRef GET_GLOBAL_BYTE = Utils.getMethod(RuntimeUtils.class, "getGlobalByte", Map.class, String.class, String.class, int.class);
-  public static Byte getGlobalByte(Map globals, String name, String source, int offset) {
+  private static void missingValue(Map globals, String name, String type, boolean allowUndeclaredGlobals, String source, int offset) {
+    checkForMissing(globals, name, allowUndeclaredGlobals, source, offset);
+    throw new NullError("Null value for global variable '" + name + "' of type " + type, source, offset);
+  }
+
+  public static final MethodRef GET_GLOBAL_BYTE = Utils.getMethod(RuntimeUtils.class, "getGlobalByte", Map.class, String.class, boolean.class, String.class, int.class);
+  public static Byte getGlobalByte(Map globals, String name, boolean allowUndeclaredGlobals, String source, int offset) {
     Object value = globals.get(name);
-    if (value == null) {
-      throw new NullError("Null value for global variable '" + name + "' of type Byte", source, offset);
-    }
+    if (value == null) { missingValue(globals, name, "Byte", allowUndeclaredGlobals, source, offset); }
     if (value instanceof Byte) {
       return (Byte)value;
     }
     throw new RuntimeError("Global variable '" + name + "' not of type Byte", source, offset);
   }
 
-  public static final MethodRef GET_GLOBAL_INT = Utils.getMethod(RuntimeUtils.class, "getGlobalInt", Map.class, String.class, String.class, int.class);
-  public static int getGlobalInt(Map globals, String name, String source, int offset) {
+  public static final MethodRef GET_GLOBAL_INT = Utils.getMethod(RuntimeUtils.class, "getGlobalInt", Map.class, String.class, boolean.class, String.class, int.class);
+  public static int getGlobalInt(Map globals, String name, boolean allowUndeclaredGlobals, String source, int offset) {
     Object value = globals.get(name);
-    if (value == null) {
-      throw new NullError("Null value for global variable '" + name + "' of type Integer", source, offset);
-    }
+    if (value == null) { missingValue(globals, name, "Integer", allowUndeclaredGlobals, source, offset); }
     if (value instanceof Integer) {
       return (int)value;
     }
     throw new RuntimeError("Global variable " + name + "' not of type Integer", source, offset);
   }
 
-  public static final MethodRef GET_GLOBAL_LONG = Utils.getMethod(RuntimeUtils.class, "getGlobalLong", Map.class, String.class, String.class, int.class);
-  public static long getGlobalLong(Map globals, String name, String source, int offset) {
+  public static final MethodRef GET_GLOBAL_LONG = Utils.getMethod(RuntimeUtils.class, "getGlobalLong", Map.class, String.class, boolean.class, String.class, int.class);
+  public static long getGlobalLong(Map globals, String name, boolean allowUndeclaredGlobals, String source, int offset) {
     Object value = globals.get(name);
-    if (value == null) {
-      throw new NullError("Null value for global variable '" + name + "' of type Long", source, offset);
-    }
+    if (value == null) { missingValue(globals, name, "Long", allowUndeclaredGlobals, source, offset); }
     if (value instanceof Long) {
       return (long)value;
     }
     throw new RuntimeError("Global variable " + name + "' not of type Long", source, offset);
   }
 
-  public static final MethodRef GET_GLOBAL_DOUBLE = Utils.getMethod(RuntimeUtils.class, "getGlobalDouble", Map.class, String.class, String.class, int.class);
-  public static double getGlobalDouble(Map globals, String name, String source, int offset) {
+  public static final MethodRef GET_GLOBAL_DOUBLE = Utils.getMethod(RuntimeUtils.class, "getGlobalDouble", Map.class, String.class, boolean.class, String.class, int.class);
+  public static double getGlobalDouble(Map globals, String name, boolean allowUndeclaredGlobals, String source, int offset) {
     Object value = globals.get(name);
-    if (value == null) {
-      throw new NullError("Null value for global variable '" + name + "' of type Double", source, offset);
-    }
+    if (value == null) { missingValue(globals, name, "Double", allowUndeclaredGlobals, source, offset); }
     if (value instanceof Double) {
       return (double)value;
     }
     throw new RuntimeError("Global variable " + name + "' not of type Double", source, offset);
   }
 
-  public static final MethodRef GET_GLOBAL_DECIMAL = Utils.getMethod(RuntimeUtils.class, "getGlobalDecimal", Map.class, String.class, String.class, int.class);
-  public static BigDecimal getGlobalDecimal(Map globals, String name, String source, int offset) {
+  public static final MethodRef GET_GLOBAL_DECIMAL = Utils.getMethod(RuntimeUtils.class, "getGlobalDecimal", Map.class, String.class, boolean.class, String.class, int.class);
+  public static BigDecimal getGlobalDecimal(Map globals, String name, boolean allowUndeclaredGlobals, String source, int offset) {
     Object value = globals.get(name);
     if (value == null) {
+      checkForMissing(globals, name, allowUndeclaredGlobals, source, offset);
       return null;
     }
     if (value instanceof BigDecimal) {
@@ -3483,10 +3479,17 @@ public class RuntimeUtils {
     throw new RuntimeError("Global variable " + name + "' not of type Decimal", source, offset);
   }
 
-  public static final MethodRef GET_GLOBAL_STRING = Utils.getMethod(RuntimeUtils.class, "getGlobalString", Map.class, String.class, String.class, int.class);
-  public static String getGlobalString(Map globals, String name, String source, int offset) {
+  private static void checkForMissing(Map globals, String name, boolean allowUndeclaredGlobals, String source, int offset) {
+    if (!allowUndeclaredGlobals && !globals.containsKey(name)) {
+      throw new RuntimeError("Reference to missing variable '" + name + "'", source, offset);
+    }
+  }
+  
+  public static final MethodRef GET_GLOBAL_STRING = Utils.getMethod(RuntimeUtils.class, "getGlobalString", Map.class, String.class, boolean.class, String.class, int.class);
+  public static String getGlobalString(Map globals, String name, boolean allowUndeclaredGlobals, String source, int offset) {
     Object value = globals.get(name);
     if (value == null) {
+      checkForMissing(globals, name, allowUndeclaredGlobals, source, offset);
       return null;
     }
     if (value instanceof String) {
@@ -3495,10 +3498,11 @@ public class RuntimeUtils {
     throw new RuntimeError("Global variable " + name + "' not of type String", source, offset);
   }
 
-  public static final MethodRef GET_GLOBAL_LIST = Utils.getMethod(RuntimeUtils.class, "getGlobalList", Map.class, String.class, String.class, int.class);
-  public static List getGlobalList(Map globals, String name, String source, int offset) {
+  public static final MethodRef GET_GLOBAL_LIST = Utils.getMethod(RuntimeUtils.class, "getGlobalList", Map.class, String.class, boolean.class, String.class, int.class);
+  public static List getGlobalList(Map globals, String name, boolean allowUndeclaredGlobals, String source, int offset) {
     Object value = globals.get(name);
     if (value == null) {
+      checkForMissing(globals, name, allowUndeclaredGlobals, source, offset);
       return null;
     }
     if (value instanceof List) {
@@ -3507,16 +3511,27 @@ public class RuntimeUtils {
     throw new RuntimeError("Global variable " + name + "' not of type List", source, offset);
   }
 
-  public static final MethodRef GET_GLOBAL_MAP = Utils.getMethod(RuntimeUtils.class, "getGlobalMap", Map.class, String.class, String.class, int.class);
-  public static Map getGlobalMap(Map globals, String name, String source, int offset) {
+  public static final MethodRef GET_GLOBAL_MAP = Utils.getMethod(RuntimeUtils.class, "getGlobalMap", Map.class, String.class, boolean.class, String.class, int.class);
+  public static Map getGlobalMap(Map globals, String name, boolean allowUndeclaredGlobals, String source, int offset) {
     Object value = globals.get(name);
     if (value == null) {
+      checkForMissing(globals, name, allowUndeclaredGlobals, source, offset);
       return null;
     }
     if (value instanceof Map) {
       return (Map)value;
     }
     throw new RuntimeError("Global variable " + name + "' not of type Map", source, offset);
+  }
+
+  public static final MethodRef GET_GLOBAL_OTHER = Utils.getMethod(RuntimeUtils.class, "getGlobalOther", Map.class, String.class, boolean.class, String.class, int.class);
+  public static Object getGlobalOther(Map globals, String name, boolean allowUndeclaredGlobals, String source, int offset) {
+    Object value = globals.get(name);
+    if (value == null) {
+      checkForMissing(globals, name, allowUndeclaredGlobals, source, offset);
+      return null;
+    }
+    return value;
   }
 
   private static final Map<JactlType, MethodRef> GLOBAL_VAR_METHODS = new HashMap() {{

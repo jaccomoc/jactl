@@ -74,7 +74,7 @@ public class JactlContext {
   // Allow local aliases for global vars (on by default unless in repl mode)
   private boolean localAliasesForGlobals = Properties.LOCAL_ALIASES_FOR_GLOBALS;
 
-  private final Map<Pair<String,Set<String>>, Function<Map<String,Object>,Object>> evalScriptCache = Collections.synchronizedMap(
+  private final Map<String, Function<Map<String,Object>,Object>> evalScriptCache = Collections.synchronizedMap(
     new LinkedHashMap(16, 0.75f, true) {
       @Override
       protected boolean removeEldestEntry(Map.Entry eldest) {
@@ -551,18 +551,18 @@ public class JactlContext {
   }
 
   public Function<Map<String, Object>, Object> getEvalScript(String code, Map<String,Object> bindings) {
-    // Look up cache using the source code and the binding names
-    Function<Map<String, Object>, Object> script = evalScriptCache.get(Pair.<String, Set<String>>of(code, bindings.keySet()));
+    // Look up cache using the source code
+    Function<Map<String, Object>, Object> script = evalScriptCache.get(code);
     if (script == null) {
       // For eval we want to be able to cache the scripts but the problem is that if the bindings
-      // are typed (e.g. x is an Integer) and when script is rerun a global has had its type
+      // are typed (e.g. x is an Integer) but when script is rerun a global has had its type
       // changed (e.g. x is now a Long) the script will fail because the types don't match. So
       // we erase all types and make everything ANY. This is obviously less efficient, but for eval()
-      // efficiency should not be a big issue.
+      // efficiency is usually not the main concern.
       HashMap erasedBindings = new HashMap();
       bindings.keySet().forEach(k -> erasedBindings.put(k, null));
       script = Compiler.compileScriptInternal(code, this, Utils.DEFAULT_JACTL_PKG, erasedBindings);
-      evalScriptCache.put(Pair.of(code, new HashSet<String>(bindings.keySet())), script);
+      evalScriptCache.put(code, script);
     }
     return script;
   }

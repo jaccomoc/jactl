@@ -5864,8 +5864,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     loadGlobals();
     loadConst(varName);
     MethodRef method = RuntimeUtils.getGlobalVarMethod(varDecl.type);
+    loadConst(classCompiler.context.allowUndeclaredGlobals);
+    loadLocation(varDecl.location);
     if (method == null) {
-      invokeMethod(MAP_GET_METHOD);
+      invokeMethod(RuntimeUtils.GET_GLOBAL_OTHER);
       if (create && !varDecl.type.is(ANY)) {
         tryCatch(ClassCastException.class, false,
                  () -> Utils.checkCast(mv, varDecl.type),
@@ -5878,7 +5880,6 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       pushType(varDecl.type);
     }
     else {
-      loadLocation(varDecl.location);
       invokeMethod(method);
     }
     unbox(varDecl);
@@ -5900,12 +5901,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       loadGlobals();
       loadConst(varName);
       MethodRef method = RuntimeUtils.getGlobalVarMethod(varDecl.type);
+      loadConst(classCompiler.context.allowUndeclaredGlobals);
+      loadLocation(varDecl.location);
       if (method == null) {
-        invokeMethod(MAP_GET_METHOD);
+        invokeMethod(RuntimeUtils.GET_GLOBAL_OTHER);
         checkCast(varDecl.type);
       }
       else {
-        loadLocation(varDecl.location);
         invokeMethod(method);
       }
       //unbox(varDecl);
