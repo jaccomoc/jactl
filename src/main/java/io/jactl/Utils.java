@@ -200,6 +200,7 @@ public class Utils {
   public static final String RUNTIME_UTILS_INTERNAL         = Type.getInternalName(RuntimeUtils.class);
   public static final String RESTORER_INTERNAL              = Type.getInternalName(Restorer.class);
   public static final String RUNTIME_ERROR_INTERNAL         = Type.getInternalName(RuntimeError.class);
+  public static final String NULL_ERROR_INTERNAL            = Type.getInternalName(NullError.class);
   public static final String STRING_BUFFER_INTERNAL         = Type.getInternalName(StringBuffer.class);
   public static final String STRING_BUILDER_INTERNAL        = Type.getInternalName(StringBuilder.class);
   public static final String NAMED_ARGS_MAP_INTERNAL        = Type.getInternalName(NamedArgsMap.class);

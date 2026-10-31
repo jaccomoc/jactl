@@ -354,8 +354,9 @@ public class ListMapArrayTests extends BaseTest {
     test("def m = [:]; m.1.2 = 123; m.toString()", "['1':['2':123]]");
     test("def m = [:]; m?.1.2 = 123; m.toString()", "['1':['2':123]]");
     test("Map m = [:]; m?.1.2 = 123; m.toString()", "['1':['2':123]]");
-    test("def m = [:]; m?.1?.2 = 123; m.toString()", "['1':['2':123]]");
-    test("Map m = [:]; m?.1?.2 = 123; m.toString()", "['1':['2':123]]");
+    test("Map m = ['1':[:]]; m?.1.2 = 123; m.toString()", "['1':['2':123]]");
+    test("def m = [:]; m.1.2 = 123; m.toString()", "['1':['2':123]]");
+    test("Map m = [:]; m?.1?.2 = 123; m.toString()", "[:]");
     test("def m = ['1':10]; m.1 = 20; m", Utils.mapOf("1", 20));
     test("Map m = ['1':10]; m.1 = 20; m", Utils.mapOf("1", 20));
     test("def m = ['1':10]; m.1 = 20; m.1", 20);
@@ -2032,6 +2033,7 @@ public class ListMapArrayTests extends BaseTest {
   }
   
   @Test public void opEqualsWithSideEffect() {
+    useAsyncDecorator = false;
     test("long[] s = new long[4]; int i = 2; s[i++] += 7", 7L);
     test("long[] s = new long[4]; int i = 2; s[i] = 2; s[i++] += 7", 9L);
     test("long[] s = new long[4]; int i = 2; s[i++] += i++; i", 4);
@@ -2043,56 +2045,63 @@ public class ListMapArrayTests extends BaseTest {
     test("def s = new long[4]; int i = 2; s[i++] += 7; i", 3);
     test("def s = new long[4]; int i = 3; int f(){ def r = i; i = i * i; r }; s[f()] += 7; i", 9);
     test("Map m = [a:2]; def x = 'a'; String f() { def r = x; x = x + x; r }; m[f()] += 3; x + m.a", "aa5");
-    test("long[] s = null; int i = 2; s?[i++]; i", 3);
-    test("def s = null; int i = 2; s?[i++]; i", 3);
-    test("String s = null; int i = 2; s?[i++]; i", 3);
-    test("Object[] s = null; int i = 2; s?[i++]; i", 3);
-    test("List s = null; int i = 2; s?[i++]; i", 3);
+    test("long[] s = null; int i = 2; s?[i++]; i", 2);
+    test("def s = null; int i = 2; s?[i++]; i", 2);
+    test("String s = null; int i = 2; s?[i++]; i", 2);
+    test("Object[] s = null; int i = 2; s?[i++]; i", 2);
+    test("List s = null; int i = 2; s?[i++]; i", 2);
     test("long[] s = null; int i = 2; s?[i++]", null);
-    test("def s = null; int i = 2; s?[i++]?.a; i", 3);
+    test("def s = null; int i = 2; s?[i++]?.a; i", 2);
     test("def s = null; int i = 2; s?[i++]?.a", null);
-    test("def s = null; int i = 2; s?[i++]?.a?[i++]?.b; i", 4);
-    testError("long[] s = null; int i = 2; s?[i++] += 7; i", "cannot convert null");
-    testError("long[] s = null; int i = 2; s?[i++] += 7", "cannot convert null");
+    test("def s = null; int i = 2; s?[i++]?.a?[i++]?.b; i", 2);
+    test("long[] s = null; int i = 2; s?[i++] += 7; i", 2);
+    test("long[] s = null; int i = 2; s?[i++] += 7", null);
     testError("class X { int i = 2 }; X x; x.i", "null object");
     test("class X { int i = 2 }; X x; x?.i", null);
-    testError("class X { int i = 2 }; X x; x.i++", "cannot load field from null parent");
-    testError("class X { int i = 2 }; X x; x?.i++", "cannot convert null");
+    test("class X { int i = 2 }; X x; x.i++", 2);
+    test("class X { int i = 2 }; X x; x?.i++", null);
     testError("def x; x.i", "null value for parent");
     test("def x; x?.i", null);
     test("def x; x.i++", 0);         // due to auto-creation
-    test("def x; x?.i++", 0);
+    test("def x; x?.i++", null);
     testError("Map x = null; x.i", "null value for parent");
     test("Map x = null; x?.i", null);
-    test("Map x = null; x?.i++", 0);  // due to auto-creation
+    test("Map x = null; x?.i++", null);
     test("Map x = null; x.a += 3", 3);
+    test("Map x = null; x.a++", 0);
+    test("Map x = null; x.a++; x.toString()", "[a:1]");
   }
   
   @Test public void mapMethodKeys() {
-    test("Map m = [:]; m['size']", null);
-    test("Map m = [:]; def f = m.size; f()", 0);
-    test("def m = [:]; m.size = 123; m.size", 123);
-    test("def m = [:]; m?.size = 123; m.size", 123);
-    test("def m = [:]; m.s++; m.s", 1);
-    test("def m = [:]; m.s += 1; m.s", 1);
-    test("def m = [:]; ++m.s; m.s", 1);
-    testError("def m = [:]; m.size += 1; m.size", "non-numeric operand");
-    testError("def m = [:]; m.\"${'size'}\" += 1; m.size", "non-numeric operand");
-    testError("def m = [:]; m.size++; m.size", "non-numeric operand");
-    test("def m = [:]; m['size']++; m['size']", 1);
-    test("def m = [:]; m?['size']++; m['size']", 1);
-    test("Map m = [:]; m.size = 123; m.size", 123);
-    test("Map m = [:]; m?.size = 123; m?.size", 123);
-    test("Map m = [:]; m.s++; m.s", 1);
-    test("Map m = [:]; m.s += 1; m.s", 1);
-    test("Map m = [:]; ++m.s; m.s", 1);
-    testError("Map m = [:]; m.size += 1; m.size", "non-numeric operand");
-    testError("Map m = [:]; m?.size += 1; m.size", "non-numeric operand");
-    testError("Map m = [:]; m.size++; m.size", "non-numeric operand");
-    test("Map m = [:]; m['size']++; m['size']", 1);
-    test("Map m = [:]; m?['size']++; m['size']", 1);
-    test("Map m = [:]; def x = 'size'; m?[x]++; m?[x]", 1);
-    testError("Map m = [:]; def x = 'size'; m.(x)++; m?.(x)", "non-numeric operand");
+    Runnable tests = () -> {
+      test("Map m = [:]; m['size']", null);
+      test("Map m = [:]; def f = m.size; f()", 0);
+      test("def m = [:]; m.size = 123; m.size", 123);
+      test("def m = [:]; m?.size = 123; m.size", 123);
+      test("def m = [:]; m.s++; m.s", 1);
+      test("def m = [:]; m.s += 1; m.s", 1);
+      test("def m = [:]; ++m.s; m.s", 1);
+      testError("def m = [:]; m.size += 1; m.size", "non-numeric operand");
+      testError("def m = [:]; m.\"${'size'}\" += 1; m.size", "non-numeric operand");
+      testError("def m = [:]; m.size++; m.size", "non-numeric operand");
+      test("def m = [:]; m['size']++; m['size']", 1);
+      test("def m = [:]; m?['size']++; m['size']", 1);
+      test("Map m = [:]; m.size = 123; m.size", 123);
+      test("Map m = [:]; m?.size = 123; m?.size", 123);
+      test("Map m = [:]; m.s++; m.s", 1);
+      test("Map m = [:]; m.s += 1; m.s", 1);
+      test("Map m = [:]; ++m.s; m.s", 1);
+      testError("Map m = [:]; m.size += 1; m.size", "non-numeric operand");
+      testError("Map m = [:]; m?.size += 1; m.size", "non-numeric operand");
+      testError("Map m = [:]; m.size++; m.size", "non-numeric operand");
+      test("Map m = [:]; m['size']++; m['size']", 1);
+      test("Map m = [:]; m?['size']++; m['size']", 1);
+      test("Map m = [:]; def x = 'size'; m?[x]++; m?[x]", 1);
+      testError("Map m = [:]; def x = 'size'; m.(x)++; m?.(x)", "non-numeric operand");
+    };
+    tests.run();
+    isAsync = false;
+    tests.run();
   }
   
   @Test public void nestedMapKeys() {

@@ -1325,7 +1325,7 @@ public class ClassTests extends BaseTest {
     testError("class X { Y y }; class Y { String j = null }; def x = new X(null); x.y.j[2].i += 4", "cannot be set to list");
     test("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i ?= 4; x.y.z.i", 4);
     testError("class X { Y y }; class Y { Z z }; class Z { int i = 3 }; X x = new X(null); x.y.z = 4; x.y.z", "cannot convert from int");
-    testError("class X { Y y }; class Y { Z z }; class Z { int i = 3 }; X x = new X(null); x.y.z.i = 4; x.y.z.i", "could not auto-create");
+    testError("class X { Y y }; class Y { Z z }; class Z { int i = 3 }; X x = new X(null); x.y.z.i = 4; x.y.z.i", "cannot auto-create");
     testError("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i", "null object");
     testError("class X { Y y }; class Y { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i ?= true ? null : 4; x.y.z.i", "null object");
     testError("class X { Y y }; class Y { Z z = null; int i = 2; def f(){i} }; class Z { int i = 3; def f() {i} }; X x = new X(null); x.y.f()", "null object");
@@ -1333,7 +1333,7 @@ public class ClassTests extends BaseTest {
     testError("class X { Y y }; class Y { Z z = null; int i = 2; def f(){i} }; class Z { int i = 3; def f() {i} }; X x = new X(null); x.y.\"${'f'}\"()", "null value");
     testError("class X { Y y }; class Y { Z z = null; int i = 2; def f(){i} }; class Z { int i = 3; def f() {i} }; def x = new X(null); x.y.\"${'f'}\"()", "null value");
     testError("class X { Y y }; class Y { Z z = null; int i = 2 }; class Z { int i = 3; def f() {i} }; X x = new X(null); x.y.i = 4; x.y.z.f()", "null object");
-    testError("class X { Y y }; class Y2 { int i }; class Y extends Y2 { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i = 4; x.y.z.i", "could not auto-create");
+    testError("class X { Y y }; class Y2 { int i }; class Y extends Y2 { Z z = null }; class Z { int i = 3 }; X x = new X(null); x.y.z.i = 4; x.y.z.i", "cannot auto-create");
   }
 
   @Test public void newlinesInClassDecl() {
@@ -1573,9 +1573,9 @@ public class ClassTests extends BaseTest {
         testError("class X { Y y = null }; class Y { int i = sleep(0,1) }; X x = new X(); x.y.i = 2", "detected async");
       }
     }
-    testError("class X { Y y = null }; class Y { int z; int i = sleep(0,1) }; X x = new X(); x.y.i = 2", "null value for parent");
-    testError("class X { Y y = null }; class Y { int z; int i = sleep(0,1) }; def x = new X(); x.y.i = 2", "mandatory fields");
-    testError("class X { Y y = null }; class Y { int z; int i = 1 }; def x = new X(); x.y.i = 2", "mandatory fields");
+    testError("class X { Y y = null }; class Y { int z; int i = sleep(0,1) }; X x = new X(); x.y.i = 2", "cannot auto-create");
+    testError("class X { Y y = null }; class Y { int z; int i = sleep(0,1) }; def x = new X(); x.y.i = 2", "cannot auto-create");
+    testError("class X { Y y = null }; class Y { int z; int i = 1 }; def x = new X(); x.y.i = 2", "cannot auto-create");
   }
 
   @Test public void asyncAutoCreateDetection() {
@@ -1841,10 +1841,10 @@ public class ClassTests extends BaseTest {
     }
     else {
       if (isAsync) {
-        testError("class X{ int i = 3; Y y = null }; class Y{ int i = sleep(0,4) }; X x = null; (x?:new X())?.y?.i = 5", "detected async");
-        testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X())?.y?.i = 5", "detected async");
-        testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X())?.\"${'y'}\"?.i = 5", "detected async");
-        testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X())?.(sleep(0,'y'))?.i = 5", "detected async");
+        testError("class X{ int i = 3; Y y = null }; class Y{ int i = sleep(0,4) }; X x = null; (x?:new X()).y.i = 5", "detected async");
+        testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X()).y.i = 5", "detected async");
+        testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X()).\"${'y'}\".i = 5", "detected async");
+        testError("class X{ int i = sleep(0,3); Y y = null }; class Y{int i=sleep(0,4) }; X x = null; (x?:new X()).(sleep(0,'y')).i = 5", "detected async");
       }
     }
     test("class X{ int i = sleep(0,3) }; (null?:new X())?.i = 5", 5);

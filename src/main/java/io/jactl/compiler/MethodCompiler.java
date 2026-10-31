@@ -845,17 +845,43 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
         String fieldName = ((Expr.Literal)expr.field).value.getStringValue();
         compile(expr.parent);
-        if (couldBeNull(expr.parent)) {
-          boolean createIfMissing = expr.parent instanceof Expr.Binary && ((Expr.Binary) expr.parent).createIfMissing;
-          throwIfNull("Null value for parent accessing field " + fieldName +
-                      (createIfMissing ? " (could not auto-create due to mandatory fields)" : ""),
-                      expr.location);
+        if (expr.parent.couldBeNull && expr.accessType.is(QUESTION_DOT,QUESTION_SQUARE)) {
+          JactlType fieldType = getFieldType(expr.parent.type, fieldName);
+          emitIf(expr.field.isAsync, IfTest.IS_NOTNULL,
+                 () -> dupVal(),
+                 () -> {
+                   swap();
+                   convertTo(fieldType, expr.expr, true, expr.expr.location);
+                   storeClassField(expr.parent.type.getInternalName(), fieldName, fieldType, false);
+                   if (expr.isResultUsed) {
+                     box();
+                   }
+                 },
+                 () -> { 
+                   popVal(2);
+                   if (expr.isResultUsed) {
+                     popVal();
+                     loadNull(fieldType.boxed());
+                   }
+          });
         }
-        swap();
+        else {
+          if (couldBeNull(expr.parent)) {
+            boolean createIfMissing = expr.parent instanceof Expr.Binary && ((Expr.Binary) expr.parent).createIfMissing;
+            if (createIfMissing && ((Expr.Binary)expr.parent).operator.is(DOT,LEFT_SQUARE)) {
+              JactlClassDescriptor classDesc = expr.parent.type.getJactlClassDescriptor();
+              throwIfNull("Null value for parent accessing field " + fieldName, expr.location);
+            }
+            else {
+              throwIfNull("Null value for parent accessing field " + fieldName, expr.location);
+            }
+          }
+          swap();
 
-        JactlType fieldType = getFieldType(expr.parent.type, fieldName);
-        convertTo(fieldType, expr.expr, true, expr.expr.location);
-        storeClassField(expr.parent.type.getInternalName(), fieldName, fieldType, false);
+          JactlType fieldType = getFieldType(expr.parent.type, fieldName);
+          convertTo(fieldType, expr.expr, true, expr.expr.location);
+          storeClassField(expr.parent.type.getInternalName(), fieldName, fieldType, false);
+        }
       }
       else
       if (expr.parent.type.is(ARRAY)) {
@@ -867,9 +893,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       else {
         box();
         compile(expr.parent);
-        compile(expr.field);
-        box();
-        storeValueParentField(expr.accessType, expr.field.location);
+        if (expr.parent.couldBeNull && expr.accessType.is(QUESTION_DOT,QUESTION_SQUARE)) {
+          emitIf(expr.field.isAsync, IfTest.IS_NOTNULL,
+                 () -> dupVal(),
+                 () -> {
+                   compile(expr.field);
+                   box();
+                   expect(3);
+                   storeValueParentField(expr.accessType, expr.field.location);
+                   box();
+                 },
+                 () -> { popVal(2); loadNull(expr.type.boxed()); });
+        }
+        else {
+          compile(expr.field);
+          box();
+          storeValueParentField(expr.accessType, expr.field.location);
+        }
         if (!expr.isResultUsed) {
           popVal();
         }
@@ -877,10 +917,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     };
 
     if (expr.assignmentOperator.is(QUESTION_EQUAL)) {
-      Label end = new Label();
-      tryCatch(NullError.class,
+      // Evaluate rhs and leave value,true/false on stack
+      // where true means we found a non-null value
+      tryCatch(NullError.class, true,
                // Try block:
-               true, () -> {
+               () -> {
                  compile(expr.expr);
 
                  // Only check for null if not primitive
@@ -889,37 +930,44 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                    _dupVal();
                    // If non null then jump to assignment
                    Label haveRhsValue = new Label();
+                   Label finish = new Label();
                    mv.visitJumpInsn(IFNONNULL, haveRhsValue);
-                   // Pop null off stack if we don't need a value as a result
-                   if (!expr.isResultUsed) {
-                     _popVal();
-                   }
-                   mv.visitJumpInsn(GOTO, end);
+                   _loadConst(false);
+                   mv.visitJumpInsn(GOTO, finish);
                    mv.visitLabel(haveRhsValue);    // :haveRhsValue
+                   loadConst(true);
+                   mv.visitLabel(finish);
                  }
-
-                 // If conditional assign then we know by now whether we have a null value or not
-                 // so we don't need to check again when checking for type conversion
-                 convertTo(expr.type, null, false, expr.expr.location);
-                 storeFieldValue.run();
-
-                 if (expr.isResultUsed) {
-                   // Just in case our field is a primitive we need to leave a boxed result on stack
-                   // to be compatible with non-assigment case when we leave null on the stack
-                   popType();
-                   pushType(expr.type);
-                   box();
+                 else {
+                   loadConst(true);
                  }
                },
                // Catch block:
                () -> {
-                 popVal();
-                 if (expr.isResultUsed) {
-                   // Need a null value if no value from rhs
-                   loadNull(expr.type);
-                 }
+                 popVal();     // pop exception off stack
+                 loadDefaultValue(expr.expr.type);
+                 loadConst(false);
                });
-      mv.visitLabel(end);
+
+      emitIf(expr.isAsync, IfTest.IS_TRUE,
+             () -> {},
+             () -> {
+               // If conditional assign then we know by now whether we have a null value or not
+               // so we don't need to check again when checking for type conversion
+               convertTo(expr.type, null, false, expr.expr.location);
+               storeFieldValue.run();
+               if (expr.isResultUsed) {
+                 // Just in case our field is a primitive we need to leave a boxed result on stack
+                 // to be compatible with non-assigment case when we leave null on the stack
+                 box();
+               }
+             },
+             () -> {
+               popVal();
+               if (expr.isResultUsed) {
+                 loadNull(expr.type.boxed());
+               }
+             });
     }
     else {
       desiredType = expr.type;
@@ -932,7 +980,24 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override public Void visitFieldOpAssign(Expr.FieldOpAssign expr) {
     compile(expr.parent);
+    if (expr.parent.couldBeNull && expr.accessType.is(QUESTION_DOT,QUESTION_SQUARE)) {
+      emitIf(true, IfTest.IS_NOTNULL,
+             () -> dupVal(),
+             () -> { _visitFieldOpAssign(expr); if (expr.isResultUsed) { box(); } },
+             () -> {
+               popVal();
+               if (expr.isResultUsed) {
+                 loadNull(expr.type.boxed());
+               }
+             });
+    }
+    else {
+      _visitFieldOpAssign(expr);
+    }
+    return null;
+  }
 
+  private Void _visitFieldOpAssign(Expr.FieldOpAssign expr) {
     JactlType parentType       = expr.parent.type;
     boolean   isField          = parentType.is(INSTANCE, CLASS) && expr.field instanceof Expr.Literal;
     String    fieldName        = isField ? ((Expr.Literal)expr.field).value.getStringValue() : null;
@@ -1944,33 +2009,40 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         if (expr.operator.is(LEFT_SQUARE,QUESTION_SQUARE) && peek().is(ARRAY,STRING,ANY)) {
           if (expr.left.couldBeNull) {
             if (expr.operator.is(QUESTION_SQUARE)) {
-              int temp = saveAndDupVal();   // save parent for null check
-              boolean simpleIndex = compileIndex(expr.left, expr.right);
-              expect(2);
-              _loadLocal(temp);
-              Label ifNotNull = new Label();
-              Label end = new Label();
-              mv.visitJumpInsn(IFNONNULL, ifNotNull);
-              _popVal();
-              _popVal();
-              _loadConst(null);
-              mv.visitJumpInsn(GOTO, end);
-              mv.visitLabel(ifNotNull);     // :ifNotNull
-              expect(2);
-              loadIndexField(expr.left, expr.operator, expr.right, parentType, simpleIndex);
-              box();
-              mv.visitLabel(end);           // :end
-              stack.freeSlot(temp);
+              emitIf(expr.right.isAsync, IfTest.IS_NOTNULL,
+                     () -> dupVal(),
+                     () -> {
+                       boolean simpleIndex = compileIndex(expr.left, expr.right);
+                       expect(2);
+                       loadIndexField(expr.left, expr.operator, expr.right, parentType, simpleIndex);
+                       box();
+                     },
+                     () -> checkCast(expr.type.boxed()));
               return null;
             }
-            throwIfNull("Cannot retrieve field from null parent", expr.left.location);
+            else {
+              throwIfNull("Cannot retrieve field from null parent", expr.left.location);
+            }
           }
           boolean simpleIndex = compileIndex(expr.left, expr.right);
           loadIndexField(expr.left, expr.operator, expr.right, parentType, simpleIndex);
         }
         else {
-          compile(expr.right);
-          loadField(expr.type, expr.operator, null, expr.right.location);
+          if (expr.left.couldBeNull && expr.operator.is(QUESTION_DOT,QUESTION_SQUARE)) {
+            emitIf(expr.right.isAsync, IfTest.IS_NOTNULL,
+                   () -> dupVal(),
+                   () -> {
+                     compile(expr.right);
+                     expect(2);
+                     loadField(expr.type, expr.operator, null, expr.right.location);
+                     box();
+                   },
+                   () -> checkCast(expr.type.boxed()));
+          }
+          else {
+            compile(expr.right);
+            loadField(expr.type, expr.operator, null, expr.right.location);
+          }
         }
       }
     }
@@ -2204,14 +2276,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // Auto-create if possible for ANY,LIST,MAP, and INSTANCE types
     if (expr.createIfMissing) {
       // If INSTANCE type then we can only auto-create if all fields have defaults
-      if (expr.type.is(INSTANCE) && expr.type.getJactlClassDescriptor().allFieldsAreDefaults() && !expr.createAsList ||
-          expr.type.is(ANY, MAP, LIST)) {
+      if (expr.type.is(INSTANCE) && expr.type.getJactlClassDescriptor().getAllMandatoryFields().isEmpty() && !expr.createAsList || expr.type.is(ANY, MAP, LIST)) {
         emitIf(false, IfTest.IS_NULL, this::dupVal,
                () -> {
                  dupType();   // Preserve type
                  popVal();
                  if (expr.type.is(INSTANCE)) {
-                   newInstance(expr.type);
+                   loadDefaultValueOrNewInstance(expr.type, expr.location);
                  }
                  else {
                    invokeMethod(expr.createAsList ? RuntimeUtils.CREATE_LIST_METHOD : RuntimeUtils.CREATE_MAP_METHOD);
@@ -2221,6 +2292,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                  popType();
                },
                null);
+      }
+      else if (expr.type.is(INSTANCE) && !expr.type.getJactlClassDescriptor().getAllMandatoryFields().isEmpty() && !expr.createAsList) {
+        throwIfNull("Null value for " + name + ": Cannot auto-create: type " + expr.type.getJactlClassDescriptor().getPrettyName() + " has mandatory field(s) " + String.join(", ", expr.type.getJactlClassDescriptor().getAllMandatoryFields().keySet()), expr.location);
       }
     }
 
@@ -3296,9 +3370,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     for (ListIterator<Expr.Binary> iter = nodes.listIterator(nodes.size()); iter.hasPrevious(); ) {
       Expr.Binary node = iter.previous();
       if (checkForNull && !node.operator.is(QUESTION_DOT, QUESTION_SQUARE)) {
-        throwIfNull("Trying to access field/element of null object" +
-                    (lastNode.createIfMissing ? " (could not auto-create parent due to mandatory fields)" : ""),
-                    node.operator);
+        throwIfNull("Trying to access field/element of null object", node.operator);
       }
       if (node.right.isSuper()) {
         continue;
@@ -3308,8 +3380,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       JactlType            childType   = parentClass.getField(fieldName);
       // Can only create if createIfMissing flag set and if there are no mandatory fields (i.expr. init method
       // has 0 parameters).
-      boolean createIfMissing = node.createIfMissing && !(childType.is(INSTANCE) && childType.getJactlClassDescriptor().getInitMethod().paramCount > 0);
-      checkForNull = !createIfMissing;
+      boolean createIfMissing = node.createIfMissing; // !(childType.is(INSTANCE) && childType.getJactlClassDescriptor().getInitMethod().paramCount > 0);
+      boolean mayBeNull = createIfMissing && node.operator.is(QUESTION_DOT, QUESTION_SQUARE) && couldBeNull(node.left);
+      checkForNull = !createIfMissing || mayBeNull;
       JactlType fieldType   = parentClass.getField(fieldName);
       boolean isStatic = fieldType == null;
       if (isStatic) {
@@ -3318,31 +3391,41 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       assert fieldType != null : "could not find field '" + fieldName + "' for " + JactlType.createClass(parentClass);
       JactlType finalFieldType = fieldType;
       if (createIfMissing) {
-        dupVal();    // Save parent in case field is null and we need to store a value
-
-        emitIf(asyncAutoCreateAllowed(), IfTest.IS_NULL,
-               () -> {
-                 if (isStatic) {
+        Runnable loadOrCreate = () -> {
+          dupVal();    // Save parent in case field is null and we need to store a value
+          emitIf(asyncAutoCreateAllowed(), IfTest.IS_NULL,
+                 () -> {
+                   if (isStatic) {
+                     popVal();
+                   }
+                   loadClassField(parentClass.getInternalName(), fieldName, finalFieldType, isStatic);
+                   dupVal();
+                 },
+                 () -> {
+                   popVal();             // pop the duplicate null
+                   // If field is ANY then create Map/List as appropriate. Otherwise create value of right type.
+                   loadDefaultValueOrNewInstance(finalFieldType.is(ANY) ? expr.type : finalFieldType, expr.location);
+                   setStackType(finalFieldType);
+                   expect(2);
+                   dupValX1();          // Copy value and move it two slots
+                   storeClassField(parentClass.getInternalName(), fieldName, finalFieldType, false);
+                 },
+                 () -> {
+                   // Not null so for x.y we have on stack: ..., x, y
+                   // We need to get rid of x so swap and pop to get: ..., y
+                   swap();
                    popVal();
-                 }
-                 loadClassField(parentClass.getInternalName(), fieldName, finalFieldType, isStatic);
-                 dupVal();
-               },
-               () -> {
-                 popVal();             // pop the duplicate null
-                 // If field is ANY then create Map/List as appropriate. Otherwise create value of right type.
-                 loadDefaultValueOrNewInstance(finalFieldType.is(ANY) ? expr.type : finalFieldType, expr.location);
-                 setStackType(finalFieldType);
-                 expect(2);
-                 dupValX1();          // Copy value and move it two slots
-                 storeClassField(parentClass.getInternalName(), fieldName, finalFieldType, false);
-               },
-               () -> {
-                 // Not null so for x.y we have on stack: ..., x, y
-                 // We need to get rid of x so swap and pop to get: ..., y
-                 swap();
-                 popVal();
-               });
+                 });
+        };
+        if (node.operator.is(QUESTION_DOT, QUESTION_SQUARE) && couldBeNull(node.left)) {
+          emitIf(false, IfTest.IS_NOTNULL,
+                 () -> dupVal(),
+                 loadOrCreate,
+                 () -> checkCast(finalFieldType.boxed()));
+        }
+        else {
+          loadOrCreate.run();
+        }
       }
       else {
         // If using ?. then only load field if parent not null
@@ -6131,7 +6214,10 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     box();                        // Field name/index passed as Object
     loadConst(accessOperator.is(DOT, QUESTION_DOT));
     loadConst(accessOperator.is(QUESTION_DOT, QUESTION_SQUARE));
-    assert defaultType.is(MAP, LIST) : "Type must be MAP/LIST when createIfMissing set";
+    if (defaultType.is(ANY)) {
+      defaultType = accessOperator.is(DOT,QUESTION_DOT) ? MAP : LIST;
+    }
+    assert defaultType.is(MAP, LIST) : "Type must be MAP/LIST when createIfMissing set (not " + defaultType + ")";
     loadConst(defaultType.is(MAP));
     loadConst(!insideTryCatchNullError());
     loadLocation(location);
@@ -6242,9 +6328,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (type.is(INSTANCE)) {
       // If there is no no-arg constructor (i.expr. there is at least one mandatory field) then we have to throw
       // a NullError since field is currently null
-      FunctionDescriptor initMethod = type.getJactlClassDescriptor().getInitMethod();
+      JactlClassDescriptor classDesc = type.getJactlClassDescriptor();
+      FunctionDescriptor   initMethod           = classDesc.getInitMethod();
       if (initMethod.paramCount > 0) {
-        throwNullError("Null value during field access and type " + type + " cannot be auto-created due to mandatory fields", location);
+        throwNullError("Null value during field access - Cannot auto-create: type " + classDesc.getPrettyName() + " has mandatory field(s) " + String.join(", ", classDesc.getAllMandatoryFields().keySet()), location);
+        pushType(type);
       }
       else {
         if (asyncAutoCreateAllowed()) {
@@ -6442,16 +6530,28 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * <p>Leaves original value on stack</p>
    */
   private void storeArrayValue(Expr.FieldAssign expr) {
-    if (!expr.accessType.is(LEFT_SQUARE)) {
+    if (!expr.accessType.is(QUESTION_SQUARE, LEFT_SQUARE)) {
       error("Field access not supported for Array object", expr.accessType);
     }
     JactlType arrayType = expr.parent.type.getArrayElemType();
     dupVal();         // save original result if needed
     convertTo(arrayType, expr.expr, true, expr.expr.location);
     compile(expr.parent);
-    if (couldBeNull(expr.parent)) {
-      throwIfNull("Null value for array", expr.parent.location);
+    if (couldBeNull(expr.parent) && expr.accessType.is(QUESTION_SQUARE)) {
+      emitIf(expr.field.isAsync, IfTest.IS_NOTNULL,
+             () -> dupVal(),
+             () -> { _storeArrayValue(expr); box(); },
+             () -> { popVal(3); loadNull(expr.type.boxed()); });
     }
+    else {
+      if (couldBeNull(expr.parent)) {
+        throwIfNull("Null value for array", expr.parent.location);
+      }
+      _storeArrayValue(expr);
+    }
+  }
+  
+  private void _storeArrayValue(Expr.FieldAssign expr) {
     int parentVar = stack.allocateSlot(expr.parent.type);
     storeLocal(parentVar);
     if (expr.field instanceof Expr.Literal && expr.field.type.isNumeric()) {

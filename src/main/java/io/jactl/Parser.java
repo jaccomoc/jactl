@@ -4503,17 +4503,17 @@ public class Parser {
   }
 
   private void setCreateIfMissing(Expr expr, Token operator) {
-    if (expr instanceof Expr.Binary) {
+    if (expr instanceof Expr.Binary && ((Expr.Binary)expr).operator.is(Utils.fieldAccessOp)) {
       Expr.Binary binary = (Expr.Binary) expr;
-      if (binary.operator.is(Utils.fieldAccessOp)) {
+      if (operator.is(DOT, LEFT_SQUARE)) {
         binary.createIfMissing = true;
       }
       setCreateIfMissing(binary.left, binary.operator);
     }
-    else if (expr instanceof Expr.Identifier) {
+    else if (expr instanceof Expr.Identifier && !operator.is(QUESTION_DOT,QUESTION_SQUARE)) {
       Expr.Identifier identifier = (Expr.Identifier) expr;
       identifier.createIfMissing = true;
-      identifier.createAsList    = operator.is(LEFT_SQUARE,QUESTION_SQUARE);
+      identifier.createAsList    = operator.is(LEFT_SQUARE);
     }
   }
 

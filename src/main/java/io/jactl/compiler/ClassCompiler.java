@@ -1499,17 +1499,17 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     mv.visitCode();
 
     Consumer<String> error = msg -> {
-      mv.visitTypeInsn(NEW, Utils.RUNTIME_ERROR_INTERNAL);
+      mv.visitTypeInsn(NEW, NULL_ERROR_INTERNAL);
       mv.visitInsn(DUP);
       Utils.loadConst(mv, msg, context);
       mv.visitVarInsn(ALOAD, SOURCE_SLOT);
       mv.visitVarInsn(ILOAD, OFFSET_SLOT);
-      mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/RuntimeError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
+      mv.visitMethodInsn(INVOKESPECIAL, "io/jactl/runtime/NullError", "<init>", "(Ljava/lang/String;Ljava/lang/String;I)V", false);
       mv.visitInsn(ATHROW);
     };
 
     if (!classDescriptor.getAllMandatoryFields().isEmpty()) {
-      error.accept("Cannot auto-create instance of " + className + " since it has mandatory fields");
+      error.accept("Cannot auto-create: type " + classDescriptor.getPrettyName() + " has mandatory field(s) " + String.join(", ", classDescriptor.getAllMandatoryFields().keySet()));
     }
     else if (classDescriptor.allFieldsAreDefaults()) {
       // If we all fields are just default values then we have nothing to do

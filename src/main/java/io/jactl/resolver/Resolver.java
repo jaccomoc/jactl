@@ -3680,7 +3680,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                                    mandatoryFields ? new Stmt.ThrowError(classToken,
                                                                          new Expr.Identifier(sourceToken),
                                                                          new Expr.Identifier(offsetToken),
-                                                                         "Cannot auto-create instance of type " + classType + " as there are mandatory fields")
+                                                                         "Cannot auto-create: type " + classType.getJactlClassDescriptor().getPrettyName() + " has mandatory field(s) " + String.join(", ", classType.getJactlClassDescriptor().getAllMandatoryFields().keySet()))
                                                    : returnStmt(classToken, new Expr.InvokeFunDecl(classToken, initMethod, Utils.listOf()), initMethod.returnType),
                                        null);
     wrapperSmts.stmts.add(ifNullArgArr);

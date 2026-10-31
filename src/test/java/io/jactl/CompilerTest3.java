@@ -143,6 +143,83 @@ public class CompilerTest3 extends BaseTest {
     test("def f(List l) { switch (l?.size()) { 2 -> 'two'; default -> 'other' } }; f(null)", "other");
     test("class X { int i = 1 }; X x = null; switch (x?.i) { 1 -> 'one'; null -> 'null'; default -> 'other' }", "null");
   }
+
+  @Test public void questionFieldAccess() {
+    useAsyncDecorator = false;
+    String P = "def t = []; def m = [a:1]; def p() { t <<= 'parent'; m }; def k() { t <<= 'key'; 'a' }; def v() { t <<= 'value'; 5 }; def nv() { t <<= 'value'; null }; def np() { t <<= 'parent'; null }; ";
+    test(P + "p()[k()] = v(); t",   Utils.listOf("value", "parent", "key"));
+    test(P + "p().(k()) = v(); t",   Utils.listOf("value", "parent", "key"));
+    test(P + "p()[k()] ?= v(); t",  Utils.listOf("value", "parent", "key"));
+    test(P + "p().(k()) ?= v(); t",  Utils.listOf("value", "parent", "key"));
+    test(P + "p()[k()] ?= nv(); t", Utils.listOf("value"));
+    test(P + "p().(k()) ?= nv(); t", Utils.listOf("value"));
+    test(P + "p()[k()] += v(); t",  Utils.listOf("parent", "key", "value"));
+    test(P + "p().(k()) += v(); t",  Utils.listOf("parent", "key", "value"));
+    test(P + "np()?[k()]; t", Utils.listOf("parent"));
+    test(P + "np()?.(k()); t", Utils.listOf("parent"));
+    test(P + "np()?[k()] ?= v(); t", Utils.listOf("value", "parent"));
+    test(P + "np()?.(k()) ?= v(); t", Utils.listOf("value", "parent"));
+    test(P + "np()?[k()] = v(); t",  Utils.listOf("value", "parent"));
+    test(P + "np()?.(k()) = v(); t",  Utils.listOf("value", "parent"));
+    test(P + "np()?[k()] += v(); t", Utils.listOf("parent"));
+    test(P + "np()?.(k()) += v(); t", Utils.listOf("parent"));
+    test(P + "def r = (np()?[k()] = v()); r", null);
+    test(P + "def r = (np()?.(k()) = v()); r", null);
+    test("int[] a = [10,20]; int i = 0; a[i++] = i; a",  new int[]{0, 20});
+    test("int[] a = [10,20]; int i = 0; a[i++] += i; a", new int[]{11, 20});
+    testError("int[] a = null; a[0] ?= 7", "null value");
+    test("int[] a = null; a?[0] ?= 7", null);
+    test("int[] a = null; a?[0] ?= 7; a", null);
+    test("String[] a = ['10','20']; String i = '0'; a[(i += '1').size() - 2] = i; a",  new String[]{"0", "20"});
+    testError("String[] a = null; a[0] ?= '7'", "null value");
+    test("String[] a = null; a?[0] ?= '7'", null);
+    test("String[] a = null; a?[0] ?= '7'; a", null);
+    test("class X { int i }; X x = null; x?.i = 5; x", null);
+    test("class X { int i }; X x = null; x?.i ?= 5; x", null);
+    test("class Y { int j = 0 }; class X { Y y; int i = 0 }; X x; x?.y?.j = 5; x", null);
+    testError("class Y { int j = 0 }; class X { Y y; int i = 0 }; X x; x?.y.j = 5; x", "null value");
+    test("class Y { int j = 0 }; class X { Y y = null; int i = 0 }; X x; x.y.j = 5; x.toString()", "[y:[j:5], i:0]");
+    test("class Y { int j = 0 }; class X { Y y = null; int i = 7 }; X x; x.y.j = 5; x.toString()", "[y:[j:5], i:7]");
+    testError("class Y { int j = 0 }; class X { Y y; int i = 0 }; X x; x.y.j = 5; x.toString()", "null value");
+    test("class Z { int k = 0 }; class Y { Z z = null; int j = 0 }; class X { Y y = null; int i = 0 }; X x; x.y.z.k = 5; x.toString()", "[y:[z:[k:5], j:0], i:0]");
+    test("class Z { int k = 0 }; class Y { Z z = null; int j = 0 }; class X { Y y = null; int i = 0 }; X x = new X(); x.y.z.k = 5; x.toString()", "[y:[z:[k:5], j:0], i:0]");
+    test("class Y { int j = 0 }; class X { Y y; int i = 0 }; X x; x?.y?.j ?= 5; x", null);
+    test("int i = 0; def s; s?[i++]; i", 0);
+    test("int i = 0; def s; s?[i++] += 1; i", 0);
+    test("String[] a = ['10','20']; String i = '8'; a[(i += '9').size() - 2] += i; a", new String[]{"1089", "20"});
+    test("def f(int[] a) { a?[0] + 1 }; f([1])", 2);
+    testError("def f(int[] a) { a?[0] + 1 }; f(null)", "null value");
+    test("class X { int i = 0 }; X x = new X(); [1, x?.i ?= 3]", Utils.listOf(1,3));
+    test("class X { int i = 0 }; X x = null; [1, x?.i ?= 3]", Utils.listOf(1,null));
+    test("class X { int i = 0 }; def f(X x) { x?.i ?= 3 }; X x = new X(); f(x)", 3);
+    test("class X { int i = 0 }; def f(X x) { x?.i ?= 3 }; X x = new X(); f(x); x.toString()", "[i:3]");
+    test("class X { int i = 0 }; def f(X x) { x?.i ?= 3 }; X x = new X(); f(null)", null);
+    test("def x = [:]; x.a?.b = 5; x.toString()", "[:]");
+    test("Map x = [:]; x.a?.b = 5; x.toString()", "[:]");
+    test("def x = [:]; x.a?.b = 5; x", Utils.mapOf());
+    test("def x = [:]; x.a.b?.c = 5; x", Utils.mapOf("a", Utils.mapOf()));
+    test("def x = [a:[:]]; x.a?.b = 5; x", Utils.mapOf("a", Utils.mapOf("b", 5)));
+    testError("class Y { int j = 0 }; class X { Y y = null }; X x; x?.y.j = 5", "null value for parent");
+    test("class Y { int j = 0 }; class X { Y y = null }; X x = new X(); x?.y.j = 5; x.y.j", 5);
+    testError("def x; x?.a.b = 5", "null");
+    testError("class Y { int j = 0 }; class X { Y y; int i = 0 }; X x; x?.y.j = 5; x", "null value for parent");
+    test("class Y { int j = 0 }; class X { Y y; int i = 0 }; X x = new X(y:null); x?.y.j = 5; x.y.j", 5);
+    testError("class Z { int j = 0 }; class Y { Z z = null }; class X { Y y = null }; X x; x?.y.z.j = 5", "null");
+    test("class Z { int j = 0 }; class Y { Z z = null }; class X { Y y = null }; X x = new X(); x?.y.z.j = 5; x.y.z.j", 5);
+    testError("class Z { int j = 0 }; class Y { Z z = null }; class X { Y y = null }; X x; x?.y?.z.j = 5; x", "null value for parent");
+    testError("class Y { int j = 0 }; class X { Y y; int i = 0 }; X x; x.y.j = 5", "type X has mandatory field(s) y");
+    testError("class Y { int j }; class X { Y y = null }; X x = new X(); x.y.j = 5", "type Y has mandatory field(s) j");
+    testError("class Y { int j = 0 }; class X { Y y; int i = 0 }; X x; x?.y.j = 5", "null value for parent accessing field j");
+    test("class X { int k = 2; Y y = null }; class Y { int j = 1 }; X x; x.y.j = 5; x.k", 2);
+    test("class X { int k = 2 }; X x; x.k = 5; x.k", 5);
+    test("def x = null; def y = [:]; (x ?: y).a = 2; [x,y].toString()", "[null, [a:2]]");
+    testError("class X { Y y }; class Y { Z z }; class Z { int i = 3 }; X x = new X(null); x.y.z.i = 4", "type Y has mandatory field(s) z");
+    test("class X{ int i = 3 }; X x = null; (x?:new X()).i = 4; x", null);
+    test("def x = null; def y = [:]; (x ?: y).a = 4; [x, y]", Utils.listOf(null, Utils.mapOf("a", 4)));
+    testError("class X { Y y }; class Y { Z z }; class Z { int i = 3 }; X x = new X(null); x.y.z.i = 4", "mandatory field(s) z");
+    testError("class Y { int j }; class X { Y y = null }; X x = new X(); x.y.j += 5", "mandatory field(s) j");
+    testError("class Y { int j }; class X { Y y = null }; def x = new X(); x.y.j = 5", "mandatory field(s) j");
+  }
   
   @Test public void questionDotMethod() {
     Runnable tests = () -> {
