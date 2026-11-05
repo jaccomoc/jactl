@@ -182,6 +182,25 @@ for (int i in [1,2,'abc',3]) {
 // 2
 // 3
 ```
+
+Note that `null` will never match any type except for `def` and `Object`:
+```java
+for (String s in ['a', null, 'b']) {
+  println s
+}
+// Output:
+// a
+// b
+
+for (def s in ['a', null, 'b']) {
+  println s
+}
+// Output:
+// a
+// null
+// b
+```
+
 If you want to generate an error if there is a non-matching element, you can use `:` instead of `in` to
 force a match on each element:
 ```groovy

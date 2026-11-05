@@ -89,8 +89,60 @@ public class SwitchTests extends BaseTest {
     test("def x = [1,2,3]\nswitch (x) {\n  [a,b,c] -> a if a < 3\n}", 1);
     test("def it = [1,2,3] as int[]; switch{ [1,2,3] -> 2 if it.size() > 2; default -> 0 }", 2);
     test("def it = [1,2,3] as int[]; switch{ [1,2,3] -> 2 unless it.size() < 2; default -> 0 }", 2);
+    test("3 + switch (1) { 1 -> 2 }", 5);
+    test("3 + switch (sleep(0,1)) { 1 -> 2 }", 5);
+    test("3 + switch (1) { 1 -> sleep(0,2) }", 5);
   }
 
+  @Test public void byteValues() {
+    test("def b = (byte)1; switch (b) { 1 -> 'int 1'; 2 -> 'int 2'; 3 -> 'int 3'; default -> 'no match' }", "no match");
+    test("const byte B = 1; def i = 1; switch (i) { B -> 'byte 1'; 7 -> 'int 7'; 9 -> 'int 9'; default -> 'no match' }", "no match");
+    test("const byte B1 = 1; const byte B2 = 2; const byte B3 = 3; def i = 2; switch (i) { B1 -> 'b1'; B2 -> 'b2'; B3 -> 'b3'; default -> 'no match' }", "no match");
+    test("const byte B1 = 1; def b = (byte)2; switch (b) { B1 -> 'b1'; 2 -> 'i2'; 3 -> 'i3'; default -> 'no match' }", "no match");
+    test("const byte B1 = 1; def b = (byte)1; switch (b) { B1 -> 'b1'; 2 -> 'i2'; 3 -> 'i3'; default -> 'no match' }", "b1");
+    test("const byte B1 = 1; def i = 2; switch (i) { B1 -> 'b1'; 2 -> 'i2'; 3 -> 'i3'; default -> 'no match' }", "i2");
+    test("const byte B1 = 1; const byte B2 = 2; const byte B3 = 3; def b = (byte)2; switch (b) { B1 -> 'b1'; B2 -> 'b2'; B3 -> 'b3'; default -> 'no match' }", "b2");
+    test("const byte B1 = 1; const byte B2 = 2; const byte B3 = 3; byte b = 2; switch (b) { B1 -> 'b1'; B2 -> 'b2'; B3 -> 'b3'; default -> 'no match' }", "b2");
+    test("const byte B200 = 200; const byte B201 = 201; const byte B202 = 202; def b = (byte)201; switch (b) { B200 -> 'b200'; B201 -> 'b201'; B202 -> 'b202'; default -> 'no match' }", "b201");
+    test("def i = 2; switch (i) { 1 -> 'i1'; 2 -> 'i2'; 3 -> 'i3'; default -> 'no match' }", "i2");
+    test("int i = 2; switch (i) { 1 -> 'i1'; 2 -> 'i2'; 3 -> 'i3'; default -> 'no match' }", "i2");
+    test("def x = 2L; switch (x) { 1 -> 'i1'; 2 -> 'i2'; 3 -> 'i3'; default -> 'no match' }", "no match");
+    test("def x = null; switch (x) { 1 -> 'i1'; 2 -> 'i2'; 3 -> 'i3'; default -> 'no match' }", "no match");
+    test("const byte B200 = 200; const byte B201 = 201; const byte B202 = 202; byte b = 201; switch (b) { B200 -> 'b200'; B201 -> 'b201'; B202 -> 'b202'; default -> 'no match' }", "b201");
+    test("const byte B200 = 200; const byte B201 = 201; const byte B202 = 202; byte[] a = [201]; switch (a[0]) { B200 -> 'b200'; B201 -> 'b201'; B202 -> 'b202'; default -> 'no match' }", "b201");
+    test("const byte B200 = 200; const byte B201 = 201; const byte B202 = 202; class X { byte b }; X x = new X(201); switch (x?.b) { B200 -> 'b200'; B201 -> 'b201'; B202 -> 'b202'; default -> 'no match' }",
+         "b201");
+    test("const byte B200 = 200; const byte B201 = 201; const byte B202 = 202; def b = (byte)201; switch (b) { B200 -> 'b200'; B201 -> 'b201'; B202 -> 'b202'; default -> 'no match' }", "b201");
+    test("def i = -55; const byte B200 = 200; const byte B201 = 201; const byte B202 = 202; switch (i) { B200 -> 'b200'; B201 -> 'b201'; B202 -> 'b202'; default -> 'no match' }", "no match");     
+  }
+  
+  @Test public void intOverflow() {
+    test("def x = 5; switch (x) { 0 -> 'a'; 1 -> 'b'; 2147483647 -> 'c'; default -> 'none' }", "none");
+    test("def x = 2147483647; switch (x) { 0 -> 'a'; 1 -> 'b'; 2147483647 -> 'c'; default -> 'none' }", "c");
+    test("def x = 1; switch (x) { 0 -> 'a'; 1 -> 'b'; 2147483647 -> 'c'; default -> 'none' }", "b");
+    test("int x = 5; switch (x) { 0 -> 'a'; 1 -> 'b'; 2147483647 -> 'c'; default -> 'none' }", "none");
+    test("def x = -1; switch (x) { -1 -> 'a'; 0 -> 'b'; 2147483647 -> 'c'; default -> 'none' }", "a");
+    test("def x = 1500000000; switch (x) { -1000000000 -> 'a'; 0 -> 'b'; 1500000000 -> 'c'; default -> 'none' }", "c");
+    test("def x = 5; switch (x) { -1000000000 -> 'a'; 0 -> 'b'; 1500000000 -> 'c'; default -> 'none' }", "none");
+    test("def x = 2147483647; switch (x) { 2147483645 -> 'a'; 2147483646 -> 'b'; 2147483647 -> 'c'; default -> 'none' }", "c");
+    test("def x = 5; switch (x) { 0 -> 'a'; 1 -> 'b'; 2147483646 -> 'c'; default -> 'none' }", "none");
+  }
+  
+  @Test public void doubleValues() {
+    alwaysEvalConsts = true;
+    test("double d = -0.0D; switch (d) { 0.0D -> 'zero'; default -> 'none' }", "none");
+    test("double d = -0.0D; switch (d) { 0.0D -> 'zero'; 1.0D -> 'one'; 2.0D -> 'two'; default -> 'none' }", "none");
+    test("def d = -0.0D; switch (d) { 0.0D -> 'zero'; 1.0D -> 'one'; default -> 'none' }", "none");
+    test("def d = -0.0D; switch (d) { -0.0D -> 'negzero'; 0.0D -> 'zero'; default -> 'none' }", "negzero");
+    test("def d = -0.0D; switch (d) { -0.0D -> 'negzero'; 0.0D -> 'zero'; 1.0D -> 'one'; default -> 'none' }", "negzero");
+    test("def d = 0.0D; switch (d) { -0.0D -> 'negzero'; default -> 'none' }", "none");
+    test("const double N = 0.0D/0.0D; def d = 0.0D/0.0D; switch (d) { N -> 'nan'; default -> 'none' }", "nan");
+    test("const double N = 0.0D/0.0D; double d = 0.0D/0.0D; switch (d) { N -> 'nan'; default -> 'none' }", "nan");
+    test("const double N = 0.0D/0.0D; def d = 0.0D/0.0D; switch (d) { N -> 'nan'; 1.0D -> 'one'; 2.0D -> 'two'; default -> 'none' }", "nan");
+    test("def d = -0.0D; switch ([d]) { [0.0D] -> 'zero'; default -> 'none' }", "none");
+    test("double d = 1.0D; switch (d) { 0.0D -> 'zero'; 1.0D -> 'one'; default -> 'none' }", "one");
+  }
+  
   @Test public void switchLiterals() {
     test("switch(null) { null -> 1; default -> 2}", 1);
     test("def x = null; switch(x) { null -> 1; default -> 2}", 1);
@@ -144,12 +196,58 @@ public class SwitchTests extends BaseTest {
     test("switch ('BB') { 'Aa','BB','xxx' -> 2 }", 2);
     test("switch ('BB') { 'Aa','xxx' -> 2; 'BB' -> 1 }", 1);
   }
+  
+  @Test public void switchIf() {
+    test("def x = 1; switch (x) { 1 if x -> 'found' }", "found");
+    test("def x = 1; switch (x) { 1 if x -> 'found'; 1 if !x -> 'not found' }", "found");
+    test("def x = 2; boolean t = true; switch (x) { 1 -> 'a'; 2 if t -> 'b'; default -> 'd' }", "b");
+    test("def x = 2; switch (x) { 1 -> 'a'; 2 if x -> 'b'; default -> 'd' }", "b");
+    test("def x = 2; def t = true; switch (x) { 1 -> 'a'; 2 if t -> 'b'; default -> 'd' }", "b");
+    test("def x = 2; def t = false; switch (x) { 1 -> 'a'; 2 if t -> 'b'; default -> 'd' }", "d");
+    test("def x = 2; switch (x) { 1 -> 'a'; 2 if 'abc' -> 'b'; default -> 'd' }", "b");
+    test("def x = 2; switch (x) { 1 -> 'a'; 2 if '' -> 'b'; default -> 'd' }", "d");
+    test("def x = 2; switch (x) { 1 -> 'a'; 2 if null -> 'b'; default -> 'd' }", "d");
+    test("def x = 2; switch (x) { 1 -> 'a'; 2 if [1] -> 'b'; default -> 'd' }", "b");
+    test("def x = 2; switch (x) { 1 -> 'a'; 2 if [] -> 'b'; default -> 'd' }", "d");
+    test("def x = 2; switch (x) { 1 -> 'a'; 2 if 5L -> 'b'; default -> 'd' }", "b");
+    test("def x = 2; switch (x) { 1 -> 'a'; 2 if 0.0D -> 'b'; default -> 'd' }", "d");
+    test("def x = [0,3]; switch (x) { [a,b] if a -> 'b'; default -> 'd' }", "d");
+    test("def x = 2; switch (x) { 1 -> 'a'; 2 if sleep(0, true) -> 'b'; default -> 'd' }", "b");
+    test("def x = 2; def f() { sleep(0, true) }; switch (x) { 1 -> 'a'; 2 if f() -> 'b'; default -> 'd' }", "b");
+    test("def x = 2; switch (x) { 1 -> 'a'; 2 if 5 -> 'b'; default -> 'd' }", "b");
+  }
+
+  @Test public void switchMultipleLiterals() {
+    testError("def x = 1; switch (x) { 1 -> 'found'; 1 if x -> 'not found' }", "occurs multiple times");
+    test("def x = 2; switch (x) { 1 -> 'a'; 2 if '' -> 'b'; 2 if 'x' -> 'c'; default -> 'd' }", "c");
+    test("def x = 2; boolean f = false; switch (x) { 2 if f -> 'b'; 2 -> 'c'; default -> 'd' }", "c");
+    test("def x = 2; boolean f = true; switch (x) { 2 if f -> 'b'; 2 -> 'c'; default -> 'd' }", "b");
+    test("def x = [2]; boolean f = false; switch (x) { [2] if f -> 'b'; [2] -> 'c'; default -> 'd' }", "c");
+    test("int x = 2; boolean f = false; switch (x) { 1 -> 'a'; 2 if f -> 'b'; 3 -> 'e'; 2 -> 'c'; 4 -> 'g'; default -> 'd' }", "c");
+    testError("def x = 2; switch (x) { 2 -> 'b'; 2 -> 'c'; default -> 'd' }", "multiple times");
+    testError("def x = 2; boolean f = true; switch (x) { 2 -> 'b'; 2 if f -> 'c'; default -> 'd' }", "multiple times");
+    testError("def x = 2; boolean f = false; switch (x) { 2, 5 if f -> 'b'; 2 -> 'c'; default -> 'd' }", "multiple times");
+  }
 
   @Test public void switchWithRecursion() {
     test("def f(it) { switch { [a,b] -> f(a)+f(b); [c] -> c; d -> d } }; f([[1,2],[3]])", 6);
     test("def f(it) { switch { [a,b] -> f(a)+f(b); [c] -> c; d -> d } }; f([[1,2],[[5],[1,2]]])", 11);
   }
 
+  @Test public void switchDefaultWithIt() {
+    test("switch (123) { default -> it }", 123);
+    test("[1,2].map{ switch (it * 10) { 10 -> 'ten'; default -> it + 1 } }", Utils.listOf("ten", 21));
+    test("def x = 5; switch (x) { 1 -> 'one'; default -> \"other: $it\" }", "other: 5");
+    test("def x = 5; switch (x * 2) { 1 -> 'one'; default -> it }", 10);
+    test("def f(x) { switch (x) { 1 -> 'one'; default -> it * 2 } }; f(4)", 8);
+    test("def it = 'outer'; switch (3) { 1 -> 'one'; default -> it }", 3);
+    test("[1,2].map{ switch (it * 10) { 10 -> it; default -> it } }", Utils.listOf(10, 20));
+    test("[1,2].map{ switch (it * 10) { 10 -> 'ten'; default -> sleep(0, it) } }", Utils.listOf("ten", 20));
+    test("[1,2].map{ switch (it * 10) { [a] -> 'list'; default -> it + 1 } }", Utils.listOf(11, 21));
+    test("[1,2].map{ switch { 1 -> 'one'; default -> it } }", Utils.listOf("one", 2));
+    test("def x = 5; switch (x) { 1 -> 'one'; default -> { -> it }() }", 5);    
+  }
+  
   @Test public void switchWithListBinding() {
     test("switch ([2,3]) { [i,i] -> true; default -> false }", false);
     test("switch ([3,3]) { [i,i] -> true; default -> false }", true);
@@ -240,27 +338,125 @@ public class SwitchTests extends BaseTest {
   }
 
   @Test public void patternCoverages() {
-    testError("List a = [1,2]; switch(a) { [x,y],[_,x] -> x }", "covered by a previous");
+    testError("List a = [1,2]; switch(a) { [x,y],[_,x] -> x }", "covered by a previous", 1);
     test("List a = [1,2]; switch(a) { [x,y] if x == 1,[_,x] -> x }", 1);
-    testError("List a = ['aa','bb','cc']; switch(a) { [_,i,'cc'] -> i; [_,i,'cc'] -> 7 }", "covered by a previous");
-    testError("def x = 1; switch (x) { String,1 -> 2; int,'abc' -> 3 }", "covered by a previous");
+    testError("List a = ['aa','bb','cc']; switch(a) { [_,i,'cc'] -> i; [_,i,'cc'] -> 7 }", "covered by a previous", 1);
+    testError("def x = 1; switch (x) { String,1 -> 2; int,'abc' -> 3 }", "covered by a previous", 1);
     test("def a = [1,2]; switch(a) { [1,2],[_,z] -> z }", null);
-    testError("def a; switch(a) { [_,i,'cc'] -> i; [_,[x:i],'cc'] -> 7 }", "covered by a previous");
+    testError("def a; switch(a) { [_,i,'cc'] -> i; [_,[x:i],'cc'] -> 7 }", "covered by a previous", 1);
     test("def a=[1,[x:3]]; switch(a) { [_,i,'cc'] -> i; [_,[x:i]] -> i }", 3);
     test("def a=[1,[x:3]]; switch(a) { [_,int i] -> i; [_,[x:i]] -> i }", 3);
     test("switch ([1,2,3]) { [1,2,3] -> 2; [*] -> 3 }", 2);
     test("switch ([1,2,3]) { [1,2,4] -> 2; [*t] -> t.size() }", 3);
     test("switch ([1,2,3]) { [1,2,4] -> 2; [1,*t] -> t.size() }", 2);
     test("switch ([1,2,[3,4,5]]) { [1,2,4] -> 2; [1,*t] -> t.size() }", 2);
-    testError("switch ([1,2,3]) { [*] -> 1; [1,2,3] -> 2 }", "covered by a previous");
-    testError("switch ([1,2,3]) { [*t] -> 1; [1,2,3] -> 2 }", "covered by a previous");
-    testError("switch ([1,2,3]) { [1,*] -> 1; [1,2,3] -> 2 }", "covered by a previous");
-    testError("switch ([1,2,3]) { [1,*t] -> 1; [1,2,3] -> 2 }", "covered by a previous");
-    testError("switch ([1,2,3]) { [1,2,*] -> 1; [1,2,3] -> 2 }", "covered by a previous");
-    testError("switch ([1,2,3]) { [1,2,*t] -> 1; [1,2,3] -> 2 }", "covered by a previous");
-    testError("switch ([1,2,3]) { [1,2,*t] -> 1; [1,2,[3,4,5]] -> 2 }", "covered by a previous");
-    testError("switch ([1,2,3]) { [1,2,_] -> 1; [1,2,3] -> 2 }", "covered by a previous");
-    testError("switch ([1,2,3]) { [1,2,_t] -> 1; [1,2,3] -> 2 }", "covered by a previous");
+    testError("switch ([1,2,3]) { [*] -> 1; [1,2,3] -> 2 }", "covered by a previous", 1);
+    testError("switch ([1,2,3]) { [*t] -> 1; [1,2,3] -> 2 }", "covered by a previous", 1);
+    testError("switch ([1,2,3]) { [1,*] -> 1; [1,2,3] -> 2 }", "covered by a previous", 1);
+    testError("switch ([1,2,3]) { [1,*t] -> 1; [1,2,3] -> 2 }", "covered by a previous", 1);
+    testError("switch ([1,2,3]) { [1,2,*] -> 1; [1,2,3] -> 2 }", "covered by a previous", 1);
+    testError("switch ([1,2,3]) { [1,2,*t] -> 1; [1,2,3] -> 2 }", "covered by a previous", 1);
+    testError("switch ([1,2,3]) { [1,2,*t] -> 1; [1,2,[3,4,5]] -> 2 }", "covered by a previous", 1);
+    testError("switch ([1,2,3]) { [1,2,_] -> 1; [1,2,3] -> 2 }", "covered by a previous", 1);
+    testError("switch ([1,2,3]) { [1,2,_t] -> 1; [1,2,3] -> 2 }", "covered by a previous", 1);
+    test("def x = [1,2]; switch (x) { [a,a] -> 'same'; [p,q] -> 'different' }", "different");
+    test("def x = [1,1]; switch (x) { [a,a] -> 'same'; [p,q] -> 'different' }", "same");
+    test("def x = [1,2]; switch (x) { [a,a] -> 'same'; [_,_] -> 'different' }", "different");
+    test("def x = [1,2,1]; switch (x) { [a,_,a] -> 'ends same'; [p,_,q] -> 'ends differ' }", "ends same");
+    test("def x = [1,2]; switch (x) { [a,a] -> 'same'; [a,b] -> 'diff' }", "diff");
+    test("class X { int i; int j }; def x = new X(1,2); switch (x) { X(i:a, j:a) -> 'same'; X(i:p, j:q) -> 'different' }", "different");
+    test("def x = [[1],[2]]; switch (x) { [[a],[a]] -> 'same'; [[p],[q]] -> 'different' }", "different");
+    testError("def x = [1,1]; switch (x) { [a,a] -> 'same'; [1,1] -> 'ones' }", "covered");
+    testError("def x = [1,1]; switch (x) { [a,a] -> 'same'; [b,b] -> 'same2' }", "covered");
+    testError("def x = [1,1]; switch (x) { [p,q] -> 'any'; [a,a] -> 'same' }", "covered");
+    test("switch ([k:1, j:2]) { [k:a, j:a] -> 'same'; [k:_, j:_] -> 'different' }", "different");
+    test("switch ([k:1, j:1]) { [k:a, j:a] -> 'same'; [k:_, j:_] -> 'different' }", "same");
+    test("switch ([b:1, a:2]) { [b:x, a:x] -> 'same'; [a:_, b:_] -> 'different' }", "different");
+    test("switch ([k:1, j:2]) { [k:a, j:a] -> 'same'; [k:p, j:q] -> 'different' }", "different");
+    test("switch ([k:1, j:2]) { [k:a, j:a] -> 'same'; [k:1, j:2] -> 'onetwo' }", "onetwo");
+    testError("switch ([k:1, j:1]) { [k:a, j:a] -> 'same'; [k:b, j:b] -> 'same2' }", "covered");
+    testError("switch ([k:1, j:1]) { [k:a, j:a] -> 'same'; [k:1, j:1] -> 'ones' }", "covered");
+    test("class X { int k; int j }; switch (new X(1,2)) { X(j:a, k:a) -> 'same'; X(k:_, j:_) -> 'different' }", "different");
+    testError("def x = [1,2]; switch (x) { [a],[a,b] -> 'x'; [p,q] -> 'y' }", "covered");
+    testError("def x = [1,2]; switch (x) { [a],[b,a] -> 'x'; [p,q] -> 'y' }", "covered");
+    testError("def x = [1,2]; switch (x) { [a],[a,a] -> 'x'; [p,p] -> 'y' }", "covered");
+    test("def x = [1,2]; switch (x) { [a],[a,a] -> 'x'; [p,q] -> 'y' }", "y");
+    test("def x = [1,2]; switch (x) { [a], [b,a] -> 'x:' + a; default -> 'd' }", "x:2");
+    test("switch ([k:1, j:2]) { [k:a, j:a] -> 'same'; [k:_, j:_] -> 'different' }", "different");
+    test("switch ([b:1, a:2]) { [b:x, a:x] -> 'same'; [a:_, b:_] -> 'different' }", "different");
+    testError("switch ([k:1, j:1]) { [k:a, j:a] -> 'same'; [k:b, j:b] -> 'same2' }", "covered");
+    test("class X { int k; int j }; switch (new X(1,2)) { X(j:a, k:a) -> 'same'; X(k:_, j:_) -> 'different' }", "different");
+    test("class X { int b; int a }; switch (new X(1,2)) { X(p, p) -> 'same'; X(_, _) -> 'different' }", "different");
+    test("class X { int b; int a }; switch (new X(1,2)) { X(p, p) -> 'same'; X(1, 2) -> 'onetwo' }", "onetwo");
+    testError("def x = [1,2]; switch (x) { [a], [b,a] -> 'x'; [p,q] -> 'y' }", "covered");
+    test("def x = [1,2]; switch (x) { [a], [b,a] -> 'x:' + a; default -> 'd' }", "x:2");
+    testError("switch ([1]) { [1,*] -> 'starts with 1'; [1] -> 'just 1'; default -> 'other' }", "covered");
+    testError("switch ([]) { [*] -> 'any list'; [] -> 'empty'; default -> 'other' }", "covered");
+    testError("switch ([1]) { [a,*] -> 'non-empty'; [b] -> 'one'; default -> 'other' }", "covered");
+    testError("switch ([1,2]) { [1,*] -> 'a'; [1,2] -> 'b'; default -> 'other' }", "covered");
+    testError("switch ([2]) { [*,2] -> 'a'; [2] -> 'b'; default -> 'other' }", "covered");
+    testError("switch ([1,3]) { [1,*,3] -> 'a'; [1,3] -> 'b'; default -> 'other' }", "covered");
+    test("switch ([1]) { [1,*] -> 'starts with 1'; [2] -> 'two'; default -> 'other' }", "starts with 1");
+    test("switch ([1]) { [1,2,*] -> 'one two..'; [1] -> 'just 1'; default -> 'other' }", "just 1");
+    test("switch ([1]) { [1,*] -> 'a'; default -> 'b' }", "a");
+    test("switch ([]) { [*] -> 'a'; default -> 'b' }", "a");
+    testError("switch ([1]) { [1,*] -> 'starts with 1'; [1] -> 'just 1'; default -> 'other' }", "covered");
+    testError("switch ([]) { [*] -> 'any list'; [] -> 'empty'; default -> 'other' }", "covered");
+    testError("switch ([1]) { [a,*] -> 'non-empty'; [b] -> 'one'; default -> 'other' }", "covered");
+    testError("switch ([1,3]) { [1,*,3] -> 'a'; [1,3] -> 'b'; default -> 'other' }", "covered");
+    test("switch ([1]) { [1,2,*] -> 'one two..'; [1] -> 'just 1'; default -> 'other' }", "just 1");
+    test("switch ([1,4]) { [1,*,3] -> 'a'; [1,4] -> 'b'; default -> 'other' }", "b");
+    testError("switch ([1,4]) { [*] -> 'a'; [1,2] -> 'b'; default -> 'other' }", "covered");
+    testError("switch ([1,4]) { [*] -> 'a'; [1,*] -> 'b'; default -> 'other' }", "covered");
+    testError("switch ([1]) { [*] -> 'a'; [1,*] -> 'b'; default -> 'other' }", "covered");
+    testError("switch ([1,2]) { [1,*] -> 'a'; [1,2,*] -> 'b'; default -> 'other' }", "covered");
+    testError("switch ([1,3]) { [1,*,3] -> 'a'; [1,*,2,3] -> 'b'; default -> 'other' }", "covered");
+    testError("switch ([1]) { [a,*] -> 'a'; [_,*] -> 'b'; default -> 'other' }", "covered");
+    test("switch ([1]) { [1,_] -> 'a'; [1,*] -> 'b'; default -> 'other' }", "b");
+    test("switch ([1]) { [a,b] -> 'a'; [c,*] -> 'b'; default -> 'other' }", "b");
+    test("switch ([]) { [a,*] -> 'a'; [*] -> 'b'; default -> 'other' }", "b");
+    test("switch ([]) { [_] -> 'a'; [*] -> 'b'; default -> 'other' }", "b");
+    test("switch ([1,2,3]) { [_,_] -> 'a'; [_,*] -> 'b'; default -> 'other' }", "b");
+    testError("switch ([a:1, b:2]) { [a:1, *] -> 'a1'; [a:1, b:2, *] -> 'a1b2'; default -> 'other' }", "covered");
+    testError("switch ([a:1, b:2]) { [a:_, *] -> 'has a'; [a:1, b:_, *] -> 'a1 has b'; default -> 'other' }", "covered");
+    testError("switch ([a:1]) { [a:x, *] -> 'has a'; [a:1, *] -> 'a1'; default -> 'other' }", "covered");
+    testError("switch ([a:1, b:2]) { [a:1, *] -> 'a1'; [a:1, *] -> 'again'; default -> 'other' }", "covered");
+    testError("switch ([a:1, b:2]) { [a:1, *] -> 'a1'; [a:1, b:2] -> 'exact'; default -> 'other' }", "covered");
+    test("switch ([b:2]) { [a:1, *] -> 'a1'; [b:2, *] -> 'b2'; default -> 'other' }", "b2");
+    test("switch ([a:1]) { [a:1, b:_] -> 'a1b'; [a:1, *] -> 'a1 any'; default -> 'other' }", "a1 any");
+    test("switch ([a:1]) { [a:_] -> 'just a'; [a:_, *] -> 'a any'; default -> 'other' }", "just a");
+    test("switch ([a:2]) { [a:1, *] -> 'a1'; [a:_, *] -> 'any a'; default -> 'other' }", "any a");
+    test("int v = 23; def x = [23, 1]; switch (x) { [$v,*] -> 'matched'; [a,$v] if a == 2*v -> 'matched2'; default -> 'no' }", "matched");
+    test("int v = 23; def x = [46, 23]; switch (x) { [$v,*] -> 'matched'; [a,$v] if a == 2*v -> 'matched2'; default -> 'no' }", "matched2");
+    test("int v = 23; def x = [1, 2]; switch (x) { [$v,*] -> 'matched'; default -> 'no' }", "no");
+    test("int v = 23; switch (23) { $v -> 'yes'; default -> 'no' }", "yes");
+    test("int v = 23; def x = [a:23]; switch (x) { [a:$v] -> 'yes'; default -> 'no' }", "yes");
+    test("int v = 23; class X { int i }; def x = new X(23); switch (x) { X(i:$v) -> 'yes'; default -> 'no' }", "yes");
+    test("long v = 23; def x = [23L]; switch (x) { [$v] -> 'yes'; default -> 'no' }", "yes");
+    test("double v = 1.5; def x = [1.5D]; switch (x) { [$v] -> 'yes'; default -> 'no' }", "yes");
+    test("boolean v = true; def x = [true]; switch (x) { [$v] -> 'yes'; default -> 'no' }", "yes");
+    test("def x = 'abc'; x =~ /(b)/; switch ('b') { $1 -> 'cap'; default -> 'no' }", "cap");
+    testError("def x = 2; switch (x) { _ -> 1; 2 -> 2 }", "covered by a previous", 1);
+    testError("def x = 2; switch (x) { def -> 1; 2 -> 2 }", "covered by a previous", 1);
+    testError("def x = 2; switch (x) { int -> 1; 2 -> 2 }", "covered by a previous", 1);
+    testError("def x = 2; switch (x) { _ -> 1; int -> 2; 3 -> 3 }", "covered by a previous", 2);
+    testError("def x = [1,2,3]; switch (x) { _ -> 2; _ if it.size() == 3 -> 3 }", "covered by a previous", 1);
+    testError("class A {}; class B extends A {}; def x = new B(); switch (x) { A -> 1; B -> 2 }", "covered by a previous", 1);
+    test("def x = 'abc'; switch (x) { int -> 1; String s if s.size() == 3 -> 2; default -> 3 }", 2);
+    test("def x = 5; switch (x) { String -> 1; int i if i > 3 -> 2; default -> 3 }", 2);
+    test("def x = 'abc'; switch (x) { int -> 1; 'abc' if true -> 2; default -> 3 }", 2);
+    testError("def x = 2; switch (x) { int -> 1; 2 if true -> 2; default -> 3 }", "covered by a previous pattern", 1);
+    testError("List x = [1,2,3]; switch(x) { List i -> i; [1,4,3] -> 7 }", "covered by a previous pattern", 1);
+    testError("def x = 2; switch (x) { int -> 1; 2 if true -> 2; default -> 3 }", "covered by a previous pattern", 1);                                                                                                       
+    testError("def x = null; switch (x) { _ -> 1; _ if true -> 2 }", "covered by a previous pattern", 1);
+    test("def x = 'abc'; switch (x) { int -> 1; String s if s.size() == 3 -> 2; default -> 3 }", 2);
+    test("def x = [1]; switch (x) { Map -> 1; [1] if true -> 2; default -> 3 }", 2);
+    test("class X {}; class Y extends X {}; X x = new Y(); switch (x) { Y -> 'Y'; X -> 'X' }", "Y");
+    test("String x = null; switch (x) { String -> 1; null -> 2 }", 2);
+    test("List x = null; switch (x) { [1] -> 1; List -> 2; _ -> 3 }", 3);
+    test("Map x = null; switch (x) { Map m -> 1; def v -> 2 }", 2);
+    testError("def x = null; switch (x) { _ -> 1; _ if true -> 2 }", "covered by a previous pattern", 1);
+    testError("def x = 2; switch (x) { int -> 1; 2 if true -> 2; default -> 3 }", "covered by a previous pattern", 1);
   }
 
   @Test public void switchOnMap() {
@@ -405,6 +601,19 @@ public class SwitchTests extends BaseTest {
     test("switch (['abc':1]) { [\"abc\":_] -> 3 }", 3);
     test("switch (['abc':1]) { [/abc/:_] -> 3 }", 3);
     testError("def x = 1; switch (['abc':1]) { [\"ab${x}c\":_] -> 3 }", "expected string constant");
+    test("def x = [b:null]; switch (x) { [a:1] -> 'yes'; default -> 'no' }", "no");
+    test("def x = [a:null]; switch (x) { [b:null] -> 'yes'; default -> 'no' }", "no");
+    test("def x = [a:1, b:null]; switch (x) { [a:1, c:2] -> 'yes'; default -> 'no' }", "no");
+    test("def x = [[b:null]]; switch (x) { [[a:1]] -> 'yes'; default -> 'no' }", "no");
+    test("def x = [k:[b:null]]; switch (x) { [k:[a:1]] -> 'yes'; default -> 'no' }", "no");
+    test("def x = [[b:null], 2]; switch (x) { [[a:1], n] -> n; default -> 'no' }", "no");
+    test("Map x = [b:null]; switch (x) { [a:1] -> 'yes'; default -> 'no' }", "no");
+    test("def x = [b:null]; switch (x) { [a:1], [c:2] -> 'yes'; [b:3] -> 'b3'; default -> 'no' }", "no");
+    test("def f(x) { switch (x) { [a:1] -> 'yes'; default -> 'no' } }; f([b:null])", "no");
+    test("def x = [a:1]; switch (x) { [a:1] -> 'yes'; default -> 'no' }", "yes");
+    test("def x = [a:null]; switch (x) { [a:null] -> 'yes'; default -> 'no' }", "yes");
+    test("def x = [a:1, b:null]; switch (x) { [b:null, a:1] -> 'yes'; default -> 'no' }", "yes");
+    test("def x = [k:[b:null]]; switch (x) { [k:[b:null]] -> 'yes'; default -> 'no' }", "yes");
   }
 
   @Test public void switchOnList() {
@@ -441,13 +650,13 @@ public class SwitchTests extends BaseTest {
     test("switch ([[1],2]) { [[1],2] -> 1; default -> 2 }", 1);
     test("switch ([1,2,3]) { [_,2,_] -> 1; default -> 2 }", 1);
     testError("switch ([1,2,3]) { _ -> 1; default -> 2 }", "default case is never applicable");
-    testError("switch ([1,2,3]) { _ -> 1; _ -> 2 }", "unreachable switch case");
-    testError("switch ([1,2,3]) { _ -> 1; [1,2,3] -> 2 }", "unreachable switch case");
+    testError("switch ([1,2,3]) { _ -> 1; _ -> 2 }", "covered by a previous pattern");
+    testError("switch ([1,2,3]) { _ -> 1; [1,2,3] -> 2 }", "covered by a previous pattern");
     test("switch ([1,2,3]) { [1,2] -> 2; _ -> 1 }", 1);
     test("switch ([1,2,3]) { [1,2] -> 2; [1,2,4],[1,2,3] -> 1 }", 1);
     test("switch ([1,2,3]) { [1,2] -> 2; [_],[_,_,_] -> 1 }", 1);
     test("switch ([1,2,3]) { [1,2] -> 2; [int],[_,int,_] -> 1 }", 1);
-    testError("switch ([1,2,3]) { [1,2] -> 2; _,_ -> 1 }", "unreachable");
+    testError("switch ([1,2,3]) { [1,2] -> 2; _,_ -> 1 }", "covered by a previous pattern");
     test("switch ([1,2,3]) { [1,2,int] -> 2; _ -> 1 }", 2);
     test("switch ([1,2,3]) { [_,2,int] -> 2; _ -> 1 }", 2);
     test("switch ([1,[2,'abc'],3]) { [_,[_,String],int] -> 2; _ -> 1 }", 2);
@@ -455,8 +664,8 @@ public class SwitchTests extends BaseTest {
     test("switch ([1,[2,'abc'],3]) { [*,[*,String],int] -> 2; _ -> 1 }", 2);
     test("switch ([1,[2,\"${'abc'}\"],3]) { [*,[*,String],int] -> 2; _ -> 1 }", 2);
     test("switch ([1,[2,\"${'abc'}\"],3]) { [*,[*,String s],int] -> s; _ -> 1 }", "abc");
-    testError("List x = [1,2,3]; switch(x) { i -> i; [1,4,3] -> 7 }", "unreachable switch case");
-    testError("List x = [1,2,3]; switch(x) { List i -> i; [1,4,3] -> 7 }", "unreachable switch case");
+    testError("List x = [1,2,3]; switch(x) { i -> i; [1,4,3] -> 7 }", "covered by a previous pattern");
+    testError("List x = [1,2,3]; switch(x) { List i -> i; [1,4,3] -> 7 }", "covered by a previous pattern");
     test("List x = [1,2,3]; switch(x) { i -> i }", Utils.listOf(1,2,3));
     testError("List x = [1,2,3]; switch(x) { int i -> i }", "type of binding variable not compatible");
     test("List x = [1,2,3]; switch(x) { List i -> i }", Utils.listOf(1,2,3));
@@ -472,8 +681,8 @@ public class SwitchTests extends BaseTest {
     test("List x = [1,'abc','abc']; switch(x) { [1,int i,_] -> i; default -> 7 }", 7);
     test("List x = [1,2,'abc']; switch(x) { [1,int i,i] -> i; default -> 7 }", 7);
     testError("List x = [1,2,2]; switch(x) { [1,int i,int i] -> i; [1,4,3] -> 7 }", "'i' already declared");
-    testError("List a = [1,2,3]; switch(a) { i -> i; [1,4,3] -> 7 }", "unreachable switch case");
-    testError("List a = [1,2,3]; switch(a) { List i -> i; [1,4,3] -> 7 }", "unreachable switch case");
+    testError("List a = [1,2,3]; switch(a) { i -> i; [1,4,3] -> 7 }", "covered by a previous pattern");
+    testError("List a = [1,2,3]; switch(a) { List i -> i; [1,4,3] -> 7 }", "covered by a previous pattern");
     test("List a = [1,2,3]; switch(a) { i -> i }", Utils.listOf(1,2,3));
     testError("List a = [1,2,3]; switch(a) { int i -> i }", "type of binding variable not compatible");
     test("List a = [1,2,3]; switch(a) { List i -> i }", Utils.listOf(1,2,3));
@@ -621,7 +830,16 @@ public class SwitchTests extends BaseTest {
     test("def x = [[[3,7]],[[4,9]]]; switch (x) { [[_],[[3,7]]] -> 3; [_,[List a]] -> a; _ -> null } == [4,9]", true);
     test("switch (3) {\n  int if it == 3 -> '3'\n  int -> 'something else'\n}", "3");
     test("def x = [1,2,3]; switch (x) { _ if it.size() == 2 -> 2; _ if it.size() == 3 -> 3 }", 3);
-    testError("def x = [1,2,3]; switch (x) { _ -> 2; _ if it.size() == 3 -> 3 }", "unreachable switch case");
+    testError("def x = [1,2,3]; switch (x) { _ -> 2; _ if it.size() == 3 -> 3 }", "covered by a previous pattern");
+    test("def x = null; switch (x) { [a] -> 'list'; default -> 'no match' }", "no match");
+    test("List l = null; switch (l) { [a] -> 'list'; default -> 'no match' }", "no match");
+    test("def x = null; switch (x) { [a,*] -> 'list'; default -> 'no match' }", "no match");
+    test("def x = null; switch (x) { [*] -> 'list'; default -> 'no match' }", "no match");
+    test("int[] arr = null; switch (arr) { [a] -> 'arr'; default -> 'no match' }", "no match");
+    test("def x = null; switch (x) { [a] -> 'list'; null -> 'null'; default -> 'no match' }", "null");
+    test("def x = null; switch (x) { [a] -> 'list' }", null);
+    test("def x = null; switch (x) { [a] -> sleep(0,'list'); default -> 'no match' }", "no match");
+    test("List l = [5]; switch (l) { [a] -> \"list $a\"; default -> 'no match' }", "list 5");
   }
 
   @Test public void switchArrays() {
@@ -653,23 +871,95 @@ public class SwitchTests extends BaseTest {
     test("def x = [[1],[1,2,3],[4],[4]] as int[][]; switch(x) { [_,j,[int i],[i]] -> ((j as List) + i) as int[]; [1,4,3] -> 7 }", new int[]{ 1,2,3,4 });
     test("def x = [[1],[1,2,3],[4],[4]] as int[][]; switch(x) { [_,[_,j,_],[int i],[i]] -> j+i; [1,4,3] -> 7 }", 6);
     test("int[] x = [1,2,3]; switch (x) { [1,2],[1,2,4] -> 1; [1,2,3] -> 2 }", 2);
+    test("int[] x = null; switch (x) { [1,2],[1,2,4] -> 1; [1,2,3] -> 2; _ -> 3 }", 3);
+    test("int[][] x = [[1,2,3],null]; switch (x) { [[1,2,3],null] -> 1; [[2]] -> 2; _ -> 3 }", 1);
   }
 
   @Test public void switchOnClassTypes() {
+    test("class X{}; X x = new X(); switch(x) { _ -> 1 }", 1);
+    test("class X{}; X x; x = new X(); switch(x) { _ -> 1 }", 1);
+    test("class X{}; X x = null; switch(x) { _ -> 1 }", 1);
+    test("class X{}; X x = null; switch(x) { def i -> i }", null);
+    test("class X{}; X x = null; switch(x) { def -> 1 }", 1);
+    test("class X{}; def x = null; switch(x) { _ -> 1 }", 1);
+    test("class X{}; X x; x = null; switch(x) { _ -> 1 }", 1);
     test("class X{}; X x = new X(); switch(x) { X -> 1 }", 1);
     test("class X{}; def x = 123; switch(x) { X -> 1; _ -> 2 }", 2);
     test("class X{}; def x = [a:123]; switch(x) { X -> 1; _ -> 2 }", 2);
     testError("class X{}; X x = new X(); switch(x) { X -> 1; int -> 2 }", "can never match pattern type int");
-    testError("class X{}; X x = new X(); switch(x) { X -> 1; def -> 2 }", "unreachable switch case");
-    testError("class X{}; X x = new X(); switch(x) { def -> 2; X -> 1 }",  "unreachable switch case");
-    test("class X{}; def x = new X(); switch(x) { X -> 1; int -> 2 }", 1);
-    test("class X{}; def x = new X(); switch(x) { X -> 1; def -> 2 }", 1);
-    testError("class X{}; def x = new X(); switch(x) { def -> 2; X -> 1 }",  "unreachable switch case");
-    test("class X{int i}; def x = new X(3); switch(x) { X xxx -> xxx.i; def -> 2 }", 3);
-    test("class X{int i}; class Y extends X{}; def x = new Y(3); switch(x) { X xxx -> xxx.i; def -> 2 }", 3);
-    test("class X{int i}; class Y extends X{}; def x = new X(3); switch(x) { X xxx -> xxx.i; def -> 2 }", 3);
-    test("class X{int i}; class Y extends X{}; def x = new X(3); switch(x) { Y xxx -> xxx.i; def -> 2 }", 2);
-    testError("class X{int i}; class Y extends X{}; def x = new X(3); switch(x) { X xxx -> xxx.i; Y -> 2 }", "unreachable switch case");
+    testError("class X{}; X x = new X(); switch(x) { X -> 1; def -> 2 }", "covered by a previous");
+    testError("class X{}; X x = new X(); switch(x) { def -> 2; X -> 1 }",  "covered by a previous");
+    test("class X{}; def x; x = new X(); switch(x) { X -> 1; int -> 2 }", 1);
+    test("class X{}; def x; x = new X(); switch(x) { X -> 1; def -> 2 }", 1);
+    testError("class X{}; def x = new X(); switch(x) { def -> 2; X -> 1 }",  "covered by a previous pattern");
+    testError("class X{}; switch(new X()) { def -> 2; X -> 1 }",  "covered by a previous pattern");
+    testError("class X{}; def x; x = new X(); switch(x) { def -> 2; X -> 1 }",  "covered by a previous pattern");
+    test("class X{int i}; def x; x = new X(3); switch(x) { X xxx -> xxx.i; def -> 2 }", 3);
+    test("class X{int i}; class Y extends X{}; def x; x = new Y(3); switch(x) { X xxx -> xxx.i; def -> 2 }", 3);
+    test("class X{int i}; class Y extends X{}; def x; x =  new X(3); switch(x) { X xxx -> xxx.i; def -> 2 }", 3);
+    test("class X{int i}; class Y extends X{}; def x; x =  new X(3); switch(x) { Y xxx -> xxx.i; def -> 2 }", 2);
+    testError("class X{int i}; class Y extends X{}; def x; x =  new X(3); switch(x) { X xxx -> xxx.i; Y -> 2 }", "covered by a previous pattern");
+    test("class X{int i}; class Y {int i}; def x; x = new Y(3); switch(x) { Y -> 'Y'; X -> 'X' }", "Y");
+    test("class X{int i}; class Y extends X{}; def x; x = new Y(3); switch(x) { Y -> 'Y'; X -> 'X' }", "Y");
+    test("class X {}; class Y extends X {}; def x; x = new Y(); switch (x) { Y -> 'type is Y'; X -> 'type is X' }", "type is Y");
+    test("class X {}; class Y extends X {}; def x; x = new X(); switch (x) { Y -> 'type is Y'; X -> 'type is X' }", "type is X");
+    test("class A {}; class B {}; def x; x = new B(); switch (x) { A -> 'A'; B -> 'B' }", "B");
+    test("class A {}; class B {}; def x; x = new B(); switch (x) { A a -> 'A'; B b -> 'B' }", "B");
+    test("class A {}; class B {}; def x; x = 'abc'; switch (x) { A -> 'A'; B -> 'B'; default -> 'other' }", "other");
+    test("class X {}; class Y extends X {}; class Z extends X {}; def x; x = new Z(); switch (x) { Y -> 'Y'; Z -> 'Z'; X -> 'X' }", "Z");
+    testError("class X {}; class Y extends X {}; def x; x = new Y(); switch (x) { X -> 'X'; Y -> 'Y' }", "covered");
+    testError("class X {}; class Y extends X {}; def x; x = new Y(); switch (x) { X -> 'X'; X -> 'X2' }", "covered");
+    test("class A {}; def x; x = new A(); switch (x) { A -> 'A'; String -> 's' }", "A");
+    test("class X{}\nclass Y extends X{}\nX x = new Y()\nswitch (x)\n{\n  Y -> 'Y'\n  X -> 'X'\n}\n", "Y");
+    test("class X {}; class Y extends X {}; X x = new Y(); switch (x) { Y -> 'Y'; default -> 'other' }", "Y");
+    test("class X {}; class Y extends X {}; X x = new X(); switch (x) { Y -> 'Y'; default -> 'other' }", "other");
+    test("class X {}; class Y extends X {}; X x = new Y(); switch (x) { Y y -> 'Y'; X -> 'X' }", "Y");
+    test("class X {}; class Y extends X {}; def f(X x) { switch (x) { Y -> 'Y'; X -> 'X' } }; f(new Y())", "Y");
+    test("class X {}; class Y extends X {}; def f(X x) { switch (x) { Y -> 'Y'; X -> 'X' } }; f(new X())", "X");
+    test("class X { int i }; class Y extends X {}; X x = new Y(1); switch (x) { Y(i:1) -> 'Y1'; default -> 'other' }", "Y1");
+    test("class X {}; class Y extends X {}; class Z extends Y {}; X x = new Z(); switch (x) { Z -> 'Z'; Y -> 'Y'; default -> 'other' }", "Z");
+    test("class X {}; class Y extends X {}; X x = null; switch (x) { Y -> 'Y'; default -> 'other' }", "other");
+    test("class X { int i = 3 }; class Y extends X { int j = 4 }; X x = new Y(); switch (x) { Y y -> y.j; default -> 0 }", 4);   // binding is typed Y                                                              
+    testError("class A {}; class B {}; A a = new A(); switch (a) { B -> 'B'; default -> 'other' }", "can never match");
+    testError("class X {}; class Y extends X {}; Y y = new Y(); switch (y) { X -> 'X'; default -> 'other' }", "never applicable");
+    test("class X { int i }; class Y extends X {}; X x = new X(1); switch (x) { Y(i:1) -> 'Y1'; default -> 'other' }", "other");
+    test("class X { int i }; class Y extends X {}; X x = null; switch (x) { Y(i:1) -> 'Y1'; default -> 'other' }", "other");
+    test("class X { int i }; class Y extends X { int j }; X x = new Y(1,2); switch (x) { Y(i:1,j:2) -> 1; default -> 0 }", 1);
+    test("class X { int i }; class Y extends X { int j }; X x = new X(1); switch (x) { Y(i:1,j:2) -> 1; default -> 0 }", 0);
+    test("class X {}; class Y extends X {}; Y y = new Y(); switch (y) { X -> 'X' }", "X");
+    test("class X {}; class Y extends X {}; def f(Y y) { switch (y) { X -> 'X' } }; f(new Y())", "X");
+    test("class X { int i }; class Y extends X {}; X x = new X(1); switch (x) { Y(i:1) -> 'Y1'; default -> 'other' }", "other");
+    test("class X { int i }; class Y extends X { int j }; X x = new Y(1,2); switch (x) { Y(i:1,j:2) -> 1; default -> 0 }", 1);
+    test("class X { int i }; class Y extends X { int j }; X x = new Y(1,2); switch (x) { Y(i:1,j:j) -> j; default -> 0 }", 2);
+    test("class X {}; class Y extends X {}; Y y = new Y(); switch (y) { X -> 'X' }", "X");
+    test("class X {}; class Y extends X {}; X x = new Y(); switch (x) { Y y -> 'Y'; X -> 'X' }", "Y");
+    test("class X {}; class Y extends X {}; X x = null; switch (x) { Y -> 'Y'; default -> 'other' }", "other");
+    test("class X {}; X x = null; switch (x) { X -> 'X' }", null);
+    test("class X {}; X x = null; switch (x) { X -> 'X'; def -> true }", true);
+    test("class X {}; X x = null; switch (x) { X -> 'X'; null -> true }", true);
+    test("class X {}; X x = null; switch (x) { null -> true; X -> 'X' }", true);
+    testError("class X {}; X x = null; switch (x) { null -> true; X -> 'X'; null -> true }", "multiple times");
+    test("class X {}; X x = null; switch (x) { X -> 'X'; default -> true }", true);
+    test("class X {}; X x = null; switch (x) { X -> 'X'; _ -> true }", true);
+    test("class X {}; class Y extends X{}; Y y = null; switch (y) { X -> 'X' }", null);
+    test("class X {}; class Y extends X{}; Y y = null; switch (y) { X -> 'X'; null -> true }", true);
+    test("class X {}; class Y extends X{}; Y y = null; switch (y) { X -> 'X'; def -> true }", true);
+    test("class X {}; class Y extends X{}; Y y = null; switch (y) { X -> 'X'; _ -> true }", true);
+    test("class X {}; class Y extends X{}; Y y = null; switch (y) { X -> 'X'; default -> true }", true);
+    test("class X {}; def x; x = null; switch (x) { X -> 'X' }", null);
+    test("class X {}; X x = null; switch (x) { X -> 'X'; default -> 'd' }", "d");
+    testError("class X {}; X x = new X(); switch (x) { X -> 'X'; default -> 'd' }", "default case is never applicable");
+
+    test("class X {}; X x = null; switch (x) { X xx -> 'X'; default -> 'd' }", "d");
+    test("class X {}; class Y extends X {}; Y y = null; switch (y) { X x -> 'X'; default -> 'd' }", "d");
+    test("String s = null; switch (s) { String t -> t; default -> 'd' }", "d");
+    test("def f(String[] arr) { switch (arr) { [String] -> 's'; default -> 'd' } }; f(new String[1])", "d");
+    test("class X {}; X[] arr = new X[1]; switch (arr) { [X] -> 'x'; default -> 'd' }", "d");
+    test("String[] arr = ['a']; switch (arr) { [String] -> 's'; default -> 'd' }", "s");
+    testError("class X {}; X x = new X(); switch (x) { X xx -> 'X'; default -> 'd' }", "matches all input");
+    test("class X {}; X x; x = new X(); switch (x) { X xx -> 'X'; default -> 'd' }", "X");
+
+    test("int i = 1; switch (i) { def -> 'd' }", "d");    
   }
 
   @Test public void switchExprWithBlocks() {
@@ -707,12 +997,12 @@ public class SwitchTests extends BaseTest {
     testError("class X { int i = 1 }; def x = new X(); switch (x) { X(2) -> true }", "does not match mandatory field count");
     test("class X{ int i }; def x = new X(3); switch (x) { X(3) -> true; _ -> false }", true);
     test("class X{ int i }; X x = new X(3); switch (x) { X(3) -> true; _ -> false }", true);
-    test("class X{ long j }; def x = new X(3); switch (x) { X(3) -> true; _ -> false }", true);
-    test("class X{ long j }; X x = new X(3); switch (x) { X(3) -> true; _ -> false }", true);
+    test("class X{ long j }; def x = new X(3); switch (x) { X(3L) -> true; _ -> false }", true);
+    test("class X{ long j }; X x = new X(3); switch (x) { X(3L) -> true; _ -> false }", true);
     test("class X{ String s }; def x = new X('abc'); switch (x) { X('abc') -> true; _ -> false }", true);
     test("class X{ String s }; X x = new X('abc'); switch (x) { X('abc') -> true; _ -> false }", true);
-    test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X(3,4) -> true; _ -> false }", true);
-    test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X(i:3,j:4) -> true; _ -> false }", true);
+    test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X(3,4L) -> true; _ -> false }", true);
+    test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X(i:3,j:4L) -> true; _ -> false }", true);
     test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X(i:_,j:_) -> true; _ -> false }", true);
     test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X(i:_,j:long) -> true; _ -> false }", true);
     test("class X{ int i; long j }; def x = new X(3,4); switch (x) { X(i:_,j:a) -> a; _ -> false }", 4L);
@@ -733,16 +1023,13 @@ public class SwitchTests extends BaseTest {
     test("class X{int i}; def x = [new X(3),new X(4)] as X[]; switch (x) { [X(3),X(3)] -> 4; [a,X(4)] -> a; _ -> null } == new X(3)", true);
     testError("class X{int i}; X[][] x = [[new X(3)], [new X(4)]]; switch (x) { [_,X(3)] -> 3; [X(3),a] -> a; _ -> null }", "can never match");
     test("class X{int i}; X[][] x = [[new X(3)],[new X(4)]]; switch (x) { [[_],[X(3)]] -> 3; [[X(3)],[a]] -> a; _ -> null } == new X(4)", true);
-    test("class X{int i}; X[][] x = [[new X(3)],[new X(4)]]; switch (x) { [[_],[X(3)]] -> 3; [[X(3L)],[a]] -> a; _ -> null } == new X(4)", true);
-    test("class X{int i}; X[][] x = [[new X(3)],[new X(4)]]; switch (x) { [[_],[X(3)]] -> 3; [[X(3D)],[a]] -> a; _ -> null } == new X(4)", true);
-    test("class X{int i}; X[][] x = [[new X(3)],[new X(4)]]; switch (x) { [[_],[X(3)]] -> 3; [[X((Decimal)3)],[a]] -> a; _ -> null } == new X(4)", true);
+    testError("class X{int i}; X[][] x = [[new X(3)],[new X(4)]]; switch (x) { [[_],[X(3)]] -> 3; [[X(3L)],[a]] -> a; _ -> null } == new X(4)", "can never match");
+    testError("class X{int i}; X[][] x = [[new X(3)],[new X(4)]]; switch (x) { [[_],[X(3)]] -> 3; [[X(3D)],[a]] -> a; _ -> null } == new X(4)", "can never match");
+    testError("class X{int i}; X[][] x = [[new X(3)],[new X(4)]]; switch (x) { [[_],[X(3)]] -> 3; [[X((Decimal)3)],[a]] -> a; _ -> null } == new X(4)", "can never match");
     test("class X{int i}; X[][] x = [[new X(3)],[new X(4)]]; switch (x) { [[_],[X(3)]] -> 3; [[X(3)],_] -> 4; _ -> null }", 4);
     test("class X{int i}; X[][] x = [[new X(3)],[new X(4)]]; switch (x) { [[_],[X(3)]] -> 3; [_,[a]] -> a; _ -> null } == new X(4)", true);
     test("class X{int i}; X[][] x = [[new X(3)],[new X(4)]]; switch (x) { [[_],[X(3)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(4)", true);
     test("class X{int i}; def x = [[new X(3)],[new X(4)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(3)],[a]] -> a; _ -> null } == new X(4)", true);
-    test("class X{int i}; def x = [[new X(3)],[new X(4)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(3L)],[a]] -> a; _ -> null } == new X(4)", true);
-    test("class X{int i}; def x = [[new X(3)],[new X(4)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(3D)],[a]] -> a; _ -> null } == new X(4)", true);
-    test("class X{int i}; def x = [[new X(3)],[new X(4)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X((Decimal)3)],[a]] -> a; _ -> null } == new X(4)", true);
     test("class X{int i}; def x = [[new X(3)],[new X(4)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(3)],_] -> 4; _ -> null }", 4);
     test("class X{int i}; def x = [[new X(3)],[new X(4)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [_,[a]] -> a; _ -> null } == new X(4)", true);
     test("class X{int i}; def x = [[new X(3)],[new X(4)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(4)", true);
@@ -755,50 +1042,74 @@ public class SwitchTests extends BaseTest {
     test("class X{int i;long j}; def x = [new X(3,7),new X(4,9)] as X[]; switch (x) { [X(i:3),X(i:3)] -> 4; [a,X(i:4)] -> a; _ -> null } == new X(3,7)", true);
     testError("class X{int i;long j}; X[][] x = [[new X(3,7)], [new X(4,9)]]; switch (x) { [_,X(i:3)] -> 3; [X(i:3),a] -> a; _ -> null }", "can never match");
     test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:3)],[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:3L)],[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:3D)],[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:(Decimal)3)],[a]] -> a; _ -> null } == new X(4,9)", true);
+    testError("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:3L)],[a]] -> a; _ -> null } == new X(4,9)", "int can never match");
+    testError("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:3D)],[a]] -> a; _ -> null } == new X(4,9)", "int can never match pattern type double");
+    testError("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:(Decimal)3)],[a]] -> a; _ -> null } == new X(4,9)", "int can never match");
     test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:3)],_] -> 4; _ -> null }", 4);
     test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3)]] -> 3; [_,[a]] -> a; _ -> null } == new X(4,9)", true);
     test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(4,9)", true);
     test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:3)],[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:3L)],[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:3D)],[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:(Decimal)3)],[a]] -> a; _ -> null } == new X(4,9)", true);
+    testError("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:3L)],[a]] -> a; _ -> null } == new X(4,9)", "can never match");
+    testError("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:3D)],[a]] -> a; _ -> null } == new X(4,9)", "can never match");
+    testError("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:(Decimal)3)],[a]] -> a; _ -> null } == new X(4,9)", "can never match");
     test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3)]] -> 3; [[X(i:3)],_] -> 4; _ -> null }", 4);
     test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3)]] -> 3; [_,[a]] -> a; _ -> null } == new X(4,9)", true);
     test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(4,9)", true);
     testError("class X{int i;long j}; X[] x = [new X(3,7),new X(4,9)]; switch (x) { [X(3),X(3)] -> 4; [X(i:3,j:7),X(i:3,j:9)] -> 3; _ -> null }", "does not match mandatory field count");
-    test("class X{int i;long j}; X[] x = [new X(3,7),new X(4,9)]; switch (x) { [X(i:3,j:7),X(i:3,j:7)] -> 4; [X(i:3,j:7),X(i:4,j:9)] -> 3; _ -> null }", 3);
-    test("class X{int i;long j}; X[] x = [new X(3,7),new X(4,9)]; switch (x) { [_,X(i:3,j:7)] -> 4; [X(i:3,j:7),_] -> 3; _ -> null }", 3);
-    test("class X{int i;long j}; X[] x = [new X(3,7),new X(4,9)]; switch (x) { [_,X(i:3,j:7)] -> 3; [X(i:3,j:7),a] -> a; _ -> null } == new X(4,9)",true);
-    test("class X{int i;long j}; def x = [new X(3,7),new X(4,9)] as X[]; switch (x) { [X(i:3,j:7),X(i:3,j:7)] -> 4; [X(i:3,j:7),X(i:4,j:9)] -> 3; _ -> null }", 3);
-    test("class X{int i;long j}; def x = [new X(3,7),new X(4,9)] as X[]; switch (x) { [X(i:3,j:7),X(i:3,j:7)] -> 4; [_,X(i:4,j:9)] -> 3; _ -> null }", 3);
-    test("class X{int i;long j}; def x = [new X(3,7),new X(4,9)] as X[]; switch (x) { [X(i:3,j:7),X(i:3,j:7)] -> 4; [a,X(i:4,j:9)] -> a; _ -> null } == new X(3,7)", true);
-    testError("class X{int i;long j}; X[][] x = [[new X(3,7)], [new X(4,9)]]; switch (x) { [_,X(i:3,j:7)] -> 3; [X(i:3,j:7),a] -> a; _ -> null }", "can never match");
-    test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [[X(i:3,j:7)],[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [[X(i:3L,j:7)],[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [[X(i:3D,j:7)],[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [[X(i:(Decimal)3,j:7)],[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [[X(i:3,j:7)],_] -> 4; _ -> null }", 4);
-    test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [_,[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [[X(i:3,j:7)],[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [[X(i:3L,j:7)],[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [[X(i:3D,j:7)],[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [[X(i:(Decimal)3,j:7)],[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [[X(i:3,j:7)],_] -> 4; _ -> null }", 4);
-    test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [_,[a]] -> a; _ -> null } == new X(4,9)", true);
-    test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(4,9)", true);
+    test("class X{int i;long j}; X[] x = [new X(3,7),new X(4,9)]; switch (x) { [X(i:3,j:7L),X(i:3,j:7L)] -> 4; [X(i:3,j:7L),X(i:4,j:9L)] -> 3; _ -> null }", 3);
+    test("class X{int i;long j}; X[] x = [new X(3,7),new X(4,9)]; switch (x) { [_,X(i:3,j:7L)] -> 4; [X(i:3,j:7L),_] -> 3; _ -> null }", 3);
+    test("class X{int i;long j}; X[] x = [new X(3,7),new X(4,9)]; switch (x) { [_,X(i:3,j:7L)] -> 3; [X(i:3,j:7L),a] -> a; _ -> null } == new X(4,9)",true);
+    test("class X{int i;long j}; def x = [new X(3,7),new X(4,9)] as X[]; switch (x) { [X(i:3,j:7L),X(i:3,j:7L)] -> 4; [X(i:3,j:7L),X(i:4,j:9L)] -> 3; _ -> null }", 3);
+    test("class X{int i;long j}; def x = [new X(3,7),new X(4,9)] as X[]; switch (x) { [X(i:3,j:7L),X(i:3,j:7L)] -> 4; [_,X(i:4,j:9L)] -> 3; _ -> null }", 3);
+    test("class X{int i;long j}; def x = [new X(3,7),new X(4,9)] as X[]; switch (x) { [X(i:3,j:7L),X(i:3,j:7L)] -> 4; [a,X(i:4,j:9L)] -> a; _ -> null } == new X(3,7)", true);
+    testError("class X{int i;long j}; X[][] x = [[new X(3,7)], [new X(4,9)]]; switch (x) { [_,X(i:3,j:7L)] -> 3; [X(i:3,j:7L),a] -> a; _ -> null }", "can never match");
+    test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3,j:7L)]] -> 3; [[X(i:3,j:7L)],[a]] -> a; _ -> null } == new X(4,9)", true);
+    testError("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3,j:7L)]] -> 3; [[X(i:3L,j:7L)],[a]] -> a; _ -> null } == new X(4,9)", "can never match");
+    testError("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3,j:7L)]] -> 3; [[X(i:3D,j:7L)],[a]] -> a; _ -> null } == new X(4,9)", "can never match");
+    testError("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3,j:7L)]] -> 3; [[X(i:(Decimal)3,j:7L)],[a]] -> a; _ -> null } == new X(4,9)", "can never match");
+    test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3,j:7L)]] -> 3; [[X(i:3,j:7L)],_] -> 4; _ -> null }", 4);
+    test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3,j:7L)]] -> 3; [_,[a]] -> a; _ -> null } == new X(4,9)", true);
+    test("class X{int i;long j}; X[][] x = [[new X(3,7)],[new X(4,9)]]; switch (x) { [[_],[X(i:3,j:7L)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(4,9)", true);
+    test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7L)]] -> 3; [[X(i:3,j:7L)],[a]] -> a; _ -> null } == new X(4,9)", true);
+    test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7L)]] -> 3; [[X(i:3,j:7L)],_] -> 4; _ -> null }", 4);
+    test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7L)]] -> 3; [_,[a]] -> a; _ -> null } == new X(4,9)", true);
+    test("class X{int i;long j}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7L)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(4,9)", true);
     testError("class X{int i;long j=7}; def x = [[new X(3,7)],[new X(4,9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(4,9)", "too many arguments");
-    test("class X{int i;long j=7}; def x = [[new X(3)],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(i:4,j:9)", true);
-    test("class X{int i;long j=7}; def x = [[new X(i:3,j:7)],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(i:3,j:7)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(i:4,j:9)", true);
-    test("class X{int i;long j=7}; def x = [[new X(i:3,j:7)],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(3)],[a]] -> a; _ -> null } == new X(i:4,j:9)", true);
-    test("class X{int i;long j=7}; def x = [[new X(i:3,j:7)],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:3,j:7)],[a]] -> a; _ -> null } == new X(i:4,j:9)", true);
-    test("class X{int i;long j=7}; def x = [[new X(i:3,j:7)],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:_,j:7)],[a]] -> a; _ -> null } == new X(i:4,j:9)", true);
-    test("class X{int i;long j=7;List list=[]}; def x = [[new X(i:3,j:7,list:[1,2,3])],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:_,j:7,list:[1,2,_])],[a]] -> a; _ -> null } == new X(i:4,j:9)", true);
-    test("class X{int i;long j=7;List list=[]}; def x = [[new X(i:3,j:7,list:[1,2,3])],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:_,j:7,list:[1,2,int b])],[a]] -> a; _ -> null } == new X(i:4,j:9)", true);
-    test("class X{int i;long j=7;List list=[]}; def x = [[new X(i:3,j:7,list:[1,2,3])],[new X(i:4,j:9)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:_,j:long c,list:[1,2,int b])],[a]] -> a.i + a.j + b + c; _ -> null }", 4+9L+7+3);
+    test("class X{int i;long j=7}; def x = [[new X(3)],[new X(i:4,j:9L)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(i:4,j:9L)", true);
+    test("class X{int i;long j=7}; def x = [[new X(i:3,j:7L)],[new X(i:4,j:9L)]] as X[][]; switch (x) { [[_],[X(i:3,j:7L)]] -> 3; [_,[X a]] -> a; _ -> null } == new X(i:4,j:9L)", true);
+    test("class X{int i;long j=7}; def x = [[new X(i:3,j:7L)],[new X(i:4,j:9L)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(3)],[a]] -> a; _ -> null } == new X(i:4,j:9L)", true);
+    test("class X{int i;long j=7}; def x = [[new X(i:3,j:7L)],[new X(i:4,j:9L)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:3,j:7L)],[a]] -> a; _ -> null } == new X(i:4,j:9L)", true);
+    test("class X{int i;long j=7}; def x = [[new X(i:3,j:7L)],[new X(i:4,j:9L)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:_,j:7L)],[a]] -> a; _ -> null } == new X(i:4,j:9L)", true);
+    test("class X{int i;long j=7;List list=[]}; def x = [[new X(i:3,j:7L,list:[1,2,3])],[new X(i:4,j:9L)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:_,j:7L,list:[1,2,_])],[a]] -> a; _ -> null } == new X(i:4,j:9L)", true);
+    test("class X{int i;long j=7;List list=[]}; def x = [[new X(i:3,j:7L,list:[1,2,3])],[new X(i:4,j:9L)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:_,j:7L,list:[1,2,int b])],[a]] -> a; _ -> null } == new X(i:4,j:9L)", true);
+    test("class X{int i;long j=7;List list=[]}; def x = [[new X(i:3,j:7L,list:[1,2,3])],[new X(i:4,j:9L)]] as X[][]; switch (x) { [[_],[X(3)]] -> 3; [[X(i:_,j:long c,list:[1,2,int b])],[a]] -> a.i + a.j + b + c; _ -> null }", 4+9L+7+3);
+    test("switch ([a:null, b:1]) { [a:null, b:v] -> \"matched v=$v\"; default -> 'no match' }", "matched v=1");
+    test("switch ([a:null]) { [a:v] -> \"matched v=$v\"; default -> 'no match' }", "matched v=null");
+    test("class X { String s }; switch (new X(null)) { X(s:v) -> \"matched v=$v\"; default -> 'no match' }", "matched v=null");
+    test("class X { String s }; switch (new X(null)) { X(s:null) -> 'matched'; default -> 'no match' }", "matched");
+    test("switch ([a:[b:null]]) { [a:[b:v]] -> \"nested v=$v\"; default -> 'no match' }", "nested v=null");
+    test("class X { List l }; switch (new X(null)) { X(l:[1]) -> 'list'; X(l:null) -> 'null'; default -> 'no match' }", "null");
+    test("switch ([:]) { [a:v] -> 'matched'; default -> 'no match' }", "no match");
+    test("switch ([a:null]) { [a:String v] -> 'matched'; default -> 'no match' }", "no match");
+    test("class X { String s }; switch (new X(null)) { X(s:String v) -> 'matched'; default -> 'no match' }", "no match");
+    test("switch ([a:null]) { [a:1] -> 'one'; default -> 'no match' }", "no match");
+    test("switch ([a:null]) { [a:[1]] -> 'list'; default -> 'no match' }", "no match");
+    test("class Y { int i }; class X { Y y }; switch (new X(null)) { X(y:Y(i:1)) -> 'y'; default -> 'no match' }", "no match");
+    testError("class X { double d; int i; long j }; def x = new X(2.5D, 3000, 2L); switch (x) { X(d:int a) -> 'int'; default -> 'no match' }", "can never match");
+    testError("class X { double d; int i; long j }; def x = new X(2.5D, 3000, 2L); switch (x) { X(i:byte b) -> 'byte'; default -> 'no match' }", "can never match");
+    testError("class X { double d; int i; long j }; def x = new X(2.5D, 3000, 2L); switch (x) { X(j:2) -> 'int 2'; default -> 'no match' }", "can never match");
+    testError("class X { int i }; def x = new X(1); switch (x) { X(i:String s) -> 's'; default -> 'no match' }", "can never match");
+    testError("class X { int i }; def x = new X(1); switch (x) { X(i:'abc') -> 's'; default -> 'no match' }", "can never match");
+    testError("class X { int i }; def x = new X(1); switch (x) { X(i:[a,b]) -> 'list'; default -> 'no match' }", "can never match");
+    test("class X { int i }; def x = new X(1); switch (x) { X(i:int a) -> \"a=$a\"; default -> 'no match' }", "a=1");
+    test("class X { long j }; def x = new X(2L); switch (x) { X(j:2L) -> 'long 2'; default -> 'no match' }", "long 2");
+    test("class X { def v }; def x = new X(2.5D); switch (x) { X(v:int a) -> 'int'; default -> 'no match' }", "no match");
+    test("class X { def v }; def x = new X(2); switch (x) { X(v:int a) -> \"int $a\"; default -> 'no match' }", "int 2");
+    testError("class X { double d }; def x = new X(2.5D); switch (x) { X(int a) -> 'int'; default -> 'no match' }", "can never match");
+    testError("class X { int i }; def x = new X(2); switch (x) { X(byte b) -> 'byte'; default -> 'no match' }", "can never match");
+    testError("class X { long j }; def x = new X(2L); switch (x) { X(2) -> 'int 2'; default -> 'no match' }", "can never match");
+    testError("class X { int i }; X x = new X(1); switch (x) { X('a') -> 's'; default -> 'no match' }", "can never match");
+    test("class X { int i }; def x = new X(2); switch (x) { X(int a) -> \"a=$a\"; default -> 'no match' }", "a=2");    
   }
 
   @Test public void switchTypeBoolean() {
@@ -1229,5 +1540,24 @@ public class SwitchTests extends BaseTest {
     test("def x = ''.map{ switch { /(c)/r -> [$1.size()] } }; x.toString()", "[]");
     test("'abc'.map{ switch { /(c)/r -> [$1.size()] } }", Utils.listOf(null,null,Utils.listOf(1)));
     test("''.map{ switch {\n /broadcaster.*-> *(.*)/r -> ['broadcaster', $1.split(/, */)]\n  /^([&%])(.*) *-> *(.*)/r -> [$1, $2, $3]\n}}\n", Utils.listOf());
+  }
+  
+  @Test public void async() {
+    test("def x = 2; 10 + switch (x) { 1 -> 1; 2 -> sleep(0, 5); 3 -> 3; default -> 0 }", 15);
+    test("def x = 2; 'r=' + switch (x) { int i if i == sleep(0, 2) -> 'two'; default -> 'd' }", "r=two");
+    test("def x = [a:1]; 'r=' + switch (x) { [a:${sleep(0, 1)}] -> 'y'; default -> 'n' }", "r=y");
+    test("def x = 2; [1, switch (x) { 1 -> 1; 2 -> sleep(0, 5); 3 -> 3; default -> 0 }]", Utils.listOf(1, 5));
+    test("def x = 4; 10 + switch (x) { 1 -> 1; 2 -> 2; 3 -> 3; default -> sleep(0, 7) }", 17);
+    test("def x = 2; 'r=' + switch (x) { 2 if sleep(0, true) -> 'two'; default -> 'd' }", "r=two");
+    test("def f(a, b) { a + b }; def x = 2; f(10, switch (x) { 1 -> 1; 2 -> sleep(0, 5); 3 -> 3; default -> 0 })", 15);
+    test("def x = 2; 10 + switch (x) { 1 -> 1; 2 -> 2; 3 -> 3; default -> 0 }", 12);    
+  }
+  
+  @Test public void subclasses() {
+    test("class A {}; class B extends A {}; class C extends A {}; def x = 2; def r = switch (x) { 1 -> new B(); default -> new C() }; r instanceof C", true);
+    test("class A {}; class B extends A {}; class C extends A {}; def x = 1; A r = switch (x) { 1 -> new B(); default -> new C() }; r instanceof B", true);
+    test("class A { int i = 1 }; class B extends A {}; class C extends A {}; def x = 2; switch (x) { 1 -> new B(); default -> new C() }.i", 1);
+    test("class A {}; class B extends A {}; class C extends A {}; class Dd extends B {}; def x = 1; def r = switch (x) { 1 -> new Dd(); default -> new C() }; r instanceof Dd", true);
+    test("class P {}; class Q {}; def x = 1; def r = switch (x) { 1 -> new P(); default -> new Q() }; r instanceof P", true);
   }
 }

@@ -497,14 +497,22 @@ public class BaseTest {
   }
 
   protected void testError(String code, String expectedError) {
-    testError(Utils.listOf(), code, expectedError);
+    testError(code, expectedError, -1);
+  }
+  
+  protected void testError(String code, String expectedError, int numErrors) {
+    testError(Utils.listOf(), code, expectedError, numErrors);
   }
 
   protected void testError(List<String> classCode, String scriptCode, String expectedError) {
+    testError(classCode, scriptCode, expectedError, -1);
+  }
+  
+  protected void testError(List<String> classCode, String scriptCode, String expectedError, int numErrors) {
     testCounter++;
-    doTestError(classCode, scriptCode, true, false, expectedError);
+    doTestError(classCode, scriptCode, true, false, expectedError, numErrors);
     if (!alwaysEvalConsts) {
-      doTestError(classCode, scriptCode, false, false, expectedError);
+      doTestError(classCode, scriptCode, false, false, expectedError, numErrors);
     }
 
     // Tests in repl mode may have different errors or no errors compared
@@ -515,7 +523,7 @@ public class BaseTest {
   }
 
   protected void replError(String code, String expectedError) {
-    doTestError(Utils.listOf(), code, true, true, expectedError);
+    doTestError(Utils.listOf(), code, true, true, expectedError, -1);
   }
 
   protected void replTest(Object expected, String... code) {
@@ -551,7 +559,7 @@ public class BaseTest {
     }
   }
 
-  protected void doTestError(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, String expectedError) {
+  protected void doTestError(List<String> classCode, String scriptCode, boolean evalConsts, boolean replMode, String expectedError, int numErrors) {
     testVariationCounter++;
     try {
       JactlContext jactlContext = getJactlContext(evalConsts, replMode, false, limitsSet); 
@@ -564,6 +572,12 @@ public class BaseTest {
       if (e.getMessage() == null) {
         e.printStackTrace();
         fail("Error: " + e);
+      }
+      if (numErrors > 0) {
+        if (numErrors == 1 && e.getMessage().contains("errors found") ||
+            numErrors > 1 && !e.getMessage().contains(numErrors + " errors found")) {
+          fail("Number of errors found does not match " + numErrors + ": " + e.getMessage());
+        }
       }
       if (!e.getMessage().toLowerCase().contains(expectedError.toLowerCase())) {
         if (e instanceof CompileError) {

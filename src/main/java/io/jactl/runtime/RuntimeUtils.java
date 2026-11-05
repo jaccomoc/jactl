@@ -2682,7 +2682,12 @@ public class RuntimeUtils {
       Map<String,Object> m2 = (Map)o2;
       if (m1.size() != m2.size()) { return false; }
       for (Object key: m1.keySet()) {
-        if (!switchEquals(m1.get(key), m2.get(key))) {
+        Object m1val = m1.get(key);
+        Object m2val = m2.get(key);
+        if (m2val == null && !m2.containsKey(key)) {
+          return false;
+        }
+        if (!switchEquals(m1val, m2val)) {
           return false;
         }
       }
@@ -2692,15 +2697,20 @@ public class RuntimeUtils {
   }
 
   /**
-   * Get integer value or null if not int/byte
+   * Get integer value or null
    */
   public static final MethodRef INT_VALUE_METHOD = Utils.getMethod(RuntimeUtils.class, "intValue", Object.class);
   public static Integer intValue(Object obj) {
     if (obj instanceof Integer) {
       return (Integer)obj;
     }
+    return null;
+  }
+
+  public static final MethodRef BYTE_VALUE_METHOD = Utils.getMethod(RuntimeUtils.class, "byteValue", Object.class);
+  public static Byte byteValue(Object obj) {
     if (obj instanceof Byte) {
-      return ((Byte)obj).intValue();
+      return (Byte)obj;
     }
     return null;
   }

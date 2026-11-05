@@ -639,7 +639,7 @@ public class LocalTypes {
     }
   }
 
-  private JactlType localsType(int slot) {
+  JactlType localsType(int slot) {
     assert slot >= 0 : "slot is " + slot + " but should be >= 0";
     LocalEntry entry = locals.get(slot);
     assert entry != null : "trying to get type of null entry";

@@ -236,6 +236,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   public static final MethodRef INT_VALUE_METHOD               = Utils.getMethod(Integer.class, "intValue");
   public static final MethodRef LONG_VALUE_METHOD              = Utils.getMethod(Long.class, "longValue");
   public static final MethodRef DOUBLE_VALUE_METHOD            = Utils.getMethod(Double.class, "doubleValue");
+  public static final MethodRef DOUBLE_COMPARE_METHOD          = Utils.getMethod(Double.class, "compare", double.class, double.class);
   public static final MethodRef NUMBER_BYTE_VALUE_METHOD       = Utils.getMethod(Number.class, "byteValue");
   public static final MethodRef NUMBER_INT_VALUE_METHOD        = Utils.getMethod(Number.class, "intValue");
   public static final MethodRef NUMBER_LONG_VALUE_METHOD       = Utils.getMethod(Number.class, "longValue");
@@ -2063,7 +2064,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
-  private static boolean couldBeNull(Expr expr) {
+  static boolean couldBeNull(Expr expr) {
     // Can't be null if "this" or "super"
     if (expr.isSuper() || expr.isThis()) {
       return false;
@@ -5017,8 +5018,13 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     expect(1);
     if (type.is(ARRAY) && type.getArrayElemType() == null) {
       // Just want to know if we have an array and don't care about the actual type
-      invokeMethod(OBJECT_GET_CLASS_METHOD);
-      invokeMethod(CLASS_IS_ARRAY_METHOD);
+      emitIf(false, IfTest.IS_NOTNULL,
+             () -> dupVal(),
+             () -> {
+               invokeMethod(OBJECT_GET_CLASS_METHOD);
+               invokeMethod(CLASS_IS_ARRAY_METHOD);
+             },
+             () -> { popVal(); loadConst(false); });
     }
     else {
       mv.visitTypeInsn(INSTANCEOF, type.boxed().getInternalName());

@@ -1639,7 +1639,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     // For capture vars type is always ANY since value can be either a String or a number
-    if (name.charAt(0) == '$' || isSpecialMatchIdentifier) {
+    if (name.charAt(0) == '$' && Utils.isDigits(name.substring(1)) || isSpecialMatchIdentifier) {
       return expr.type = ANY;
     }
 

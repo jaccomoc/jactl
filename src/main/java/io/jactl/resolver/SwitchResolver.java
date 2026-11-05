@@ -42,8 +42,10 @@ public class SwitchResolver {
       c.block.stmts.stmts.add(new Stmt.ExprStmt(location, c));
       block.stmts.stmts.add(c.block);
     });
+    if (expr.defaultCase != null) {
+      block.stmts.stmts.add(new Stmt.ExprStmt(expr.defaultCase.location, expr.defaultCase));
+    }
     resolver.resolve(block);
-    resolver.resolve(expr.defaultCase);
 
     // If we have no errors then do some more checks
     if (resolver.getErrors().isEmpty()) {
@@ -51,13 +53,18 @@ public class SwitchResolver {
       
       // Check that if there is a pattern covering all cases that there are no subsequent patterns and no default
       Set<JactlType> coveredTypes = new HashSet<>();
+      Set<Expr> erroredExprs = new HashSet<>();
       expr.cases.forEach(c -> c.patterns.forEach(pair -> {
         Expr      pattern = pair.first;
         Expr      ifCond  = pair.second;
         JactlType type    = coveringType(pattern);
         for (JactlType ct : coveredTypes) {
-          if (ct.is(ANY) || ct.is(subjectType) || ct.isAssignableFrom(pattern.type) || (type != null && ct.isAssignableFrom(type))) {
-            resolver.error("Unreachable switch case (covered by a previous case)", pattern.location);
+          if (ct.is(ANY) || ct.equals(subjectType) || ct.equals(pattern.type) || ct.isAssignableFrom(pattern.type) || (type != null && ct.isAssignableFrom(type))) {
+            if (!ct.is(ANY) && (pattern.isNull() || type != null && type.is(ANY) && expr.subject.couldBeNull)) {
+              continue;
+            }
+            resolver.error("Switch pattern will never be evaluated (covered by a previous pattern)", pattern.location);
+            erroredExprs.add(pair.first);
             break;
           }
         }
@@ -79,7 +86,9 @@ public class SwitchResolver {
             expr.defaultCase = null;
           }
           else {
-            resolver.error("Default case is never applicable due to switch case that matches all input", expr.defaultCase.location);
+            if (!expr.subject.couldBeNull) {
+              resolver.error("Default case is never applicable due to switch case that matches all input", expr.defaultCase.location);
+            }
           }
         }
       }
@@ -92,7 +101,7 @@ public class SwitchResolver {
           }
         }
       }
-      validateNotCovered(resolver, list);
+      validateNotCovered(resolver, list, erroredExprs);
     }
     
     if (expr.defaultCase == null) {
@@ -147,7 +156,7 @@ public class SwitchResolver {
         return true;
       }
       if (subjectType.is(INSTANCE) && patType.is(INSTANCE)) {
-        return subjectType.isConvertibleTo(patType, true);
+        return subjectType.isConvertibleTo(patType, true) || patType.isConvertibleTo(subjectType, true);
       }
       return subjectType.isBoxedOrUnboxed(patType);
     }
@@ -169,14 +178,17 @@ public class SwitchResolver {
     return subjectType.isConvertibleTo(patType, true);
   }
 
-  private static void validateNotCovered(Resolver resolver, List<Expr> patterns) {
+  private static void validateNotCovered(Resolver resolver, List<Expr> patterns, Set<Expr> erroredExprs) {
     // For each pattern after the first one check there are no previous ones that are a superset
     // of the current pattern
+   OUTER: 
     for (int i = 1; i < patterns.size(); i++) {
       Expr pattern = patterns.get(i);
       for (int j = 0; j < i; j++) {
-        if (covers(patterns.get(j), pattern)) {
+        if (covers(patterns.get(j), pattern) && !erroredExprs.contains(pattern)) {
           resolver.error("Switch pattern will never be evaluated (covered by a previous pattern)", pattern.location);
+          erroredExprs.add(pattern);
+          continue OUTER;
         }
       }
     }
@@ -189,16 +201,16 @@ public class SwitchResolver {
   }
 
   private static boolean covers(Expr pattern1, Expr pattern2, Map<String,Expr> bindings) {
-    if (isUnderscore(pattern1) || pattern1.isStar()) {
-      return true;
-    }
+    if (pattern1.isStar())      { return true; }
+    if (pattern2.isStar())      { return false; }
+    if (isUnderscore(pattern1)) { return true; }
     if (pattern1 instanceof Expr.TypeExpr || pattern1 instanceof Expr.VarDecl) {
       JactlType t1 = pattern1 instanceof Expr.TypeExpr ? ((Expr.TypeExpr) pattern1).typeVal : pattern1.type;
       JactlType t2 = pattern2.patternType();
       if (pattern1 instanceof Expr.VarDecl) {
         bindings.put(((Expr.VarDecl) pattern1).name.getStringValue(), pattern2);
       }
-      return t1.is(ANY) || t1.is(t2) || t1.isAssignableFrom(t2);
+      return t1.is(ANY) || t1.equals(t2) || t1.isAssignableFrom(t2);
     }
     if (pattern1.isLiteral() && pattern1.isConst && pattern2.isLiteral() && pattern2.isConst) {
       return RuntimeUtils.switchEquals(pattern1.constValue, pattern2.constValue);
@@ -211,11 +223,6 @@ public class SwitchResolver {
       if (!(pattern2 instanceof Expr.ListLiteral))           { return false; }
       List<Expr> l1 = ((Expr.ListLiteral) pattern1).exprs;
       List<Expr> l2 = ((Expr.ListLiteral) pattern2).exprs;
-      for (Expr expr : l2) {
-        if (expr.isStar()) {
-          return false;
-        }
-      }
       boolean l1HasStar = false;
       for (Expr expr : l1) {
         if (expr.isStar()) {
@@ -226,9 +233,13 @@ public class SwitchResolver {
       if (l1.size() - (l1HasStar ? 1 : 0) > l2.size())   { return false; }
       if (l2.size() > l1.size() && !l1HasStar)           { return false; }
       for (int i = 0, star = 0; i < l1.size(); i++) {
-        Expr e1 = l1.get(i);
-        Expr e2 = l2.get(star>0 ? i-l1.size()+l2.size() : i);
-        star += e1.isStar()?1:0;
+        Expr e1    = l1.get(i);
+        if (e1.isStar()) {
+          star++;
+          continue;
+        }
+        int  e2Idx = star > 0 ? i - l1.size() + l2.size() : i;
+        Expr e2    = l2.get(e2Idx);
         if (!covers(e1,e2,bindings))                      { return false; }
       }
       return true;
@@ -237,11 +248,6 @@ public class SwitchResolver {
       if (!(pattern2 instanceof Expr.MapLiteral))                   { return false; }
       List<Pair<Expr,Expr>> entries1 = ((Expr.MapLiteral) pattern1).entries;
       List<Pair<Expr,Expr>> entries2 = ((Expr.MapLiteral) pattern2).entries;
-      for (Pair<Expr, Expr> exprExprPair : entries2) {
-        if (exprExprPair.first.isStar()) {
-          return false;
-        }
-      }
       boolean l1HasStar = false;
       for (Pair<Expr, Expr> exprExprPair : entries1) {
         if (exprExprPair.first.isStar()) {
@@ -251,7 +257,7 @@ public class SwitchResolver {
       }
       if (entries1.size() - (l1HasStar ? 1 : 0) > entries2.size())   { return false; }
       if (entries2.size() > entries1.size() && !l1HasStar)           { return false; }
-      Map<String, Expr> m1 = new HashMap<>();
+      Map<String, Expr> m1 = new LinkedHashMap<>();
       for (Pair<Expr, Expr> exprExprPair : entries1) {
         if (!exprExprPair.first.isStar()) {
           if (m1.put(((Expr.Literal) exprExprPair.first).value.getStringValue(), exprExprPair.second) != null) {
@@ -259,7 +265,7 @@ public class SwitchResolver {
           }
         }
       }
-      Map<String, Expr> m2 = new HashMap<>();
+      Map<String, Expr> m2 = new LinkedHashMap<>();
       for (Pair<Expr, Expr> p : entries2) {
         if (m2.put(((Expr.Literal) p.first).value.getStringValue(), p.second) != null) {
           throw new IllegalStateException("Duplicate key");
@@ -286,7 +292,20 @@ public class SwitchResolver {
       return true;
     }
     if (pattern1 instanceof Expr.Identifier && pattern1.isTypePattern()) {
-      return covers(bindings.get(((Expr.Identifier) pattern1).identifier.getStringValue()), pattern2, bindings);
+      String name    = ((Expr.Identifier) pattern1).identifier.getStringValue();
+      Expr   binding = bindings.get(name);
+      if (binding == null) {
+        bindings.put(name, pattern2);
+        return true;
+      }
+      if (binding instanceof Expr.VarDecl && pattern2 instanceof Expr.Identifier &&
+          ((Expr.VarDecl)binding).name.getStringValue().equals(((Expr.Identifier) pattern2).identifier.getStringValue())) {
+        return true;
+      }
+      if (binding.isLiteral() && binding.isConst && pattern2.isLiteral() && pattern2.isConst) {
+        return RuntimeUtils.switchEquals(binding.constValue, pattern2.constValue);
+      }
+      return false;
     }
     return false;
   }
@@ -294,13 +313,14 @@ public class SwitchResolver {
   public static JactlType visitConstructorPattern(Resolver resolver, Expr.ConstructorPattern expr) {
     resolver.resolve(expr.typeExpr);
     resolver.resolve(expr.args);
-    JactlClassDescriptor descriptor = expr.typeExpr.patternType().getJactlClassDescriptor();
+    JactlType            parentType = expr.typeExpr.patternType();
+    JactlClassDescriptor descriptor = parentType.getJactlClassDescriptor();
     if (descriptor != null) {
       List<Map.Entry<String, JactlType>> constructorArgs = new ArrayList<>(descriptor.getAllMandatoryFields().entrySet());
       // Transform unnamed args into named args
       if (expr.args instanceof Expr.ListLiteral) {
         Expr.MapLiteral mapLiteral = new Expr.MapLiteral(expr.args.location);
-        mapLiteral.literalKeyMap = new HashMap<>();
+        mapLiteral.literalKeyMap = new LinkedHashMap<>();
         List<Expr> exprs = ((Expr.ListLiteral) expr.args).exprs;
         if (exprs.size() != constructorArgs.size()) {
           resolver.error("Argument count for constructor pattern does not match mandatory field count of " + constructorArgs.size(), expr.args.location);
@@ -308,9 +328,8 @@ public class SwitchResolver {
         for (int i = 0; i < Math.min(exprs.size(), constructorArgs.size()); i++) {
           Expr                         arg              = exprs.get(i);
           Map.Entry<String, JactlType> constructorParam = constructorArgs.get(i);
-          if (!arg.type.isConvertibleTo(constructorParam.getValue())) {
-            resolver.error("Argument value of type " + arg.type + " incompatible with type " + constructorParam.getValue() + " of field " + constructorParam.getKey(), arg.location);
-          }
+          // Check for compatibility and generate appropriate error
+          isCompatible(resolver, parentType, constructorParam.getValue(), arg);
           mapLiteral.literalKeyMap.put(constructorParam.getKey(), arg);
           Expr.Literal fieldName = new Expr.Literal(arg.location.newIdent(constructorParam.getKey()));
           resolver.resolve(fieldName);
@@ -319,15 +338,21 @@ public class SwitchResolver {
         expr.args = mapLiteral;
       }
       else {
-        // Validate that the fields listed actually exist
-        ((Expr.MapLiteral) expr.args).entries.stream()
-                                             .map(pair -> pair.first)
-                                             .filter(field -> !descriptor.getAllFields().containsKey(field.constValue))
-                                             .findFirst()
-                                             .ifPresent(field -> resolver.error("Field " + field.constValue + " does not exist in class " + expr.typeExpr.patternType(), field.location));
+        // Validate that the fields listed actually exist and that types are compatible
+        for (Pair<Expr,Expr> pair: ((Expr.MapLiteral)expr.args).entries) {
+          String fieldName = (String)pair.first.constValue;
+          if (!descriptor.getAllFields().containsKey(fieldName)) {
+            resolver.error("Field " + fieldName + " does not exist in class " + parentType, pair.first.location);
+            continue;
+          }
+          JactlType fieldType   = descriptor.getField(fieldName);
+          JactlType patternType = pair.second.patternType();
+          // Check for compatibility
+          isCompatible(resolver, parentType, fieldType, pair.second);
+        }
       }
     }
-    return expr.type = expr.typeExpr.patternType();
+    return expr.type = parentType;
   }
 
   public static JactlType visitSwitchCase(Resolver resolver, Expr.SwitchCase caseExpr) {
@@ -496,7 +521,7 @@ public class SwitchResolver {
           list.add(exprExprPair);
         }
         args.entries = list;
-        Map<String, Expr> map = new HashMap<>();
+        Map<String, Expr> map = new LinkedHashMap<>();
         for (Pair<Expr, Expr> p : args.entries) {
           if (map.put(((Expr.Literal) p.first).value.toString(), p.second) != null) {
             throw new IllegalStateException("Duplicate key");

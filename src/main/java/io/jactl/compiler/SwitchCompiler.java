@@ -13,6 +13,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static io.jactl.JactlType.*;
+import static io.jactl.JactlType.DOUBLE;
 import static io.jactl.JactlType.LONG;
 import static org.objectweb.asm.Opcodes.*;
 
@@ -21,6 +22,11 @@ import static org.objectweb.asm.Opcodes.*;
  */
 public class SwitchCompiler {
   public static Void visitSwitch(MethodCompiler mc, Expr.Switch expr) {
+    // If we have async code we need to make sure that the stack is preserved
+    if (expr.isAsync) {
+      mc.stack.convertStackToLocals();
+    }
+    
     mc.compile(expr.subject);
     mc.defineVar(expr.itVar);
     mc.storeVar(expr.itVar);
@@ -118,11 +124,11 @@ public class SwitchCompiler {
                 Label endCheck = new Label();
                 Consumer<JactlType> loadValue = type -> {
                   mc.loadVar(expr.itVar);
-                  if (type != null && !type.is(ANY,LIST)) {
-                    mc.castTo(type, expr.subject, true, expr.subject.location);
+                  if (type != null && !type.is(LIST)) {
+                    mc.castTo(type, expr.subject, false, expr.subject.location);
                   }
                 };
-                compileMatchCaseTest(mc, loadValue, expr.subject.type, patternPair, expr.subject.location, endCheck);
+                compileMatchCaseTest(mc, loadValue, MethodCompiler.couldBeNull(expr.subject), expr.subject.type, patternPair, expr.subject.location, endCheck);
                 if (patternPair.second != null) {
                   // If pattern did not match
                   mc._dupVal();
@@ -130,6 +136,7 @@ public class SwitchCompiler {
                   mc.popVal();
                   // Evaluate the "if" expression part
                   mc.compile(patternPair.second);
+                  mc.convertTo(BOOLEAN, patternPair.second, MethodCompiler.couldBeNull(patternPair.second), patternPair.second.location);
                 }
                 mc.mv.visitLabel(endCheck);
               },
@@ -148,12 +155,12 @@ public class SwitchCompiler {
               () -> {});
   }
 
-  private static void compileMatchCaseTest(MethodCompiler mc, Consumer<JactlType> loadValue, JactlType subjectType, Pair<Expr, Expr> patternPair, Token subjectLocation, Label endCheck) {
+  private static void compileMatchCaseTest(MethodCompiler mc, Consumer<JactlType> loadValue, boolean couldBeNull, JactlType subjectType, Pair<Expr, Expr> patternPair, Token subjectLocation, Label endCheck) {
     Expr pattern = patternPair.first;
-    compileMatchCaseTest(mc, subjectType, pattern, subjectLocation, endCheck, loadValue);
+    compileMatchCaseTest(mc, couldBeNull, subjectType, pattern, subjectLocation, endCheck, loadValue);
   }
 
-  private static void compileMatchCaseTest(MethodCompiler mc, JactlType subjectType, Expr pattern, Token subjectLocation, Label endCheck, Consumer<JactlType> loadValue) {
+  private static void compileMatchCaseTest(MethodCompiler mc, boolean couldBeNull, JactlType subjectType, Expr pattern, Token subjectLocation, Label endCheck, Consumer<JactlType> loadValue) {
     Consumer<JactlType> ifCanConvertTo = (caseType) -> {
       // Check if type matches and if not jump to end with false on stack
       if (caseType.is(ANY)) { return; }
@@ -175,9 +182,23 @@ public class SwitchCompiler {
     }
     else if (pattern instanceof Expr.TypeExpr || pattern instanceof Expr.Identifier || pattern instanceof Expr.VarDecl) {
       if (pattern instanceof Expr.TypeExpr) {
-        if (subjectType.isBoxedOrUnboxed(patternType)) {
+        if (patternType.is(ANY)) {
+          mc.loadConst(true);
+          return;
+        }
+        if (subjectType.equals(patternType) ||
+            !subjectType.is(ANY) && patternType.isAssignableFrom(subjectType) || 
+            patternType.unboxed().isPrimitive() && subjectType.isBoxedOrUnboxed(patternType)) {
           if (subjectType.equals(patternType)) {
-            mc.loadConst(true);
+            if (couldBeNull) {
+              mc.emitIf(false, MethodCompiler.IfTest.IS_NOTNULL,
+                        () -> loadValue.accept(null),
+                        () -> mc.loadConst(true),
+                        () -> mc.loadConst(false)); 
+            }
+            else {
+              mc.loadConst(true);
+            }
           }
           else {
             // Check for boxed null not matching primitive
@@ -186,8 +207,9 @@ public class SwitchCompiler {
           return;
         }
       }
-      
-      if (!pattern.isStar() && !patternType.is(ANY) && !subjectType.is(patternType) && (subjectType.is(ANY) || subjectType.isBoxed())) {
+      boolean needsInstanceOf = subjectType.is(ANY) || subjectType.isBoxed() ||
+                                subjectType.is(INSTANCE) && patternType.is(INSTANCE) && !patternType.isAssignableFrom(subjectType);
+      if (!pattern.isStar() && !patternType.is(ANY) && !subjectType.equals(patternType) && needsInstanceOf) {
         loadValue.accept(ANY);
         mc.isInstanceOf(patternType);
         if (!(pattern instanceof Expr.TypeExpr)) {
@@ -197,17 +219,28 @@ public class SwitchCompiler {
         }
       }
       if (pattern instanceof Expr.VarDecl || (pattern instanceof Expr.Identifier && ((Expr.Identifier) pattern).firstTimeInPattern)) {
-        loadValue.accept(pattern.type);
-        mc.castTo(pattern.type, pattern, true, pattern.location);
-        mc.storeVar(pattern);
-        mc.loadConst(true);   // Binding variable on its own always matches
+        loadValue.accept(patternType);
+        Runnable compileVarDecl = () -> {
+          mc.castTo(patternType, pattern, true, pattern.location);
+          mc.storeVar(pattern);
+          mc.loadConst(true);   // Binding variable on its own always matches
+        };
+        if (!patternType.is(ANY) && !patternType.isPrimitive() && couldBeNull) {
+          mc.emitIf(false, MethodCompiler.IfTest.IS_NOTNULL,
+                    mc::dupVal,
+                    compileVarDecl,
+                    () -> { mc.popVal(); mc.loadConst(false); });
+        }
+        else {
+          compileVarDecl.run();
+        }
       }
       else if (pattern instanceof Expr.Identifier) {
-        loadValue.accept(pattern.type);
-        mc.convertTo(pattern.type, pattern, true, pattern.location);
+        loadValue.accept(patternType);
+        mc.convertTo(patternType, pattern, true, pattern.location);
         mc.compile(pattern);
         mc.expect(2);
-        checkForEquality(mc, pattern.type);
+        checkForEquality(mc, patternType);
       }
     }
     else if (pattern.isLiteral() || pattern instanceof Expr.ExprString) {
@@ -246,7 +279,7 @@ public class SwitchCompiler {
             break;
           }
         }
-        compileDestructuring(mc, subjectType, patternType, exprs.size(), anyIsStar, exprs, loadValue, subjectLocation, endCheck);
+        compileDestructuring(mc, subjectType, patternType, couldBeNull, exprs.size(), anyIsStar, exprs, loadValue, subjectLocation, endCheck);
       }
       else if (pattern instanceof Expr.MapLiteral) {
         if (!subjectType.is(ITERATOR, MAP, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
@@ -258,12 +291,12 @@ public class SwitchCompiler {
             break;
           }
         }
-        compileDestructuring(mc, subjectType, patternType, exprs.size(), anyIsStar, exprs, loadValue, subjectLocation, endCheck);
+        compileDestructuring(mc, subjectType, patternType, couldBeNull, exprs.size(), anyIsStar, exprs, loadValue, subjectLocation, endCheck);
       }
     } else if (pattern instanceof Expr.ConstructorPattern) {
       if (!subjectType.is(INSTANCE, ANY)) { throw new IllegalStateException("Internal error: unexpected type " + subjectType); }
       List<Pair<Expr,Expr>> exprs = ((Expr.MapLiteral)((Expr.ConstructorPattern) pattern).args).entries;
-      compileDestructuring(mc, subjectType, patternType, exprs.size(), false, exprs, loadValue, subjectLocation, endCheck);
+      compileDestructuring(mc, subjectType, patternType, couldBeNull, exprs.size(), false, exprs, loadValue, subjectLocation, endCheck);
     }
     else if (pattern instanceof Expr.RegexMatch) {
       mc.compileRegexMatch((Expr.RegexMatch)pattern, () -> {
@@ -287,8 +320,8 @@ public class SwitchCompiler {
     return expr instanceof Expr.Identifier && ((Expr.Identifier) expr).identifier.is(TokenType.UNDERSCORE);
   }
 
-  private static void compileDestructuring(MethodCompiler mc, JactlType parentType, JactlType patternType, int size, boolean hasStar, List exprs, Consumer<JactlType> loadValue, Token subjectLocation, Label endCheck) {
-    if (parentType.is(ANY)) {
+  private static void compileDestructuring(MethodCompiler mc, JactlType parentType, JactlType patternType, boolean couldBeNull, int size, boolean hasStar, List exprs, Consumer<JactlType> loadValue, Token subjectLocation, Label endCheck) {
+    if (!parentType.equals(patternType) || couldBeNull) {
       // Check for appropriate type
       loadValue.accept(ANY);
       mc.isInstanceOf(patternType.is(LIST) ? new JactlType[]{ ARRAY,LIST } : new JactlType[]{ patternType });
@@ -409,18 +442,32 @@ public class SwitchCompiler {
               continue;
             }
             loadValue.accept(MAP);
+            int mapSlot = mc.stack.allocateSlot(MAP);
+            mc.dupVal();
+            mc.storeLocal(mapSlot);
             mc.compile(keyVal.first);
+            mc.dupVal();
+            int keySlot = mc.stack.allocateSlot(ANY);
+            mc.storeLocal(keySlot);
             mc.expect(2);
             mc.invokeMethod(Utils.MAP_GET_METHOD);
             mc._dupVal();
             subElemSlot = subElemSlots.get(ANY);
             mc.storeLocal(subElemSlot);
-            Label isNotNull = new Label();
-            mc.mv.visitJumpInsn(IFNONNULL, isNotNull);
+            Label isPresent = new Label();
+            mc.mv.visitJumpInsn(IFNONNULL, isPresent);
+            // Check if field present if we get a null value
+            mc.loadLocal(mapSlot);
+            mc.loadLocal(keySlot);
+            mc.invokeMethod(Utils.MAP_CONTAINS_KEY_METHOD);
+            mc.popType();
+            mc.mv.visitJumpInsn(IFNE, isPresent);
             mc._loadConst(false);
             mc.mv.visitJumpInsn(GOTO, endCheck);
             isNotNull:
-            mc.mv.visitLabel(isNotNull);
+            mc.mv.visitLabel(isPresent);
+            mc.stack.freeSlot(mapSlot);
+            mc.stack.freeSlot(keySlot);
             break;
           }
           case INSTANCE: {
@@ -443,26 +490,22 @@ public class SwitchCompiler {
             }
             String fieldName = keyVal.first.constValue.toString();
             elemType = patternType.getClassDescriptor().getField(fieldName);
-            mc.loadClassField(patternType.getInternalName(), fieldName, elemType, false);
+            JactlType fieldClass = patternType.getClassDescriptor().getDeclaredClassForField(fieldName);
+            assert fieldClass != null: "Can't find declaring class for field " + fieldName;
+            if (!mc.peek().equals(fieldClass)) {
+              mc.checkCast(fieldClass);
+            }
+            mc.loadClassField(fieldClass.getInternalName(), fieldName, elemType, false);
             subElemSlot = subElemSlots.get(elemType);
             mc.storeLocal(subElemSlot);
-            if (elemType.isRef()) {
-              Label isNotNull = new Label();
-              mc._loadLocal(subElemSlot);
-              mc.mv.visitJumpInsn(IFNONNULL, isNotNull);
-              mc._loadConst(false);
-              mc.mv.visitJumpInsn(GOTO, endCheck);
-              isNotNull:
-              mc.mv.visitLabel(isNotNull);
-            }
             break;
           }
           default: throw new IllegalStateException("Internal error: unexpected type " + patternType);
         }
         int finalSubElemSlot = subElemSlot;
-        compileMatchCaseTest(mc, elemType, subExpr, subjectLocation, endCheck, t -> {
+        compileMatchCaseTest(mc, !mc.stack.localsType(subElemSlot).isPrimitive(), elemType, subExpr, subjectLocation, endCheck, t -> {
           mc.loadLocal(finalSubElemSlot);
-          if (t != null && !t.is(ANY,LIST)) {
+          if (t != null && !t.is(LIST)) {
             mc.convertTo(t, subExpr, true, subExpr.location);
           }
         });
@@ -494,20 +537,29 @@ public class SwitchCompiler {
 
   private static void checkForEquality(MethodCompiler mc, JactlType type) {
     if (type.isPrimitive()) {
-      int opCode = type.is(BOOLEAN,BYTE,INT) ? ISUB :
-                   type.is(LONG)             ? LCMP :
-                   DCMPL;
-      mc.mv.visitInsn(opCode);
-      mc.popType(2);
-      Label isTrue = new Label();
-      Label end    = new Label();
-      mc.mv.visitJumpInsn(IFEQ, isTrue);
-      mc._loadConst(false);
-      mc.mv.visitJumpInsn(GOTO, end);
-      mc.mv.visitLabel(isTrue);
-      mc._loadConst(true);
-      mc.mv.visitLabel(end);
-      mc.pushType(BOOLEAN);
+      if (type.is(DOUBLE)) {
+        mc.invokeMethod(MethodCompiler.DOUBLE_COMPARE_METHOD);
+        mc._loadConst(1);
+        mc.mv.visitInsn(IAND);
+        mc._loadConst(1);
+        mc.mv.visitInsn(IXOR);
+        mc.popType();
+        mc.pushType(BOOLEAN);
+      }
+      else {
+        int opCode = type.is(BOOLEAN, BYTE, INT) ? ISUB : LCMP;
+        mc.mv.visitInsn(opCode);
+        mc.popType(2);
+        Label isTrue = new Label();
+        Label end    = new Label();
+        mc.mv.visitJumpInsn(IFEQ, isTrue);
+        mc._loadConst(false);
+        mc.mv.visitJumpInsn(GOTO, end);
+        mc.mv.visitLabel(isTrue);
+        mc._loadConst(true);
+        mc.mv.visitLabel(end);
+        mc.pushType(BOOLEAN);
+      }
     }
     else {
       mc.invokeMethod(RuntimeUtils.SWITCH_EQUALS_METHOD);
@@ -525,10 +577,13 @@ public class SwitchCompiler {
     // a sparse table.
     // We use a heuristic that if the sparse table size would be more than 5 times as big
     // as the number of individual cases then we will use a LOOKUPSWITCH instead. This
-    // check only applies if the values are all integral types (numeric and not double/BigDecimal).
+    // check only applies if the values are all int or byte.
     // All other types we will generate a LOOKUPSWITCH for.
-    Function<Expr, Boolean> isIntegral = e -> e.isConst && e.constValue instanceof Number &&
-                                              !(e.constValue instanceof Double || e.constValue instanceof BigDecimal || e.constValue instanceof Long);
+    Object first = cases.get(0).first.constValue;
+    Class<?> literalClass = first == null ? null : first.getClass(); 
+    Function<Expr, Boolean> isIntegral = e -> e.isConst &&
+                                              (e.constValue instanceof Byte || e.constValue instanceof Integer) &&
+                                              e.constValue.getClass() == literalClass;
 
     // Check if all patterns are an integer value in which case we might be able to use a TABLESWITCH
     boolean useTable = true;
@@ -548,30 +603,35 @@ public class SwitchCompiler {
                                           .collect(Collectors.toMap(p -> p.second, p -> nonSimpleLabels.getOrDefault(p.second, new Label()), (a,b) -> a));
 
       // Sort literal values
+      Function<Object,Integer> intValue = n -> n instanceof Byte ? Byte.toUnsignedInt((byte)n) : ((Number)n).intValue(); 
       List<Pair<Integer,Label>> sorted = cases.stream()
-                                              .map(p -> Pair.of(((Number) p.first.constValue).intValue(), switchLabels.get(p.second)))
+                                              .map(p -> Pair.of(intValue.apply(p.first.constValue), switchLabels.get(p.second)))
                                               .sorted(Comparator.comparingInt(p -> p.first))
                                               .collect(Collectors.toList());
 
       // Make sure that we don't have so many values that the table would be too large
       int max   = sorted.get(sorted.size() - 1).first;
       int min   = sorted.get(0).first;
-      int range = max - min + 1;
-      if (range > 5 * sorted.size()) {
+      long range = (long)max - (long)min + 1;
+      if (range > 5L * sorted.size()) {
         useTable = false;
       }
       if (useTable) {
         // Make sure we have a subject of the right type
         switch (mc.peek().getType()) {
           case ANY: {
-            mc.invokeMethod(RuntimeUtils.INT_VALUE_METHOD);
+            mc.invokeMethod(literalClass == Byte.class ? RuntimeUtils.BYTE_VALUE_METHOD : RuntimeUtils.INT_VALUE_METHOD);
             mc._dupVal();
             Label isInt = new Label();
             mc.mv.visitJumpInsn(IFNONNULL, isInt);
             mc.mv.visitInsn(POP);
             mc.mv.visitJumpInsn(GOTO, noMatch);
             mc.mv.visitLabel(isInt);
-            mc.invokeMethod(MethodCompiler.INT_VALUE_METHOD);
+            mc.invokeMethod(MethodCompiler.NUMBER_INT_VALUE_METHOD);
+            if (literalClass.equals(Byte.class)) {
+              mc._loadConst(0xff);
+              mc.mv.visitInsn(IAND);
+            }
             break;
           }
           case BYTE: case INT:
@@ -590,7 +650,7 @@ public class SwitchCompiler {
 
         // Have integral values not spaced out too far
         // Populate labels with defaultLabel
-        Label[] labels = IntStream.range(0, range).mapToObj(i -> noMatch).toArray(Label[]::new);
+        Label[] labels = IntStream.range(0, (int)range).mapToObj(i -> noMatch).toArray(Label[]::new);
         // Override where we have an actual case with the label for the result
         sorted.forEach(t -> labels[t.first - min] = t.second);
         mc.mv.visitTableSwitchInsn(min, max, noMatch, labels);

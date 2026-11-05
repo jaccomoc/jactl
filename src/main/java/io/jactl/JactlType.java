@@ -791,8 +791,7 @@ public class JactlType extends JactlUserDataHolder {
       if (type1Base != null && type1Base == type2.getClassDescriptor()) { return type2; }
       if (type2Base != null && type2Base == type1.getClassDescriptor()) { return type1; }
       if (type1Base == null || type2Base == null)                       { return ANY;   }
-      return commonSuperType(type1.getClassDescriptor().getBaseClassType(),
-                             type2.getClassDescriptor().getClassType());
+      return commonSuperType(type1Base.getClassType().createInstanceType(), type2);
     }
     if (type1.is(ARRAY) || type2.is(ARRAY)) {
       if (!type1.is(ARRAY) || !type2.is(ARRAY)) { return ANY; }
@@ -1060,7 +1059,7 @@ public class JactlType extends JactlUserDataHolder {
       }
       return internalName;
     }
-    return classDescriptor.getPackagedName();
+    return classDescriptor.getPrettyName();
   }
 
   public List<Expr> getClassNameExprs() {

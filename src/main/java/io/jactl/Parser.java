@@ -2972,14 +2972,20 @@ public class Parser {
       });
     }
 
-    // Make sure that patterns that are literals don't occur multiple times. Build a map that we won't use
-    // and use merge function to detect if key occurs multiple times.
+    // Make sure that patterns that are literals don't occur multiple times (unless they are all guarded
+    // or only follow guarded values).
+    Set<Object> literals = new HashSet<>();
     cases.stream()
-         .flatMap(c -> c.patterns.stream().map(p -> p.first))
-         .filter(expr -> expr.isConst)
-         .collect(Collectors.toMap(expr -> expr.constValue,
-                                   expr -> expr,
-                                   (expr1, expr2) -> error("Literal match occurs multiple times in switch: " + expr2.constValue, expr2.location, false)));
+         .flatMap(c -> c.patterns.stream().filter(p -> p.first.isConst))
+         .forEach(p -> {
+           if (literals.contains(p.first.constValue)) {
+             error("Literal match occurs multiple times in switch: " + p.first.constValue, p.first.location, false);
+           }
+           else if (p.second == null) {
+             // Only remember literals that have no 'if'
+             literals.add(p.first.constValue);
+           }
+         });
     expectOrNull(true, RIGHT_BRACE);
     return new Expr.Switch(matchToken, subject, cases, defaultCase.get());
   }
@@ -3244,7 +3250,7 @@ public class Parser {
 
   private Expr.MapLiteral patternMapEntries(TokenType endToken, boolean starAllowed) {
     Expr.MapLiteral  expr          = new Expr.MapLiteral(previous());
-    Map<String,Expr> literalKeyMap = new HashMap<>();
+    Map<String,Expr> literalKeyMap = new LinkedHashMap<>();
     if (matchAnyIgnoreEOL(COLON)) {
       // Empty map
       expect(RIGHT_SQUARE);

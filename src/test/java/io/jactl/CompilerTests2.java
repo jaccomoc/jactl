@@ -2471,6 +2471,21 @@ public class CompilerTests2 extends BaseTest {
     test("int[] c = new int[3]; for (i in 3) { c[i]++ }; c.toString()", "[1, 1, 1]");
     test("def x = []; for (i in [3, 2.5]) { x <<= i }; x", Utils.listOf(3, new BigDecimal("2.5")));
     test("def x = []; for (i in [3, '2.5']) { x <<= i }; x", Utils.listOf(3, "2.5"));
+    test("def r = []; for (x in ['a', null, 'b']) { r <<= x }; r", Utils.listOf("a", null, "b"));
+    test("int c = 0; for (x in [null, null]) { c++ }; c", 2);
+    test("def r = []; for ([a,b] in [[1,null],[2,3]]) { r <<= b }; r", Utils.listOf(null, 3));
+    test("def x = null; switch (x) { v -> 'v:' + v }", "v:null");
+    test("def x = [null]; switch (x) { [v] -> 'v:' + v; default -> 'd' }", "v:null");
+    test("def r = []; for (String s in ['a', null, 'b']) { r <<= s }; r", Utils.listOf("a", "b")); 
+    testError("def r = []; for (String s : ['a', null, 'b']) { r <<= s }; r", "did not match expected pattern");
+    test("def r = []; for (x in ['a', null, 'b']) { r <<= x }; r", Utils.listOf("a", null, "b"));
+    test("def r = []; for (def x in ['a', null, 'b']) { r <<= x }; r", Utils.listOf("a", null, "b"));
+    test("def r = []; for (String s in ['a', null, 'b']) { r <<= s }; r", Utils.listOf("a", "b"));
+    testError("def r = []; for (String s : ['a', null, 'b']) { r <<= s }; r", "did not match expected pattern");
+    test("def r = []; for (int i in [1, 2, 'abc', 3]) { r <<= i }; r", Utils.listOf(1, 2, 3));
+    test("def r = []; for (def s in ['a', null, 'b']) { r <<= s }; r", Utils.listOf("a", null, "b"));
+    test("def r = []; for (Object s in ['a', null, 'b']) { r <<= s }; r", Utils.listOf("a", null, "b"));
+    test("def r = []; for (int s in [1, null, 2]) { r <<= s }; r", Utils.listOf(1,2));
   }
   
   @Test public void destructuringForLoops() {

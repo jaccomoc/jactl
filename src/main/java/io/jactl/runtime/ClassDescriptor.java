@@ -57,6 +57,10 @@ public interface ClassDescriptor extends JactlUserDataGetter {
    */
   String getInternalName();
 
+  default String getPrettyName() {
+    return getPackagedName();
+  }
+  
   /**
    * True if this class is assignable from the other class (i.e. other is a subclass)
    * @param other the other class descriptor
@@ -89,6 +93,25 @@ public interface ClassDescriptor extends JactlUserDataGetter {
    */
   ClassDescriptor getInnerClass(String name);
 
+  /**
+   * Find which of our base classes declared a given field
+   * @param fieldName  the name of the field
+   * @return the ClassDescriptor where field is declared
+   */
+  default JactlType getDeclaredClassForField(String fieldName) {
+    ClassDescriptor baseDesc = getBaseClass();
+    if (baseDesc != null) {
+      JactlType fieldClass = baseDesc.getDeclaredClassForField(fieldName);
+      if (fieldClass != null) {
+        return fieldClass;
+      }
+    }
+    if (getField(fieldName) == null) {
+      return null;
+    }
+    return this.getClassType();
+  }
+  
   default JactlType getField(String name) {
     return null;
   }
