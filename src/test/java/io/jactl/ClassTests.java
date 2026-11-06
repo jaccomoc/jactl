@@ -1490,6 +1490,21 @@ public class ClassTests extends BaseTest {
     testError("class X extends Y{}; class Y extends Z{}; class Z extends X{}; new X()", "cyclic inheritance");
     testError("class X extends X{}; new X()", "class cannot extend itself");
   }
+  
+  @Test public void baseClasses3() {
+    test("class A { int c = { 1 }() }; class B extends A { int e = { 2 }() }; new B().toString()", "[c:1, e:2]");
+    test("class A { def c = { 1 } }; class B extends A { def e = { 2 } }; def b = new B(); b.c() + b.e()", 3);
+    test("class A { def c = { 1 } }; class B extends A { def e = { 2 } }; A a = new B(); [a.c(), new A().c()]", Utils.listOf(1, 1));
+    test("class A { int c = { 1 }() }; class B extends A { int e = { 2 }(); int f = { 3 }() }; class C extends B { def g = { 4 } }; def c = new C(); [c.c, c.e, c.f, c.g()]", Utils.listOf(1, 2, 3, 4));
+    test("class A { def m() { [1,2].map{ it * 10 } } }; class B extends A { def m() { [1,2].map{ it } + super.m() } }; new B().m()", Utils.listOf(1, 2, 10, 20));
+    test("class A { def m() { [1,2].map{ sleep(0, it * 10) } } }; class B extends A { def m() { [1,2].map{ sleep(0, it) } + super.m() } }; new B().m()", Utils.listOf(1, 2, 10, 20));
+    test("class A { def c = { x -> sleep(0, x + 1) } }; class B extends A { def d = { x -> sleep(0, x + 2) } }; def b = new B(); [b.c(1), b.d(1)]", Utils.listOf(2, 3));
+    test("class A { def m() { def h() { 10 }; h() } }; class B extends A { def m() { def h() { 20 }; h() + super.m() } }; new B().m()", 30);
+    test("class A { def m(x) { def h(y) { sleep(0, y * 10) }; h(x) } }; class B extends A { def m(x) { def h(y) { sleep(0, y * 100) }; h(x) + super.m(x) } }; new B().m(1)", 110);
+    test("class A { def m() { def h() { 10 }; h() } }; class B extends A { def n() { def h() { 20 }; h() } }; class C extends B { def m() { def h() { 30 }; h() + super.m() } }; [new C().m(), new A().m(), new C().n()]", Utils.listOf(40, 10, 20));
+    test("class Outer { class X { def m() { def h() { 'OX' }; h() } }; class Y extends X { def m() { def h() { 'OY' }; h() + super.m() } } }; class X extends Outer.Y { def m() { def h() { 'X' }; h() + super.m() } }; new X().m()", "XOYOX");
+    test("class A { static def s() { def h() { 'As' }; h() }; def m() { { -> 'Am' }() } }; class B extends A { static def s() { def h() { 'Bs' }; h() }; def m() { { -> 'Bm' }() + super.m() } }; [A.s(), B.s(), new B().m()]", Utils.listOf("As", "Bs", "BmAm"));
+  }
 
   @Test public void finalMethods() {
     testError("class X{ static static def f(){1} }", "cannot combine");

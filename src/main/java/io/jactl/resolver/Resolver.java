@@ -1548,15 +1548,24 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         expr.functionDescriptor.isStaticImplementation = true;
       }
 
-      // Create a name if we are a closure
+      // Create a unique name if we are a closure
       Expr.FunDecl parent = currentFunction();
       String methodName = expr.isClosure() ? "$c" + ++parent.closureCount : functionName;
 
       // Method name is parent + $ + functionName unless at script function level or at top level of a class
       // in which case there is no parent, so we use just functionName
-      expr.functionDescriptor.implementingMethod =
-        getFunctions().size() == 1 || (expr.varDecl != null && expr.varDecl.isField) ? methodName
-                                                                                     : parent.functionDescriptor.implementingMethod + "$" + methodName;
+      String implementingMethod = getFunctions().size() == 1 || (expr.varDecl != null && expr.varDecl.isField) ? methodName
+                                                                                                               : parent.functionDescriptor.implementingMethod + "$" + methodName;
+      boolean isNested = expr.isClosure() || getFunctions().size() > 1;
+      if (isNested && !currentClass().isScriptClass()) {
+        String packagedName = classDescriptor.getPackagedName().replace('.','_');
+        String prefix       = packagedName + '$';
+        if (!implementingMethod.startsWith(prefix)) {
+          implementingMethod = prefix + implementingMethod;
+        }
+      }
+      
+      expr.functionDescriptor.implementingMethod = implementingMethod;
 
       // Create a wrapper function that takes care of var arg and named argument handling
       expr.wrapper = expr.isInitMethod() ? createInitWrapper(expr) : createVarArgWrapper(expr);
