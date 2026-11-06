@@ -596,13 +596,14 @@ public class JactlFunction extends FunctionDescriptor {
    * @return the created wrapper class
    */
   private Class<?> createWrapperClass() {
-    String           packageName = context == null ? Utils.JACTL_PKG : context.javaPackage;
-    JactlClassWriter cw = new JactlClassWriter(Utils.JACTL_PKG.replace('.', '/'));
-    ClassVisitor     cv = cw.getClassVisitor();
-
+    String packageName         = context == null ? Utils.JACTL_PKG : context.javaPackage;
     String helperClassName    = Utils.JACTL_PREFIX + "Helper" + classCounter.getAndIncrement() + '$' + name;
     String helperPkgClassName = Utils.pkgPathOf(packageName, helperClassName);
     String internalName       = helperPkgClassName.replace('.', '/');
+    
+    JactlClassWriter cw = new JactlClassWriter(Utils.JACTL_PKG.replace('.', '/'), internalName, Utils.OBJECT_INTERNAL);
+    ClassVisitor     cv = cw.getClassVisitor();
+
     cv.visit(Utils.JAVA_VERSION, ACC_PUBLIC, internalName, null, Utils.OBJECT_INTERNAL, new String[0]);
     cv.visitSource(helperClassName + ".java", null);
 

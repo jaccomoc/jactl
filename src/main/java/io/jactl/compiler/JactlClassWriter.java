@@ -36,26 +36,30 @@ public class JactlClassWriter extends ClassWriter {
   JactlContext context;
   String       internalJavaPackage;
   ClassVisitor cv;
+  String       className;
+  String       superName;
   
-  public JactlClassWriter(JactlContext context) {
+  public JactlClassWriter(JactlContext context, String className, String superName) {
     super(COMPUTE_MAXS + COMPUTE_FRAMES);
     this.context = context;
     this.internalJavaPackage = context.internalJavaPackage;
-    init(context.debugLevel);
+    init(context.debugLevel, className, superName);
   }
   
-  public JactlClassWriter(String internalJavaPackage) {
-    this(internalJavaPackage, 0);
+  public JactlClassWriter(String internalJavaPackage, String className, String superName) {
+    this(internalJavaPackage, 0, className, superName);
   }
   
-  public JactlClassWriter(String internalJavaPackage, int debugLevel) {
+  public JactlClassWriter(String internalJavaPackage, int debugLevel, String className, String superName) {
     super(COMPUTE_MAXS + COMPUTE_FRAMES);
     this.internalJavaPackage = internalJavaPackage;
-    init(debugLevel);
+    init(debugLevel, className, superName);
   }
   
-  private void init(int debugLevel) {
+  private void init(int debugLevel, String className, String superName) {
     cv = this;
+    this.className = className;
+    this.superName = superName;
     if (debugLevel > 0 || context != null && context.checkClasses()) {
       cv = new CheckClassAdapter(cv);
     }
@@ -85,6 +89,12 @@ public class JactlClassWriter extends ClassWriter {
     if (type1.equals(objectClass) || type2.equals(objectClass)) {
       return objectClass;
     }
+    if (type1.equals(className)) {
+      return getCommonSuperClass(superName, type2);
+    }
+    if (type2.equals(className)) {
+      return getCommonSuperClass(type1, superName);
+    }
     String jactlObjectClass = Utils.JACTL_OBJECT_INTERNAL;
     boolean type1StartsWithJavaPackage = type1.startsWith(internalJavaPackage);
     if (type1StartsWithJavaPackage && type2.equals(jactlObjectClass)) {
@@ -98,11 +108,11 @@ public class JactlClassWriter extends ClassWriter {
       if (type1StartsWithJavaPackage && type2StartsWithJavaPackage) {
         Class clss1 = context.getClass(type1);
         if (clss1 == null) {
-          throw new RuntimeException("Cannot find class " + type1);
+          throw new IllegalStateException("Internal error: Cannot find class " + type1);
         }
         Class clss2 = context.getClass(type2);
         if (clss2 == null) {
-          throw new RuntimeException("Cannot find class " + type2);
+          throw new IllegalStateException("Internal error: Cannot find class " + type2);
         }
         if (clss1.isAssignableFrom(clss2)) {
           return type1;
@@ -130,8 +140,11 @@ public class JactlClassWriter extends ClassWriter {
       }
       return super.getCommonSuperClass(type1, type2);
     }
+    catch (IllegalStateException e) {
+      throw e;
+    }
     catch (Exception e) {
-      throw new RuntimeException(e);
+      throw new IllegalStateException(e);
     }
   }
 

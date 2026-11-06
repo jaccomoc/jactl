@@ -72,13 +72,14 @@ public class ClassCompiler {
     this.classType       = Type.getType("L" + internalName + ";");
     this.source          = source;
     this.sourceName      = sourceName;
-    cw = new JactlClassWriter(context);
-    cv = cw.getClassVisitor();
     internalBaseName = classDecl.baseClass != null ? classDecl.baseClass.getInternalName() : null;
     if (classDecl.isScriptClass()) {
       internalBaseName = Utils.JACTL_SCRIPT_OBJECT_INTERNAL;
     }
     String superName = internalBaseName == null ? Utils.OBJECT_INTERNAL : internalBaseName;
+
+    cw = new JactlClassWriter(context, internalName, superName);
+    cv = cw.getClassVisitor();
 
     cv.visit(Utils.JAVA_VERSION, ACC_PUBLIC, internalName, null, superName, new String[] {Utils.JACTL_OBJECT_INTERNAL });
     cv.visitSource(sourceName, null);

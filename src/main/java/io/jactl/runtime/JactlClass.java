@@ -355,10 +355,10 @@ public class JactlClass {
   }
 
   private Class compileWrapperHandlesClass(String helperClassName) {
-    JactlClassWriter cw = new JactlClassWriter(Utils.JACTL_PKG.replace('.', '/'), debugLevel);
+    String internalHelperClassName = helperClassName.replace('.', '/');
+    JactlClassWriter cw = new JactlClassWriter(Utils.JACTL_PKG.replace('.', '/'), debugLevel, internalHelperClassName, Utils.OBJECT_INTERNAL);
     ClassVisitor     cv = cw.getClassVisitor();
 
-    String internalHelperClassName = helperClassName.replace('.', '/');
     cv.visit(Utils.JAVA_VERSION, ACC_PUBLIC, internalHelperClassName, null, Utils.OBJECT_INTERNAL, new String[0]);
     cv.visitSource(helperClassName + ".java", null);
 

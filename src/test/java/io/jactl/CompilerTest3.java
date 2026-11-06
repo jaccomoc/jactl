@@ -1281,4 +1281,16 @@ public class CompilerTest3 extends BaseTest {
     test("def b = false; [1, b || sleep(0, false)]", Utils.listOf(1, false));
     test("def y = [1,2,3]; [1, y && y.map{ it * 2 }.size()]", Utils.listOf(1, true));
   }
+  
+  @Test public void asyncBranchMergeTests() {
+    test("class X { def m(a) { a } }; class Y { def f(x) {x} }; X x = new X(); Y y = new Y(); if (true) { y.f(sleep(0,2)) } else { x.m(3) }; 'done'", "done");
+    test("class X { def m(a) { a } }; def f(a) { a }; X x = new X(); if (true) { f(sleep(0,2)) } else { x.m(3) }; 'done'", "done");
+    test("class X { def m(a) { a } }; def f(a) { a }; X x = new X(); def c = true; if (c) { f(sleep(0,2)) } else { x.m(3) }; 'done'", "done");
+    test("class X { def m(a) { a } }; def f(a) { a }; X x = new X(); def c = true; c ? f(sleep(0,2)) : x.m(3)", 2);
+    test("class X { def m(a) { a } }; def f(a) { a }; X x = new X(); def c = false; c ? f(sleep(0,2)) : x.m(3)", 3);
+    test("class X { def m(a) { a } }; def f(a) { a }; X x = new X(); def c = true; def z = c ? f(sleep(0,2)) : x.m(3); z", 2);
+    test("class X { def m(a) { a } }; def f(a) { a }; X x = new X(); def c = false; c ? x.m(3) : f(sleep(0,2))", 2);
+    test("class X { def m(a) { a } }; def f(a) { a }; X x = new X(); def c = false; 10 + (!c ? x.m(3) : f(sleep(0,2)))", 13);
+    test("class X { def m(a) { a } }; class Y { def f(a) { a }; def g(c, X x) { c ? f(sleep(0,2)) : x.m(3) } }; [new Y().g(true, new X()), new Y().g(false, new X())]", Utils.listOf(2, 3)); 
+  }
 }  
