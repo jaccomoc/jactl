@@ -56,9 +56,10 @@ class Expr extends JactlUserDataHolder {
                                 // result of evaluating the expression during the
                                 // resolve phase here.
 
-  boolean    isCallee    = false; // Whether we are the callee in a call expression
-  boolean    couldBeNull = true;  // Whether result could be null
-  boolean    isAsync     = false; // Whether expression contains an async call
+  boolean    isCallee      = false; // Whether we are the callee in a call expression
+  boolean    couldBeNull   = true;  // Whether result could be null
+  boolean    isAsync       = false; // Whether expression contains an async call
+  boolean    usesTryCatch  = false; // Whether expression uses try/catch (e.g. ?: and ?= which try/catch NullError)
 
   boolean    isLValue      = false; // Whether expression is field or variable in a.b.c = xxx or v = xxx 
   boolean    isInitialiser = false; // Whether expression is an initialiser for a variable/field
@@ -78,6 +79,10 @@ class Expr extends JactlUserDataHolder {
   // handles leaving result on stack or not (based on isResultUsed flag) or whether
   // result management needs to be done for it.
   interface ManagesResult {}
+  
+  public boolean emitsTryCatch() {
+    return isAsync || usesTryCatch;
+  }
 
   // Whether expression is a direct function call (and not a closure)
   public boolean isFunctionCall() {

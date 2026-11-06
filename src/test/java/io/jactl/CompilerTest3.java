@@ -1255,4 +1255,30 @@ public class CompilerTest3 extends BaseTest {
       put("body", new Object());
     }});
   }
+  
+  @Test public void stackToLocalsTests() {
+    test("def y = 3; 10 + (y ? 1 : 2)", 11);
+    test("def y = 3; 10 + (y ? (y ?: 1) : 2)", 13);
+    test("def y = 3; [1, y ? (y ?: 1) : 2]", Utils.listOf(1, 3));
+    test("def y = 3; 10 + (y ? 1 : (y ?: 2))", 11);
+    test("def y = null; 10 + (y ? 1 : (y ?: 2))", 12);
+    test("def y = 3; def z; 10 + (y ? (z ?= y) : 2)", 13);
+    test("def y = [b:1]; 10 + (y ? (??y.a) ? 1 : 0 : 2)", 10);
+    test("def y = 3; 10 + (y ? [1, (y ?: 1)][1] : 2)", 13);
+    test("def y = 3; 10 + (y ? (y ? (y ?: 1) : 0) : 2)", 13);
+    test("class X { def a = null }; def x = new X(); def y = 3; [1, y ? (x.a ?= y) : 2][1] == 3 && x.a == 3", true);
+    test("def y = [a:1]; [y && (y.a ?: 1)]", Utils.listOf(true));
+    test("def y = [a:1]; [1, y || (y.a ?: 1)]", Utils.listOf(1, true));
+    test("def y = null; [1, y && (y.a ?: 1)]", Utils.listOf(1, false));
+    test("def y = null; [1, y || (y?.a ?: 1)]", Utils.listOf(1, true));
+    test("def y = [a:1]; 10 + ((y && (y.a ?: 1)) ? 1 : 0)", 11);
+    test("def y = null; def z = 3; 10 + switch (z) { 3 -> (y ?: 1); default -> 2 }", 11);
+    test("def y = null; def z = 3; [1, switch (z) { 3 -> (y ?: 1); default -> 2 }]", Utils.listOf(1, 1));
+    test("def y = null; def z = 3; 10 + switch (z) { 3 -> (y ?: 1); 4 -> 4; 5 -> 5; default -> 2 }", 11);
+    test("def y = null; def z = 4; 10 + switch (z) { 3 -> 3; 4 if (y ?: true) -> 2; default -> 0 }", 12);
+    test("def b = true; def f(x, y) { y }; f(1, b && sleep(0, false))", false);
+    test("def b = true; [1, b || sleep(0, false)]", Utils.listOf(1, true));
+    test("def b = false; [1, b || sleep(0, false)]", Utils.listOf(1, false));
+    test("def y = [1,2,3]; [1, y && y.map{ it * 2 }.size()]", Utils.listOf(1, true));
+  }
 }  

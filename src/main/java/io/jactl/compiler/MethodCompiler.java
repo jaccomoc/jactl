@@ -1602,6 +1602,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         desiredType = BOOLEAN;
         compile(expr.left);
         convertToBoolean(false, expr.left);
+        if (expr.right.emitsTryCatch()) {
+          stack.convertStackToLocalsExcept(1);
+        }
         
         // Look for short-cutting && or || (i.expr. if we already know the result
         // we don't need to evaluate right-hand side)
@@ -2117,7 +2120,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitTernary(Expr.Ternary expr) {
-    emitIf(expr.second.isAsync || expr.third.isAsync, IfTest.IS_TRUE,
+    emitIf(expr.second.emitsTryCatch() || expr.third.emitsTryCatch(), IfTest.IS_TRUE,
            () -> {
              desiredType = BOOLEAN;
              compile(expr.first);

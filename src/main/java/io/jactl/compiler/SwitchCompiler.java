@@ -23,7 +23,7 @@ import static org.objectweb.asm.Opcodes.*;
 public class SwitchCompiler {
   public static Void visitSwitch(MethodCompiler mc, Expr.Switch expr) {
     // If we have async code we need to make sure that the stack is preserved
-    if (expr.isAsync) {
+    if (expr.emitsTryCatch()) {
       mc.stack.convertStackToLocals();
     }
     

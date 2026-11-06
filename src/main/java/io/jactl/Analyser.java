@@ -25,6 +25,9 @@ import java.util.*;
 import java.util.function.Function;
 
 import static io.jactl.JactlType.*;
+import static io.jactl.TokenType.QUESTION_COLON;
+import static io.jactl.TokenType.QUESTION_EQUAL;
+import static io.jactl.TokenType.QUESTION_QUESTION;
 
 /**
  * Class that analyses the AST for any final tweaks needed before generating the byte code.
@@ -148,6 +151,12 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       try {
         currentExpr.push(expr);
         expr.accept(this);
+        if (expr instanceof Expr.Binary && ((Expr.Binary) expr).operator.is(QUESTION_COLON) ||
+            expr instanceof Expr.PrefixUnary && ((Expr.PrefixUnary) expr).operator.is(QUESTION_QUESTION) ||
+            expr instanceof Expr.VarAssign && ((Expr.VarAssign) expr).operator.is(QUESTION_EQUAL) ||
+            expr instanceof Expr.FieldAssign && ((Expr.FieldAssign) expr).assignmentOperator.is(QUESTION_EQUAL)) {
+          expr.usesTryCatch = true;
+        }
         return null;
       }
       finally {
@@ -156,6 +165,9 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         Stmt stmt   = currentStmt.peek();
         if (parent != null && expr.isAsync) {
           parent.isAsync = true;
+        }
+        if (parent != null && expr.usesTryCatch) {
+          parent.usesTryCatch = true;
         }
         if (stmt != null && expr.isAsync) {
           stmt.isAsync = true;
