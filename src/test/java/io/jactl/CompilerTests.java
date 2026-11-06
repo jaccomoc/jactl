@@ -1624,13 +1624,16 @@ class CompilerTests extends BaseTest {
     test("def x; x ?: 2", 2);
     test("def x; x ? 1 : 2", 2);
     test("def x; x ? (1 if true): 2", 2);
-    testError("true ? 'abc':1", "not compatible");
+    test("true ? 'abc':1", "abc");
+    test("false ? 'abc':1", 1);
+    test("false ? 'abc':1", 1);
+    test("true ? 'abc':1", "abc");
     test("false ? 'abc':'1'", "1");
     test("def x = 'abc'; true ? x:1", "abc");
     test("def x = 'abc'; true ? 1:x", 1);
     test("def x = 'abc'; false ? x:1", 1);
-    testError("def x; x ? 1 : [1,2,3]", "are not compatible");
-    testError("def x; x ? { 1 } : 2", "not compatible");
+    test("def x; x ? 1 : [1,2,3]", Utils.listOf(1,2,3));
+    test("def x; x ? { 1 } : 2", 2);
     test("def x; var y = true ? x : 1", null);
     test("def x; var y = true ? 1 : x", 1);
     test("true ? 1 : 2L", 1L);
@@ -1667,8 +1670,33 @@ class CompilerTests extends BaseTest {
     test("Map m = [:]; m.a.b ?: 'abc'", "abc");
     test("def f() { null }; f() + f() ?: 'abc'", "abc");
     test("int f() { 3 }; f() + f() ?: 7", 6);
+    test("def x = true ? [1,2,3] : [a:1]", Utils.listOf(1,2,3));
+    test("def x = true ? [1,2,3] as int[] : [1,2,3] as long[]; x instanceof int[]", true);
+    test("def x = false ? [1,2,3] as int[] : [1,2,3] as long[]; x instanceof long[]", true);
   }
 
+  @Test public void ternaryWithClasses() {
+    String classes = "class A { int i = 0; def name() { 'A' } }; class B extends A { def name() { 'B' } }; class C extends A { def name() { 'C' } }; class D extends C {}; class Z { int i = 0 }; ";
+    test(classes + "def x = true; A a = x ? new B() : new C(); a.name()", "B");
+    test(classes + "def x = false; A a = x ? new B() : new C(); a.name()", "C");
+    test(classes + "def x = true; (x ? new B() : new C()).name()", "B");
+    test(classes + "def x = false; def r = x ? new B() : new C(); r.name()", "C");
+    test(classes + "def x = false; (x ? new B() : new C()).i", 0);
+    test(classes + "def x = true; B b = new B(); C c = new C(); A a = x ? b : c; a.name()", "B");
+    test(classes + "def x = true; A a = x ? new B() : new D(); a.name()", "B");
+    test(classes + "def x = false; A a = x ? new B() : new D(); a.name()", "C");
+    test(classes + "def x = false; A a = x ? new D() : new B(); a.name()", "B");
+    test(classes + "def x = true; A a = x ? new B() : new A(); a.name()", "B");
+    test(classes + "def x = false; A a = x ? new D() : new A(); a.name()", "A");
+    test(classes + "def x = false; (x ? new A() : new D()).name()", "C");
+    test(classes + "def x = true; A a = x ? new B() : (x ? new C() : new D()); a.name()", "B");
+    test(classes + "def x = true; C c = x ? new D() : new C(); c.name()", "C");
+    test(classes + "def x = false; A a = switch (x) { true -> new B(); default -> new D() }; a.name()", "C");
+    test(classes + "def x = true; (x ? new B() : new Z()).name()", "B");
+    testError(classes + "def x = false; (switch (x) { true -> new B(); default -> new D() }).zzz()", "no such method");
+    test(classes + "(true ? new B() : new D()) instanceof A", true);
+  }
+  
   @Test public void bracketedExpressionsEndOfStatment() {
     test("(2)\n 1+2\n", 3);
     test("(2 + 1)\n 1+2\n", 3);

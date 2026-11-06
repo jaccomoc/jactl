@@ -1155,8 +1155,8 @@ public class ClassTests extends BaseTest {
   }
 
   @Test public void questionColon() {
-    testError("class X { int i }; (true ? new X(0) : [i:1]).i", "must be compatible");
-    testError("class X { int i }; (true ? [i:1] : new X(2)).i", "must be compatible");
+    test("class X { int i }; (true ? new X(0) : [i:1]).i", 0);
+    test("class X { int i }; (true ? [i:1] : new X(2)).i", 1);
     test("class X { int i }; (true ? new X(0) as Map: [i:1]).i", 0);
     test("class X { int i }; (true ? [i:1] as X: new X(2)).i", 1);
   }

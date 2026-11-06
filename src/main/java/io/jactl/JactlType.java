@@ -696,21 +696,20 @@ public class JactlType extends JactlUserDataHolder {
         break;
       }
         
-      case EQUAL:
-      case QUESTION: {
+      case EQUAL: {
         if (type1 == type2)                                         { return type1; }
         if (!type2.isCastableTo(type1)) {
           throw new CompileError("Right-hand operand of type " + type2 + " cannot be converted to " + type1, operator);
         }
-        if (operator.is(TokenType.QUESTION)) {
-          if (type1.is(ANY) || type2.is(ANY))                       { return ANY; }
-          JactlType result = resultType(type1, type2);
-          if (result != null) {
-            return result;
-          }
-        throw new CompileError("Types for both true and false cases must be compatible", operator);
-        }
         return type1;
+      }
+        
+      case QUESTION: {
+        if (type1 == type2)                                         { return type1; }
+        if (type1.is(ANY) || type2.is(ANY))                         { return ANY; }
+        JactlType result = resultType(type1, type2);
+        if (result != null )                                        { return result; }
+        return JactlType.commonSuperType(type1, type2);
       }
       
       case QUESTION_COLON:
@@ -762,8 +761,11 @@ public class JactlType extends JactlUserDataHolder {
     if (type1.is(BYTE) && type2.is(BYTE)) {
       return BYTE;
     }
-    if (type1.is(type2)) {
+    if (type1.equals(type2)) {
       return type1;
+    }
+    if (type1.is(STRING) || type2.is(STRING)) {
+      return ANY;
     }
     return resultMap.get(new TypePair(type1.getDelegate().unboxed(), type2.getDelegate().unboxed()));
   }
@@ -785,17 +787,16 @@ public class JactlType extends JactlUserDataHolder {
     if (type1.is(CLASS) || type2.is(CLASS))                             { return ANY;    }
     if (type1.is(INSTANCE) || type2.is(INSTANCE)) {
       if (!type1.is(INSTANCE) || !type2.is(INSTANCE))                   { return ANY;   }
-      if (type1.getClassDescriptor() == type2.getClassDescriptor())     { return type1; }
-      ClassDescriptor type1Base = type1.getClassDescriptor().getBaseClass();
-      ClassDescriptor type2Base = type2.getClassDescriptor().getBaseClass();
-      if (type1Base != null && type1Base == type2.getClassDescriptor()) { return type2; }
-      if (type2Base != null && type2Base == type1.getClassDescriptor()) { return type1; }
-      if (type1Base == null || type2Base == null)                       { return ANY;   }
-      return commonSuperType(type1Base.getClassType().createInstanceType(), type2);
+      ClassDescriptor classDesc2 = type2.getClassDescriptor();
+      for (ClassDescriptor base = type1.getClassDescriptor(); base != null; base = base.getBaseClass()) {
+        if (base.isAssignableFrom(classDesc2)) {
+          return base == type1.getClassDescriptor() ? type1 : base.getClassType().createInstanceType();
+        }
+      }
     }
     if (type1.is(ARRAY) || type2.is(ARRAY)) {
       if (!type1.is(ARRAY) || !type2.is(ARRAY)) { return ANY; }
-      return JactlType.arrayOf(commonSuperType(type1.getArrayElemType(), type2.getArrayElemType()));
+      return type1.getArrayElemType().equals(type2.getArrayElemType()) ? type1 : ANY;
     }
     if (type1.isNumeric() && type2.isNumeric()) {
       if (type1.is(BYTE))   { return type2; }
@@ -1118,7 +1119,8 @@ public class JactlType extends JactlUserDataHolder {
       if (this.getInternalName() != null) {
         return this.getInternalName().equals(other.getInternalName());
       }
-      return this.getClassDescriptor().equals(other.getClassDescriptor());
+      ClassDescriptor classDesc1 = this.getClassDescriptor();
+      return classDesc1 == null ? false : classDesc1.equals(other.getClassDescriptor());
     }
     if (is(ARRAY)) {
       return getArrayElemType().equals(other.getArrayElemType());

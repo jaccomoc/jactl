@@ -1260,11 +1260,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (expr.third.isNull() && !expr.second.type.isPrimitive()) {
       expr.third.type = expr.second.type;
     }
-    else
-    if (!expr.third.type.isCastableTo(expr.second.type)) {
-      error("Result types of " + expr.second.type + " and " + expr.third.type + " are not compatible", expr.operator2);
-    }
-    return expr.type = resultType(expr.second.type, expr.operator1, expr.third.type);
+    expr.type = resultType(expr.second.type, expr.operator1, expr.third.type);
+    return expr.type; 
   }
 
   @Override public JactlType visitPrefixUnary(Expr.PrefixUnary expr) {
