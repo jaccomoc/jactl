@@ -181,6 +181,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     classDecl.imports.forEach(this::resolve);
     createClassDescriptors(classDecl, null);
+    prepareBaseClasses(classDecl);
+    prepareClassMembers(classDecl);
     prepareClass(classDecl);
     resolve(classDecl);
     if (errors.size() > 0 && throwError) {
@@ -378,17 +380,22 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     classDecl.innerClasses.forEach(decl -> classDecl.classDescriptor.addInnerClass(decl.classDescriptor));
   }
 
-  private void prepareClass(Stmt.ClassDecl classDecl) {
+  private void prepareBaseClasses(Stmt.ClassDecl classDecl) {
     resolve(classDecl.baseClass);
     classStack.push(classDecl);
     cachedBlock = null;
-    
+    // Now process our inner classes
+    classDecl.innerClasses.forEach(innerClass -> prepareBaseClasses(innerClass));
+    classStack.pop();
+    cachedBlock = null;
+  }
+  
+  private void prepareClassMembers(Stmt.ClassDecl classDecl) {
+    classStack.push(classDecl);
+    cachedBlock = null;
     JactlClassDescriptor classDescriptor = classDecl.classDescriptor;
-    JactlType            classType       = JactlType.createClass(classDescriptor);
-
     checkForCyclicInheritance(classDecl, classDescriptor);
 
-    // Find our functions and fields and add them to the ClassDescriptor if not script class
     if (!classDecl.isScriptClass()) {
       classDecl.fieldVars.values().forEach(varDecl -> {
         if (varDecl.isField) {
@@ -408,17 +415,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         }
       });
 
-      Stmt.FunDecl       initMethod         = createInitMethod(classDecl);
-      FunctionDescriptor initFuncDescriptor = initMethod.declExpr.functionDescriptor;
-      initFuncDescriptor.firstArgtype = classType.createInstanceType();
-      classDescriptor.setInitMethod(initFuncDescriptor);
-
       // Add JSON parsing methods if not script class
-      if (!classDecl.isScriptClass()) {
-        classDecl.methods.add(createFromJsonFunc(classDecl));
-        classDecl.methods.add(createMissingFieldsFunc(classDecl));
-      }
+      classDecl.methods.add(createFromJsonFunc(classDecl));
+      classDecl.methods.add(createMissingFieldsFunc(classDecl));
 
+      JactlType classType = JactlType.createClass(classDescriptor);
       classDecl.methods.forEach(funDeclStmt -> {
         Expr.FunDecl funDecl    = funDeclStmt.declExpr;
         String       methodName = funDecl.nameToken.getStringValue();
@@ -427,19 +428,49 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         if (!classDescriptor.addMethod(methodName, functionDescriptor)) {
           error("Method name '" + methodName + "' clashes with another field or method of the same name in class " + classDescriptor.getPackagedName(), funDecl.nameToken);
         }
-        // Instance method
-        // NOTE: JACTL_INIT_MISSING method is special since it not invoked as a virtual method (it is always
-        // invoked through implementing class or via super when it is an INVOKESPECIAL call)
+        // We have to treat all non-final instance methods as async since we might later be overridden by a
+        // child class that is async and we need the signatures to match (i.e. passing in of continuation).
+        // Furthermore, callers may not know what type of subclass an object is and whether its implementation of
+        // the method is async or not so we have to assume always that a call to a non-final instance method is async.
+        // If a method is final and it does not override a method that is async then we will mark it async (during
+        // Analyser phase) only if it invokes something that is async.
+        //   NOTE: JACTL_INIT_MISSING method is special since it not invoked as a virtual method (it is always
+        //   invoked through implementing class or via super when it is an INVOKESPECIAL call)
+        if (!funDecl.isStatic() && !functionDescriptor.name.equals(Utils.JACTL_INIT_MISSING) && !functionDescriptor.isFinal) {
+          functionDescriptor.isAsync = jactlContext.isAsync;
+        }
+      });
+    }
+
+    // Now process our inner classes
+    classDecl.innerClasses.forEach(innerClass -> prepareClassMembers(innerClass));
+    classStack.pop();
+    cachedBlock = null;
+  }
+  
+  private void prepareClass(Stmt.ClassDecl classDecl) {
+    classStack.push(classDecl);
+    cachedBlock = null;
+    
+    JactlClassDescriptor classDescriptor = classDecl.classDescriptor;
+    JactlType            classType       = JactlType.createClass(classDescriptor);
+
+    // Find our functions and fields and add them to the ClassDescriptor if not script class
+    if (!classDecl.isScriptClass()) {
+      Stmt.FunDecl       initMethod         = createInitMethod(classDecl);
+      FunctionDescriptor initFuncDescriptor = initMethod.declExpr.functionDescriptor;
+      initFuncDescriptor.firstArgtype = classType.createInstanceType();
+      classDescriptor.setInitMethod(initFuncDescriptor);
+
+      classDecl.methods.forEach(funDeclStmt -> {
+        Expr.FunDecl funDecl    = funDeclStmt.declExpr;
+        String       methodName = funDecl.nameToken.getStringValue();
+        FunctionDescriptor functionDescriptor = funDecl.functionDescriptor;
         if (!funDecl.isStatic() && !functionDescriptor.name.equals(Utils.JACTL_INIT_MISSING)) {
-          // We have to treat all non-final instance methods as async since we might later be overridden by a
-          // child class that is async and we need the signatures to match (i.e. passing in of continuation).
-          // Furthermore, callers may not know what type of subclass an object is and whether its implementation of
-          // the method is async or not so we have to assume always that a call to a non-final instance method is async.
-          // If a method is final and it does not override a method that is async then we will mark it async (during
-          // Analyser phase) only if it invokes something that is async.
-          JactlClassDescriptor baseClass = classDescriptor.getBaseClassDescriptor();
-          FunctionDescriptor   method    = baseClass != null ? baseClass.getMethod(methodName) : null;
-          if (!functionDescriptor.isFinal || baseClass != null && method != null && method.isAsync()) {
+          // Mark as async if we override method that is async
+          JactlClassDescriptor baseClass  = classDescriptor.getBaseClassDescriptor();
+          FunctionDescriptor   baseMethod = baseClass != null ? baseClass.getMethod(methodName) : null;
+          if (baseMethod != null && baseMethod.isAsync()) {
             functionDescriptor.isAsync = jactlContext.isAsync;
           }
         }

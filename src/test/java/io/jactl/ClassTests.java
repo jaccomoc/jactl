@@ -1505,6 +1505,26 @@ public class ClassTests extends BaseTest {
     test("class Outer { class X { def m() { def h() { 'OX' }; h() } }; class Y extends X { def m() { def h() { 'OY' }; h() + super.m() } } }; class X extends Outer.Y { def m() { def h() { 'X' }; h() + super.m() } }; new X().m()", "XOYOX");
     test("class A { static def s() { def h() { 'As' }; h() }; def m() { { -> 'Am' }() } }; class B extends A { static def s() { def h() { 'Bs' }; h() }; def m() { { -> 'Bm' }() + super.m() } }; [A.s(), B.s(), new B().m()]", Utils.listOf("As", "Bs", "BmAm"));
   }
+  
+  @Test public void forwardlyDeclaredBaseClasses() {
+    test("class X extends Y { def f() {3} }; class Y{}; new X().f()", 3);
+    test("class X extends Y { def f() {3} }; class Y{ int j }; new X(1).f()", 3);
+    test("class X extends Y { int i; def f() {3} }; class Y{ int j }; new X(1,2).f()", 3);
+    test("class Y extends X { String type }; class X { String name }; 'declared'", "declared");
+    test("class Y extends X { String type }; class X { String name }; new Y('Aname', 'atype').toString()", "[name:'Aname', type:'atype']");
+    test("class Y extends X { def describe() { \"x $name\" } }; class X { String name = 'aname' }; new Y().describe()", "x aname");
+    test("class C extends B { int c = 3 }; class B extends A { int b = 2 }; class A { int a = 1 }; new C().toString()", "[a:1, b:2, c:3]");
+    test("class Outer { class Y extends X { String type }; class X { String name } }; new Outer.Y('Aname', 'atype').toString()", "[name:'Aname', type:'atype']");
+    test("class Y extends X { String type; def describe() { \"$name the $type: ${action()}\" } };\n" +
+         "class X { String name; def action() { 'result' } }\n" +
+         "class Z extends Y { int age; def describe() { super.describe() + \" ($age)\" } }\n" +
+         "new Z('Aname', 'atype', 1).describe()", "Aname the atype: result (1)");
+    test("class Y extends X { String type; def describe() { \"$name the $type\" } }; class X { String name }; Y.fromJson('{\"name\":\"Aname\",\"type\":\"btype\"}').describe()", "Aname the btype");
+    test("class Y extends X { final def action() { sleep(0, 'result') } }; class X { def action() { '?' } }; X a = new Y(); a.action()", "result");
+    testError("class X extends Y {}; class Y extends X {}; new X()", "cyclic inheritance");
+    test("class Y extends X { final def action() { 'y' } }; class X { def action() { '?' } }; X a = new Y(); a.action()", "y");
+    test("class C extends B { final def action() { 'c' } }; class B extends A { def action() { 'b' } }; class A { def action() { 'a' } }; A a = new C(); B b = new C(); a.action() + b.action() + new B().action()", "ccb");
+  }
 
   @Test public void finalMethods() {
     testError("class X{ static static def f(){1} }", "cannot combine");
