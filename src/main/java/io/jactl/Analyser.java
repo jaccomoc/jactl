@@ -22,10 +22,13 @@ import io.jactl.runtime.FunctionDescriptor;
 
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static io.jactl.JactlType.*;
+import static io.jactl.TokenType.DOT;
 import static io.jactl.TokenType.QUESTION_COLON;
+import static io.jactl.TokenType.QUESTION_DOT;
 import static io.jactl.TokenType.QUESTION_EQUAL;
 import static io.jactl.TokenType.QUESTION_QUESTION;
 
@@ -244,7 +247,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       else {
         // If function we are invoking is async then we are async
-        if (isAsync(function, null, expr.args)) {
+        if (isAsync(expr, function, null, expr.args)) {
           async(expr);
         }
       }
@@ -271,7 +274,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         // If we are invoking a method that is marked as async then we need to mark ourselves as async
         // so that callers to us (the current function) can know to add code for handling suspend/resume
         // with Continuations.
-        if (isAsync(expr.methodDescriptor, expr.parent, expr.args)) {
+        if (isAsync(expr, expr.methodDescriptor, expr.parent, expr.args)) {
           async(expr);
         }
       }
@@ -606,7 +609,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     else {
       // If initMethod is async then we need to mark ourselves as async
-      if (isAsync(initMethod, null, expr.args)) {
+      if (isAsync(expr, initMethod, null, expr.args)) {
         async(expr);
       }
     }
@@ -795,7 +798,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
    * @param args  the remaining arguments
    * @return true if call should be treated as async
    */
-  private boolean isAsync(FunctionDescriptor func, Expr arg0, List<Expr> args) {
+  private boolean isAsync(Expr callSite, FunctionDescriptor func, Expr arg0, List<Expr> args) {
     if (testAsync)                  { return true;  }
     if (!func.isAsync)              { return false; }
     if (func.asyncArgs.isEmpty()) {
@@ -804,12 +807,12 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       return true;
     }
 
-    boolean result = hasAsyncArg(func, arg0, args);
+    boolean result = hasAsyncArg(callSite, func, arg0, args);
     //debug("Test " + func.implementingClassName + "." + func.name + " --> async args = " + result);
     return result;
   }
 
-  private boolean hasAsyncArg(FunctionDescriptor func, Expr arg0, List<Expr> args) {
+  private boolean hasAsyncArg(Expr callSite, FunctionDescriptor func, Expr arg0, List<Expr> args) {
     // If function is only async if passed an async arg then check the args.
     // For methods note that index 0 means the object on whom we are performing the method call so other
     // arguments start at index 1 so args.get(index-1) gets the arg value for that index.
@@ -821,7 +824,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                                                           : namedArgs.get(func.paramNames.get(i));
       for (Integer asyncArg : func.asyncArgs) {
         Expr expr = getrArg.apply(asyncArg);
-        if (_isAsyncArg(expr)) {
+        if (_isAsyncArg(callSite, expr)) {
           return true;
         }
       }
@@ -841,7 +844,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
       for (Integer asyncArg : func.asyncArgs) {
         Expr expr = getArg.apply(asyncArg);
-        if (_isAsyncArg(expr)) {
+        if (_isAsyncArg(callSite, expr)) {
           return true;
         }
       }
@@ -849,15 +852,15 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
-  private boolean _isAsyncArg(Expr arg) {
-    return _isAsyncArg(arg, isFirstPass);
+  private boolean _isAsyncArg(Expr callSite, Expr arg) {
+    return _isAsyncArg(arg, method -> addAsyncCallDependency(currentFunction(), callSite, method));
   }
   
   public static boolean isAsyncArg(Expr arg) {
-    return _isAsyncArg(arg, false);
+    return _isAsyncArg(arg, (Consumer<FunctionDescriptor>)null);
   }
   
-  private static boolean _isAsyncArg(Expr arg, boolean isFirstPass) {
+  private static boolean _isAsyncArg(Expr arg, Consumer<FunctionDescriptor> handleUnknownAsync) {
     if (arg == null || arg instanceof Expr.Noop) {
       return false;
     }
@@ -866,7 +869,7 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       if (decl == null) {
         throw new IllegalStateException("Internal error: Expr.Identifier with null varDecl");
       }
-      return _isAsyncArg(decl, isFirstPass);
+      return _isAsyncArg(decl, handleUnknownAsync);
     }
 
     if (arg instanceof Expr.VarDecl) {
@@ -880,15 +883,15 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
 
       if (decl.funDecl != null) {
-        return _isAsyncArg(decl.funDecl, isFirstPass);
+        return _isAsyncArg(decl.funDecl, handleUnknownAsync);
       }
 
       if (decl.initialiser != null) {
-        return _isAsyncArg(decl.initialiser, isFirstPass);
+        return _isAsyncArg(decl.initialiser, handleUnknownAsync);
       }
 
       if (decl.originalVarDecl != null) {
-        return _isAsyncArg(decl.originalVarDecl, isFirstPass);
+        return _isAsyncArg(decl.originalVarDecl, handleUnknownAsync);
       }
 
       // If we have a type that can't be async then return false, otherwise return true
@@ -897,32 +900,50 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
     // Check for an initialiser that is a closure/function and return its asyncness
     if (arg instanceof Expr.FunDecl) {
-      Boolean isAsync = ((Expr.FunDecl) arg).functionDescriptor.isAsync;
-      if (isAsync == null) {
-        assert isFirstPass;
-      }
-      return isAsync != null && isAsync;
+      return isAsyncFunc(((Expr.FunDecl) arg).functionDescriptor, handleUnknownAsync);
     }
 
     // Check for a closure
     if (arg instanceof Expr.Closure) {
-      Boolean isAsync = ((Expr.Closure) arg).funDecl.functionDescriptor.isAsync;
-      if (isAsync == null) {
-        assert isFirstPass;
-      }
-      return isAsync != null && isAsync;
+      return isAsyncFunc(((Expr.Closure) arg).funDecl.functionDescriptor, handleUnknownAsync);
     }
 
     // If arg is itself a function/method call then it is async if the call is async
-    if (arg instanceof Expr.Call && ((Expr.Call)arg).isAsync)             { return true; }
-    if (arg instanceof Expr.MethodCall && ((Expr.MethodCall)arg).isAsync) { return true; }
-
-    if (arg.type.is(FUNCTION) && arg.isAsync) { return true; }
+    if (arg instanceof Expr.Call && arg.isAsync)             { return true; }
+    if (arg instanceof Expr.MethodCall && arg.isAsync)       { return true; }
     
-    // If type of variable is ANY then assume worst
-    if (arg.type.is(ANY)) { return true; }
+    if (arg instanceof Expr.Binary && ((Expr.Binary) arg).operator.is(DOT,QUESTION_DOT) && ((Expr.Binary) arg).left.type.isHostClass()) {
+      // Host class methods are never async
+      return false;
+    }
+
+    if (arg.type.is(FUNCTION) && arg.constValue instanceof FunctionDescriptor) {
+      return isAsyncFunc((FunctionDescriptor)arg.constValue, handleUnknownAsync);
+    }
+
+    if (arg instanceof Expr.Ternary) {
+      // Async if either branch is async
+      Expr.Ternary ternary = (Expr.Ternary)arg;
+      return _isAsyncArg(ternary.second, handleUnknownAsync) || _isAsyncArg(ternary.third, handleUnknownAsync);
+    }
+    
+    // If type of arg is ANY or FUNCTION then assume worst as we don't know 
+    // at compile time whether it will hold an async function or not
+    if (arg.type.is(ANY,FUNCTION)) { return true; }
 
     return false;
+  }
+
+  private static boolean isAsyncFunc(FunctionDescriptor func, Consumer<FunctionDescriptor> handleUnknownAsync) {
+    Boolean isAsync = func.isAsync;
+    if (isAsync != null) {
+      return isAsync;
+    }
+    if (handleUnknownAsync != null) {
+      handleUnknownAsync.accept(func);
+      return false;
+    }
+    return true;
   }
 
   private void resolveHeapLocals(Expr.FunDecl caller, Expr.FunDecl callee) {

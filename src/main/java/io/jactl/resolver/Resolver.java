@@ -1077,7 +1077,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         if (!expr.left.type.is(ANY)) {
           // Do some level of validation
           if (expr.operator.is(DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE)) {
-            expr.type = getFieldType(expr.left, expr.operator, expr.right, false).first;
+            expr.type = getFieldType(expr, expr.left, expr.operator, expr.right, false).first;
             if (expr.operator.is(QUESTION_DOT, QUESTION_SQUARE)) {
               expr.type = expr.type.boxed();         // since with ?. and ?[ we could get null
             }
@@ -1151,14 +1151,17 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   /**
-   * Look up field type for given parent
+   * Look up field type for given parent.
+   * Side effect: If the field is actually a method then we store the FunctionDescriptor for the method
+   * in the constValue field of expr.
+   * @param expr           the expr (e.g. the Expr.Binary)
    * @param parent         the parent expression
    * @param accessOperator the type of access (DOT, QUESTION_DOT, LEFT_SQUARE, QUESTION_SQUARE)
    * @param field          the expression giving the field name
    * @param fieldsOnly     true if field look up only (not methods)
    * @return Pair of field type and a pair of booleans indicating whether the field is a static constant and whether field is final
    */
-  private Pair<JactlType,Pair<Boolean,Boolean>> getFieldType(Expr parent, Token accessOperator, Expr field, boolean fieldsOnly) {
+  private Pair<JactlType,Pair<Boolean,Boolean>> getFieldType(Expr expr, Expr parent, Token accessOperator, Expr field, boolean fieldsOnly) {
     boolean isStaticConst = false;
     boolean isFinal  = false;
     JactlType type   = null;
@@ -1240,6 +1243,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
               if (parent.type.is(CLASS) && !descriptor.isStaticImplementation) {
                 error("Static access to non-static method '" + fieldName + "' for class " + parent.type, field.location);
               }
+              expr.constValue = descriptor;
               type = FUNCTION;
             }
             if (descriptor == null && parent.type.is(CLASS)) {
@@ -1261,7 +1265,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
           // Not INSTANCE or CLASS
 
           // Might be a built-in method...
-          if (accessOperator.is(DOT,QUESTION_DOT) && lookupMethod(parent.type, (String) fieldName) != null) {
+          FunctionDescriptor functionDescriptor = accessOperator.is(DOT,QUESTION_DOT) ? lookupMethod(parent.type, (String) fieldName) : null;
+          if (functionDescriptor != null) {
+            expr.constValue = functionDescriptor;
             type = FUNCTION;
           }
           else if (parent.type.is(MAP, ANY)) {
@@ -1874,7 +1880,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       // know the field type (e.g. it comes from a Map) then we will just use ANY as the type
       // and figure it all out at runtime.
       Expr.Binary valueExpr = (Expr.Binary) expr.expr;
-      Pair<JactlType,Pair<Boolean,Boolean>> fieldInfo = getFieldType(expr.parent, expr.accessType, expr.field, true);
+      Pair<JactlType,Pair<Boolean,Boolean>> fieldInfo = getFieldType(expr.expr, expr.parent, expr.accessType, expr.field, true);
       valueExpr.left.type = fieldInfo.first;
     }
     resolveFieldAssignment(expr, expr.parent, expr.field, expr.expr, expr.accessType);
@@ -1916,7 +1922,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
     if (parent.type.is(INSTANCE, CLASS)) {
       // Type will be the field type (boxed if ?= being used due to possibility of null value)
-      Pair<JactlType,Pair<Boolean,Boolean>> pair = getFieldType(parent, accessType, field, true);
+      Pair<JactlType,Pair<Boolean,Boolean>> pair = getFieldType(expr, parent, accessType, field, true);
       JactlType fieldType = pair.first;
       if (fieldType.is(CLASS)) {
         error("Invalid operation on a class", field.location);

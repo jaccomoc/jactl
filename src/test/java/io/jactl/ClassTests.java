@@ -1579,6 +1579,24 @@ public class ClassTests extends BaseTest {
     test("class X { int z;  int abc = 1 }; def x = new X(1); x.\"${sleep(0,'a') + sleep(0,'bc')}\"", 1);
     test("class X { int z;  int abc = sleep(0,1) + sleep(0,new X(abc:3,z:1).abc) }; def x = new X(1); x.abc", 4);
     test("class X { int z;  int i = sleep(0,-1)+sleep(0,2); def f(){ return sleep(0,{ sleep(0,++i - 1)+sleep(0,1) }) } }; def x = new X(1); def g = x.f(); g() + g() + x.i", 8);
+    test("class X { def f(x) { sleep(0,x) } }; [1,2,3].map(new X().f)", Utils.listOf(1,2,3));
+    test("class X { def m(x) { sleep(0,x) + 1 }; def f() { [1,2,3].map(this.m) } }; new X().f()", Utils.listOf(2,3,4));
+    test("class X { def m(x) { sleep(0,x) + 1 }; def f() { def r = [1,2,3].map(this.m); r.size() } }; new X().f()", 3);
+    test("class X { def m(x) { sleep(0,x) + 1 } }; def f() { X x = new X(); [1,2].map(x.m) }; f()", Utils.listOf(2,3));
+    test("class X { def m(x) { sleep(0,x) + 1 } }; def f() { X x = new X(); [1,2].map(x?.m) }; f()", Utils.listOf(2,3));
+    test("class X { final def m(x) { sleep(0,x) + 1 } }; def f() { X x = new X(); [1,2].map(x.m) }; f()", Utils.listOf(2,3));
+    test("class X { static def m(x) { sleep(0,x) + 1 } }; def f() { [1,2].map(X.m) }; f()", Utils.listOf(2,3));
+    test("class X { def m(x) { sleep(0,x) + 1 } }; def f() { X x = new X(); var g = x.m; [1,2].map(g) }; f()", Utils.listOf(2,3));
+    test("class X { def m(x) { sleep(0,x) + 1 } }; def f(b) { X x = new X(); [1,2].map(b ? x.m : { it }) }; f(true)", Utils.listOf(2,3));
+    test("def f(x) { [1,2,3].map(x ? { sleep(0,it) + 1 } : { it }) }; f(true)", Utils.listOf(2,3,4));
+    test("class X { def m(x) { sleep(0,x) + 1 } }; def f() { X x = new X(); [1,2,3].filter(x.m).map(x.m).sort{ a,b -> sleep(0,a) <=> b } }; f()", Utils.listOf(2,3,4));
+    test("class X { final def m(x) { x + 1 } }; def f() { X x = new X(); [1,2].map(x.m) }; f()", Utils.listOf(2,3));
+    test("class X { static def m(x) { x + 1 } }; def f() { [1,2].map(X.m) }; f()", Utils.listOf(2,3));
+    test("def f() { [1,2].map(X.m) }; class X { static def m(x) { x + 1 } }; f()", Utils.listOf(2,3));
+    test("def f() { X x = new X(); [1,2].map(x.m) }; class X { final def m(x) { sleep(0, x) + 1 } }; f()", Utils.listOf(2,3));
+    test("def f() { [1,2].map(X.m) }; class X { static def m(x) { g(x) }; static def g(x) { sleep(0, x) + 1 } }; f()", Utils.listOf(2,3));
+    test("class X { final def m(x) { x + 1 }; def f() { [1,2].map(this.m) } }; new X().f()", Utils.listOf(2,3));
+    test("def f() { String s = 'abcd'; [1,2].map(s.substring) }; f()", Utils.listOf("bcd", "cd"));
   }
 
   @Test public void asyncTests2() {

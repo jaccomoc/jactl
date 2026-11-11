@@ -403,6 +403,17 @@ public class CompilerTest3 extends BaseTest {
     test("def f(x) { x == 1 ? 3 : f(sleep(0,x.a)) }; f([a:[a:[a:1]]])", 3);
     testError("def f(x) { x == 1 ? 3 : f(sleep(0,x.a)) }; f([a:[a:[a:2]]])", "invalid parent object type");
   }
+  
+  @Test public void asyncForwardReferences() {
+    test("def c() { a() }; def a() { [1,2].map{ b(it) } }; def b(x) { sleep(0, x) }; c()", Utils.listOf(1,2));
+    test("class X { static def c() { a() }; static def a() { [1,2].map{ b(it) } }; static def b(x) { sleep(0, x) } }; X.c()", Utils.listOf(1,2));
+    test("def c() { a() }; def a() { def g = { b(it) }; [1,2].map(g) }; def b(x) { sleep(0, x) }; c()", Utils.listOf(1,2));
+    test("def c() { a() }; def a() { def h(x) { b(x) }; [1,2].map(h) }; def b(x) { sleep(0, x) }; c()", Utils.listOf(1,2));
+    test("def c() { a() }; def a() { [1,2].map{ [it].map{ b(it) }[0] } }; def b(x) { sleep(0, x) }; c()", Utils.listOf(1,2));
+    test("def d() { c() }; def c() { a() }; def a() { [1,2].filter{ b(it) }.map{ it * 10 } }; def b(x) { sleep(0, x) > 1 }; d()", Utils.listOf(20));
+    test("def c() { def r = a(); r.size() }; def a() { [1,2].map{ b(it) } }; def b(x) { sleep(0, x) }; c()", 2);
+    test("def c() { a() }; def a() { [1,2].map{ b(it) } }; def b(x) { x * 2 }; c()", Utils.listOf(2,4));
+  }
 
   @Test
   public void asyncFieldAccess() {
