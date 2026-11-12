@@ -1455,7 +1455,29 @@ public class ClassTests extends BaseTest {
     test("class X { int i }; class Y extends X { int j = 1 }; Y y = new Y(3); y.i + y.j", 4);
     testError("class X extends Y { class Y {} }; new X()", "unknown class 'Y'");
   }
-
+  
+  @Test public void superMethods() {
+    test("class X { def f(i,j = i+1) { \"X.f($i,$j)\" } }; class Y extends X { def f(i,j = i+1) { \"Y.f($i,$j)\" }; def g() { super.f(1) } }; new Y().g()", "X.f(1,2)");
+    test("class X { def f(int i = 1) { i + 1 } }; class Y extends X { def f(int i = 2) { i * 2 }; def g() { super.f() } }; new Y().g()", 2);
+    test("class X { def f(int i = 1) { i + 1 } }; class Y extends X { def f(int i = 2) { i * 3 }; def g() { super.f(i:3) } }; new Y().g()", 4);
+    test("class A { def f(x, y = x + 1) { \"A.f($x,$y)\" } }; class B extends A { def f(x, y = x + 1) { \"B.f($x,$y)\" }; def g() { super.f(1) } }; new B().g()", "A.f(1,2)");
+    test("class A { def f(x, y = x + 1) { \"A.f($x,$y)\" } }; class B extends A { def f(x, y = x + 1) { \"B.f($x,$y)\" }; def g() { super.f(x:1) } }; new B().g()", "A.f(1,2)");
+    test("class A { def f(x, y = x + 1) { \"A.f($x,$y)\" } }; class B extends A { def f(x, y = x + 100) { \"B.f($x,$y)\" }; def g() { super.f(1) } }; new B().g()", "A.f(1,2)");
+    test("class A { def f(x, y = x + 1) { \"A.f($x,$y)\" } }; class B extends A {}; class C extends B { def f(x, y = x + 1) { \"C.f($x,$y)\" }; def g() { super.f(1) } }; new C().g()", "A.f(1,2)");
+    test("class A { def f(x, y = x + 1) { \"A.f($x,$y)\" } }; class B extends A { def f(x, y = x + 1) { \"B.f($x,$y)\" } }; class C extends B { def f(x, y = x + 1) { \"C.f($x,$y)\" }; def g() { super.f(1) } }; new C().g()", "B.f(1,2)");                                                                                                                                                                                      
+    test("class A { def f(x, y = x + 1) { \"A.f($x,$y)\" } }; class B extends A { def f(x, y = x + 1) { \"B.f($x,$y)\" }; def g() { super.f(1) } }; class C extends B { def f(x, y = x + 1) { \"C.f($x,$y)\" } }; new C().g()", "A.f(1,2)");                                                                                                                                                                                      
+    test("class A { def f(x, y = x + 1) { \"A.f($x,$y)\" } }; class B extends A { final def f(x, y = x + 1) { \"B.f($x,$y)\" }; def g() { super.f(1) } }; new B().g()", "A.f(1,2)");
+    test("class A { def f(x, y = sleep(0, x + 1)) { \"A.f($x,$y)\" } }; class B extends A { def f(x, y = sleep(0, x + 1)) { \"B.f($x,$y)\" }; def g() { super.f(1) } }; new B().g()", "A.f(1,2)");
+    test("class A { def f(x, y = x + 1, z = 'z') { \"A.f($x,$y,$z)\" } }; class B extends A { def f(x, y = x + 1, z = 'z') { \"B.f($x,$y,$z)\" }; def g() { super.f(x:1, z:'q') } }; new B().g()", "A.f(1,2,q)");
+    test("class A { def f(x, y = x + 1) { \"A.f($x,$y)\" }; def g() { f(1) } }; class B extends A { def f(x, y = x + 1) { \"B.f($x,$y)\" } }; A a = new B(); [a.f(1), a.f(x:1), a.g()]", Utils.listOf("B.f(1,2)", "B.f(1,2)", "B.f(1,2)"));
+    test("class A { def f(x, y = x + 1) { \"A.f($x,$y)\" } }; class B extends A { def f(x, y = x + 1) { \"B.f($x,$y)\" } }; [new A(), new B()].map{ it.f(1) }", Utils.listOf("A.f(1,2)", "B.f(1,2)"));
+  }
+  
+  @Test public void superMethodsAsHandles() {
+    testError("class X { def f(){1} }; class Y extends X { def f(){2}; def g(){ super.f } }; new Y().g()()", "cannot use 'super.f' as a value");
+    testError("class X { def f(){1} }; class Y extends X { def f(){2}; def g(){ super.\"${'f'}\" } }; new Y().g()()", "dynamic field lookup not supported for super");
+  }
+  
   @Test public void baseClassesNamedArgContructors() {
     test("class X { int i = 1; int j = 2 }; class Y extends X { int k }; Y y = new Y(4); y.j", 2);
     test("class X { int i = 1; int j = 2 }; class Y extends X { int k = 3 }; Y y = new Y(k:4); y.j", 2);

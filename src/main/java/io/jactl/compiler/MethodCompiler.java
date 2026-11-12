@@ -2974,7 +2974,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // and this is the very last thing that the wrapper function does. If the real
     // function throws a Continuation then there is no need to continue the wrapper since
     // there is nothing left to do.
-    invokeUserMethod(expr.funDecl);
+    // NOTE: we use INVOKE_SPECIAL for non-static methods since we are inside a wrapper
+    // function (and have already done a virtual call to get here) and we want to invoke
+    // the method in the local class and not dispatch virtually which could invoke a child
+    // class method.
+    invokeMethod(expr.funDecl.functionDescriptor, methodParamTypes(expr.funDecl), !expr.funDecl.isStatic());
     return null;
   }
 

@@ -1240,6 +1240,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
                 error("Found method where field expected", field.location);
                 return Pair.of(TYPE_FOR_BAD_REF, null);
               }
+              if (parent.isSuper() && !descriptor.isStaticMethod) {
+                error("Cannot use 'super." + fieldName + "' as a value (only direct calls to super methods allowed)", field.location);
+                return Pair.of(TYPE_FOR_BAD_REF, null);
+              }
               if (parent.type.is(CLASS) && !descriptor.isStaticImplementation) {
                 error("Static access to non-static method '" + fieldName + "' for class " + parent.type, field.location);
               }
