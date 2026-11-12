@@ -1751,7 +1751,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     // Flag variable as non-final since it has had an assignment to it
-    identifierExpr.varDecl.isEffectivelyFinal = false;
+    unmarkEffectivelyFinal(identifierExpr.varDecl);
 
     // Track last type assigned so we can supply better completions in Intellij plugin
     identifierExpr.varDecl.lastAssignedType = expr.expr.type;
@@ -1762,6 +1762,13 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     return expr.type = expr.expr.type;
   }
 
+  private static void unmarkEffectivelyFinal(Expr.VarDecl varDecl) {
+    varDecl.isEffectivelyFinal = false;
+    if (varDecl.originalVarDecl != null) {
+      varDecl.originalVarDecl.isEffectivelyFinal = false;
+    }
+  }
+  
   private void flagMutatedGlobals(Expr expr) {
     if (expr instanceof Expr.Identifier) {
       Expr.Identifier identifierExpr = (Expr.Identifier) expr;
@@ -1837,7 +1844,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     // Flag variable as non-final since it has had an assignment to it
-    expr.identifierExpr.varDecl.isEffectivelyFinal = false;
+    unmarkEffectivelyFinal(expr.identifierExpr.varDecl);
 
     flagMutatedGlobals(expr.identifierExpr);
     

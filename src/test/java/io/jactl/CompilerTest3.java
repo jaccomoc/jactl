@@ -1304,4 +1304,13 @@ public class CompilerTest3 extends BaseTest {
     test("class X { def m(a) { a } }; def f(a) { a }; X x = new X(); def c = false; 10 + (!c ? x.m(3) : f(sleep(0,2)))", 13);
     test("class X { def m(a) { a } }; class Y { def f(a) { a }; def g(c, X x) { c ? f(sleep(0,2)) : x.m(3) } }; [new Y().g(true, new X()), new Y().g(false, new X())]", Utils.listOf(2, 3)); 
   }
+  
+  @Test public void reassignmentOfClosureVariables() {
+    test("def f = { it }; f = { it + 1 }; f(1)", 2);
+    test("def f = { it }; def g() { f = { it + 1 } }; g(); f(1)", 2);
+    test("def f = { it }; def g = { f = { it + 1 } }; g(); f(1)", 2);
+    test("def f = { it }; def g = { def j = { f = { it + 1 } }; j() }; g(); f(1)", 2);
+    test("def f() { def f = { it }; def g = { f = { it * 10 } }; g(); f(2) }; f()", 20);
+    test("def f = { it }; def g = { f = { sleep(0, it) + 1 } }; g(); f(1)", 2);
+  }
 }  
