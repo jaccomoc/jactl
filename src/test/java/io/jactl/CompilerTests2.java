@@ -2482,6 +2482,10 @@ public class CompilerTests2 extends BaseTest {
     test("def r = []; for (def s in ['a', null, 'b']) { r <<= s }; r", Utils.listOf("a", null, "b"));
     test("def r = []; for (Object s in ['a', null, 'b']) { r <<= s }; r", Utils.listOf("a", null, "b"));
     test("def r = []; for (int s in [1, null, 2]) { r <<= s }; r", Utils.listOf(1,2));
+    testError("String[] a = new String[2]; a[0] = 'x'; for (String s : a) { s }", "did not match");
+    testError("Map[] a = new Map[2]; for (Map m : a) { m }", "did not match");
+    testError("int[][] a = new int[2][]; for (int[] i : a) { i }", "did not match");
+    testError("class X{}; X[] a = new X[2]; for (X x : a) { x }", "did not match");
   }
   
   @Test public void destructuringForLoops() {

@@ -1313,4 +1313,31 @@ public class CompilerTest3 extends BaseTest {
     test("def f() { def f = { it }; def g = { f = { it * 10 } }; g(); f(2) }; f()", 20);
     test("def f = { it }; def g = { f = { sleep(0, it) + 1 } }; g(); f(1)", 2);
   }
+
+  @Test public void variableReassignmentToNull() {
+    test("int[] a = new int[2]; def g = { a = new int[5] }; g(); a[4] = 7; a[4]", 7);
+    testError("int[] a = new int[5]; def g = { a = new int[1] }; g(); a[3]", "index out of bounds");
+    testError("def f() { int[] a = new int[5]; def g() { a = new int[1] }; g(); a[3] }; f()", "index out of bounds");
+    testError("String x = 'abc'; def g = { x = null }; g(); x.size()", "null object");
+    test("String x = 'abc'; def g = { x += 'de' }; g(); x.size()", 5);
+    testError("String x = 'abc'; x = null; for (int i = 0; i < 2; i++) { x.size() }", "null object");
+    testError("String x = 'abc'; for (int i = 0; i < 2; i++) { x.size(); x = null }", "null object");
+    testError("String x = 'abc'; int i = 0; while (i++ < 2) { x.size(); x = null }", "null object");
+    testError("String x = 'abc'; for (i in [1,2]) { x.size(); x = null }", "null object");
+    testError("def f() { String x = 'abc'; for (int i = 0; i < 2; i++) { x.size(); x = null } }; f()", "null object");
+    testError("String x = 'abc'; for (int i = 0; i < 2; i++) { \"${x.size()}\"; x = null }", "null object");
+    testError("class X { int a = 3 }; X x = new X(); for (int i = 0; i < 2; i++) { x.a; x = null }", "null object");
+    testError("class X { def m() { 3 } }; X x = new X(); for (int i = 0; i < 2; i++) { x.m(); x = null }", "null object");
+    testError("def x = 'abc'; for (int i = 0; i < 2; i++) { x.size(); x = null }", "null value");
+    testError("String x = 'abc'; for (int i = 0; i < 2; i++) { def y = x; y.size(); x = null }", "null value");
+    testError("List x = [1,2]; for (int i = 0; i < 2; i++) { x.map{ it * 2 }; x = null }", "null object");
+    testError("String x = 'abc'; k(); x.size(); def k() { x = null }", "null object");
+    test("String x = 'abc'; def r = []; for (int i = 0; i < 2; i++) { r <<= x?.size(); x = null }; r", Utils.listOf(3, null));
+    test("class X { def m() { 3 } }; X x = new X(); def r = []; for (int i = 0; i < 2; i++) { r <<= x?.m(); x = null }; r", Utils.listOf(3, null));
+    test("def x = 'abc'; def r = []; for (int i = 0; i < 2; i++) { r <<= x?.size(); x = null }; r", Utils.listOf(3, null));
+    test("String x = 'abc'; k(); x?.size(); def k() { x = null }; x", null);
+    test("class X{}; X x = new X(); def r = []; for (int i = 0; i < 2; i++) { r <<= switch (x) { X -> 1; default -> 2 }; x = null }; r", Utils.listOf(1, 2));
+    test("class X{}; X x = new X(); def r = []; for (int i = 0; i < 2; i++) { r <<= switch (x) { X -> 1; def -> 2 }; x = null }; r", Utils.listOf(1, 2));
+    test("class X{}; X x = new X(); k(); def k() { x = null }; switch (x) { X -> 1; default -> 2 }", 2);
+  }
 }  

@@ -60,7 +60,7 @@ public class SwitchResolver {
         JactlType type    = coveringType(pattern);
         for (JactlType ct : coveredTypes) {
           if (ct.is(ANY) || ct.equals(subjectType) || ct.equals(pattern.type) || ct.isAssignableFrom(pattern.type) || (type != null && ct.isAssignableFrom(type))) {
-            if (!ct.is(ANY) && (pattern.isNull() || type != null && type.is(ANY) && expr.subject.couldBeNull)) {
+            if (!ct.is(ANY) && (pattern.isNull() || type != null && type.is(ANY) && (expr.subject.couldBeNull || expr.subject instanceof Expr.Identifier && !expr.subject.type.isPrimitive()))) {
               continue;
             }
             resolver.error("Switch pattern will never be evaluated (covered by a previous pattern)", pattern.location);
@@ -75,18 +75,20 @@ public class SwitchResolver {
       if (expr.defaultCase != null) {
         boolean coveredIsAnyOrIsAssignable = false;
         for (JactlType ct : coveredTypes) {
-          if (ct.is(ANY) || ct.isAssignableFrom(subjectType)) {
+          if (ct.is(ANY) || ct.equals(subjectType) || ct.isAssignableFrom(subjectType)) {
             coveredIsAnyOrIsAssignable = true;
             break;
           }
         }
         if (coveredIsAnyOrIsAssignable) {
           if (expr.isForStatement) {
-            // In for loop we just remove the redundant default case (which was to throw an error if no match found)
-            expr.defaultCase = null;
+            if (!expr.subject.couldBeNull) {
+              // In for loop we just remove the redundant default case (which was to throw an error if no match found)
+              expr.defaultCase = null;
+            }
           }
           else {
-            if (!expr.subject.couldBeNull) {
+            if (!expr.subject.couldBeNull && !(expr.subject instanceof Expr.Identifier && !expr.subject.type.isPrimitive())) {
               resolver.error("Default case is never applicable due to switch case that matches all input", expr.defaultCase.location);
             }
           }

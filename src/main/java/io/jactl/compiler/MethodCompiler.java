@@ -1787,7 +1787,9 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       convertTo(expr.type, expr.left, true, expr.left.location);
     }
     compile(expr.right);
-    unbox(expr.right);
+    if (!expr.left.type.is(LIST,ANY)) {
+      unbox(expr.right);
+    }
     if (expr.operator.getType().isBitShift()) {
       if (!expr.left.type.is(LIST, ANY)) {
         assert lhsType.isNumeric();

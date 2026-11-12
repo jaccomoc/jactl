@@ -363,6 +363,17 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override public Void visitIdentifier(Expr.Identifier expr) {
+    // Catch scenarios where we have reset the effectively final field and now have to also reset
+    // the couldBeNull field of references to that variable
+    if (expr.varDecl != null) {
+      Expr.VarDecl varDecl = expr.varDecl.originalVarDecl == null ? expr.varDecl : expr.varDecl.originalVarDecl;
+      if (!varDecl.isEffectivelyFinal && !varDecl.type.isPrimitive()) {
+        expr.couldBeNull = true;
+      }
+      else if (varDecl.isEffectivelyFinal) {
+        expr.couldBeNull = varDecl.couldBeNull;
+      }
+    }
     return null;
   }
 
@@ -376,6 +387,9 @@ public class Analyser implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override public Void visitVarDecl(Expr.VarDecl expr) {
     if (!expr.isField) {
       analyse(expr.initialiser);
+    }
+    if (!expr.isField && expr.initialiser != null) {
+      expr.couldBeNull = expr.initialiser.couldBeNull && !expr.type.isPrimitive();
     }
     return null;
   }

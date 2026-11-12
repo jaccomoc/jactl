@@ -1695,11 +1695,6 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       error("Cannot modify 'final' " + (expr.varDecl.isField ? "field" : "variable") + " '" + expr.identifier.getStringValue() + "'", expr.location);
     }
 
-    if ((varDecl.isField && varDecl.isFinal || !varDecl.isField && varDecl.isEffectivelyFinal) &&
-        varDecl.initialiser != null && !varDecl.initialiser.couldBeNull) {
-      expr.couldBeNull = false;
-    }
-    
     if (varDecl.isGlobal) {
       if (jactlContext.globalAliases()) {
         // If we are using local aliases for globals then the local aliases will be the unboxed type if
@@ -2874,6 +2869,8 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       type = ((HostClassDescriptor)classDescriptor).getClassType();
     }
     classVarDecl.type = type;
+    classVarDecl.couldBeNull = false;
+    classVarDecl.isEffectivelyFinal = true;
     return classVarDecl;
   }
 

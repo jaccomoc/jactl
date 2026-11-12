@@ -457,11 +457,14 @@ public class SwitchTests extends BaseTest {
     test("Map x = null; switch (x) { Map m -> 1; def v -> 2 }", 2);
     testError("def x = null; switch (x) { _ -> 1; _ if true -> 2 }", "covered by a previous pattern", 1);
     testError("def x = 2; switch (x) { int -> 1; 2 if true -> 2; default -> 3 }", "covered by a previous pattern", 1);
+    testError("switch ('abc') { String -> 1; default -> 2 }", "never applicable");
+    testError("switch ('abc') { String -> 1; def -> 2 }", "covered by a previous pattern", 1);
   }
 
   @Test public void switchOnMap() {
-    test("switch ([:]) { Map -> 1; default -> 2 }", 1);
-    test("switch ([:]) { Map x -> x; default -> 2 }", Utils.mapOf());
+    testError("switch ([:]) { Map -> 1; default -> 2 }", "never applicable");
+    test("Map m = [:]; switch(m) { Map -> 1; default -> 2 }", 1);
+    test("Map m = [:]; switch(m) { Map x -> x; default -> 2 }", Utils.mapOf());
     test("switch ([:]) { [:] -> 1; default -> 2 }", 1);
     test("switch ([:]) { [a:_] -> 1; default -> 2 }", 2);
     test("switch ([:]) { [a:_,*] -> 1; default -> 2 }", 2);
@@ -887,7 +890,6 @@ public class SwitchTests extends BaseTest {
     test("class X{}; def x = 123; switch(x) { X -> 1; _ -> 2 }", 2);
     test("class X{}; def x = [a:123]; switch(x) { X -> 1; _ -> 2 }", 2);
     testError("class X{}; X x = new X(); switch(x) { X -> 1; int -> 2 }", "can never match pattern type int");
-    testError("class X{}; X x = new X(); switch(x) { X -> 1; def -> 2 }", "covered by a previous");
     testError("class X{}; X x = new X(); switch(x) { def -> 2; X -> 1 }",  "covered by a previous");
     test("class X{}; def x; x = new X(); switch(x) { X -> 1; int -> 2 }", 1);
     test("class X{}; def x; x = new X(); switch(x) { X -> 1; def -> 2 }", 1);
@@ -921,7 +923,6 @@ public class SwitchTests extends BaseTest {
     test("class X {}; class Y extends X {}; X x = null; switch (x) { Y -> 'Y'; default -> 'other' }", "other");
     test("class X { int i = 3 }; class Y extends X { int j = 4 }; X x = new Y(); switch (x) { Y y -> y.j; default -> 0 }", 4);   // binding is typed Y                                                              
     testError("class A {}; class B {}; A a = new A(); switch (a) { B -> 'B'; default -> 'other' }", "can never match");
-    testError("class X {}; class Y extends X {}; Y y = new Y(); switch (y) { X -> 'X'; default -> 'other' }", "never applicable");
     test("class X { int i }; class Y extends X {}; X x = new X(1); switch (x) { Y(i:1) -> 'Y1'; default -> 'other' }", "other");
     test("class X { int i }; class Y extends X {}; X x = null; switch (x) { Y(i:1) -> 'Y1'; default -> 'other' }", "other");
     test("class X { int i }; class Y extends X { int j }; X x = new Y(1,2); switch (x) { Y(i:1,j:2) -> 1; default -> 0 }", 1);
@@ -948,7 +949,6 @@ public class SwitchTests extends BaseTest {
     test("class X {}; class Y extends X{}; Y y = null; switch (y) { X -> 'X'; default -> true }", true);
     test("class X {}; def x; x = null; switch (x) { X -> 'X' }", null);
     test("class X {}; X x = null; switch (x) { X -> 'X'; default -> 'd' }", "d");
-    testError("class X {}; X x = new X(); switch (x) { X -> 'X'; default -> 'd' }", "default case is never applicable");
 
     test("class X {}; X x = null; switch (x) { X xx -> 'X'; default -> 'd' }", "d");
     test("class X {}; class Y extends X {}; Y y = null; switch (y) { X x -> 'X'; default -> 'd' }", "d");
@@ -956,10 +956,13 @@ public class SwitchTests extends BaseTest {
     test("def f(String[] arr) { switch (arr) { [String] -> 's'; default -> 'd' } }; f(new String[1])", "d");
     test("class X {}; X[] arr = new X[1]; switch (arr) { [X] -> 'x'; default -> 'd' }", "d");
     test("String[] arr = ['a']; switch (arr) { [String] -> 's'; default -> 'd' }", "s");
-    testError("class X {}; X x = new X(); switch (x) { X xx -> 'X'; default -> 'd' }", "matches all input");
+    test("class X {}; X x = new X(); switch (x) { X xx -> 'X'; default -> 'd' }", "X");
     test("class X {}; X x; x = new X(); switch (x) { X xx -> 'X'; default -> 'd' }", "X");
 
     test("int i = 1; switch (i) { def -> 'd' }", "d");    
+    testError("switch (1) { int -> 2; def -> 'd' }", "covered");    
+    testError("switch (1) { int -> 2; _ -> 'd' }", "covered");    
+    testError("switch (1) { int -> 2; default -> 'd' }", "never applicable");    
   }
 
   @Test public void switchExprWithBlocks() {
