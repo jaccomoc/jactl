@@ -9,7 +9,7 @@ public class Triple<X,Y,Z> {
     this.second = second;
     this.third  = third;
   }
-  public static <X,Y,Z> Triple<X,Y,Z> create(X first, Y second, Z third) {
+  public static <X,Y,Z> Triple<X,Y,Z> of(X first, Y second, Z third) {
     return new Triple(first, second, third);
   }
 }

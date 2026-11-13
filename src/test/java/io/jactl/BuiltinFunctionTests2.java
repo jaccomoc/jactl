@@ -1473,6 +1473,25 @@ public class BuiltinFunctionTests2 extends BaseTest {
     return ((InvocationContext)RuntimeState.getState().getInvocationContext()).value;
   }
 
+  @Test public void checkpointMapListKeys() throws ExecutionException, InterruptedException {
+    checkpointTest("def m = [:]; m[[1]] = 123; checkpoint({},{}); m[[1]]", 123, 123, null);
+    checkpointTest("def m = [:]; def k = [1]; m[k] = 123; checkpoint({},{}); m[k]", 123, 123, null);
+  }
+  
+  @Test public void checkpointMapCollectionKeys() throws ExecutionException, InterruptedException {
+    test("def k = [1]; def m = [(k):123]; m[k]", 123);
+    test("def k = [1,2]; def m = [(k):123]; m", Utils.mapOf(Utils.listOf(1,2), 123));
+    test("def m = [:]; def k = [1,2]; m[k] = 'v'; [m[k], m[[1,2]]]", Utils.listOf("v", "v"));
+    test("def m = [:]; def k = [1,2]; def l = [k]; m[k] = 'v'; m[[1,2]]", "v");
+    test("def m = [:]; m[[a:[1,2]]] = 'v'; m[[a:[1,2]]]", "v");
+    test("class X { int i; List l }; def m = [:]; m[new X(1,[2,3])] = 'v'; m[new X(1,[2,3])]", "v");
+    test("def m = [:]; m[[1,[2,[3,[4]]]]] = 'deep'; m[[1,[2,[3,[4]]]]]", "deep");
+    test("def k1 = [1]; def k2 = [2]; def m = [(k1):'a', (k2):'b']; def all = [k2, k1, m]; [m[[1]], m[[2]], m.size()]", Utils.listOf("a", "b", 2));
+    test("def g = [[1,'a'],[1,'b'],[2,'c']].groupBy{ [it[0]] }; g[[1]]", Utils.listOf(Utils.listOf(1,"a"), Utils.listOf(1,"b")));
+    test("class N { def next; int v }; def a = new N(null, 1); def b = new N(a, 2); a.next = b; def m = [(a.v):a]; m[1].next.next.v", 1);
+    test("class X { int i; def f = { i * 10 } }; def x = new X(3); def m = [(x):'v']; [m[x], m.map{ it[0].f() }]", Utils.listOf("v", Utils.listOf(30)));
+  }
+
   @Test public void functionWithDefaults() {
     try {
       Jactl.function().name("testFunc").param("arg", 10).impl(BuiltinFunctionTests2.class, "testFunc").register();

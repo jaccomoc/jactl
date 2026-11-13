@@ -19,7 +19,7 @@ package io.jactl.runtime;
 
 import io.jactl.JactlContext;
 import io.jactl.JactlType;
-import io.jactl.Pair;
+import io.jactl.Triple;
 
 import java.io.Reader;
 import java.io.Writer;
@@ -39,8 +39,10 @@ public class Restorer {
 
   private int           objTableOffset;
   private Object[]      restoredObjects;
+  private boolean[]     pendingRestores;
+  private int           mapKeyNestingDepth = 0;
 
-  private CircularBuffer<Pair<Integer,Object>> toBeProcessed = new CircularBuffer<>(127, true);
+  private CircularBuffer<Triple<Integer,Integer,Object>> toBeProcessed = new CircularBuffer<>(127, true);
 
   /////////////////
   
@@ -58,6 +60,7 @@ public class Restorer {
     objTableOffset = _readInt(idx);
     idx += 4;
     restoredObjects = new Object[numObjects];
+    pendingRestores = new boolean[numObjects];
     return this;
   }
 
@@ -84,9 +87,9 @@ public class Restorer {
 
   private Object restore() {
     Object result = readObject();
-    Pair<Integer,Object> objectPair;
-    while ((objectPair = toBeProcessed.remove()) != null) {
-      restoreObject(objectPair.first, objectPair.second);
+    Triple<Integer,Integer,Object> objInfo;
+    while ((objInfo = toBeProcessed.remove()) != null) {
+      restoreObjectIfNeeded(objInfo.first, objInfo.second, objInfo.third);
     }
     restoredObjects = null;
     return result;
@@ -264,27 +267,20 @@ public class Restorer {
   }
 
   /**
-   * Read an object from the buffer
-   * @return the object
-   */
-  public Object readObject() {
-    return readObject(false);
-  }
-
-  /**
    * Read object will return the actual object (for primitives) or the shell
    * of the object (created but no fields filled in) for non-primitives.
    * This allows us to deal with circular references. We add the object to a
    * list of objects that need to be fully restored at the end.
-   * If the restore flag is set we will read *and* restore the object. This
-   * is used for Maps where we need the full object for the key so that we
+   * If the mapKeyNestingDepth is &gt; 0 we will read *and* restore the object.
+   * This is used for Maps where we need the full object for the key so that we
    * can determine the hashCode when adding an object to the map. Note that
    * we don't support circular references for map key objects since hashCode
    * will get a stack overflow in these situations anyway.
-   * @param restore  whether to restore the object or not
-   * @return
+   * @return the object
    */
-  private Object readObject(boolean restore) {
+  public Object readObject() {
+    boolean restore = mapKeyNestingDepth > 0;
+    
     int ordinal = buf[idx++];
     if (ordinal == NULL_TYPE) {
       return null;
@@ -304,41 +300,42 @@ public class Restorer {
     }
 
     int objId = readCInt();
-    Object restoredObject = restoredObjects[objId];
-    if (restoredObject != null) {
-      return restoredObject;
-    }
     int oldIdx = idx;
     try {
       // Get offset to object
       idx = _readInt(objTableOffset + objId * 4);
       int objOffset = idx;
-      // Only add object to list of objects to be processed (restored) if not restoring now
-      Function<Object,Object> add = obj -> { if (!restore) { toBeProcessed.add(Pair.of(objOffset, obj)); }; return obj; };
+      Object restoredObject = restoredObjects[objId];
+      if (restoredObject != null) {
+        if (restore) {
+          restoreObjectIfNeeded(objId, objOffset, restoredObject);
+        }
+        return restoredObject;
+      }
       ordinal = buf[idx++];
       Object result;
 
       // For non-primitives we create but don't populate the object and return it and add it to
       // list of objects that need to be restored later. This allows us to cater for circular
       // references.
-      boolean shouldRestore = restore;
+      boolean isRestored = false;
       switch (JactlType.TypeEnum.values()[ordinal]) {
         // Don't restore since these object types are more like primitives and are restored when we read them
-        case STRING:         result = readString();            shouldRestore = false;   break;
-        case STRING_BUFFER:  result = readStringBuffer();      shouldRestore = false;   break;
-        case STRING_BUILDER: result = readStringBuilder();     shouldRestore = false;   break;
+        case STRING:         result = readString();            isRestored = true;   break;
+        case STRING_BUFFER:  result = readStringBuffer();      isRestored = true;   break;
+        case STRING_BUILDER: result = readStringBuilder();     isRestored = true;   break;
 
-        case MAP:            result = add.apply(new LinkedHashMap<>());                 break;
-        case LIST:           result = add.apply(new ArrayList<>());                     break;
-        case INSTANCE:       result = add.apply(createInstance());                      break;
-        case FUNCTION:       result = add.apply(JactlMethodHandle.create(readCInt()));  break;
-        case ARRAY:          result = add.apply(createArray());                         break;
-        case HEAPLOCAL:      result = add.apply(new HeapLocal());                       break;
-        case ITERATOR:       result = add.apply(JactlIterator.create(readCInt()));      break;
-        case CONTINUATION:   result = add.apply(new Continuation());                    break;
-        case MATCHER:        result = add.apply(new RegexMatcher());                    break;
-        case BUILTIN:        result = add.apply(createBuiltinInstance());               break;
-        case CLASS:          result = add.apply(createClass());                         break;
+        case MAP:            result = new LinkedHashMap<>();                 break;
+        case LIST:           result = new ArrayList<>();                     break;
+        case INSTANCE:       result = createInstance();                      break;
+        case FUNCTION:       result = JactlMethodHandle.create(readCInt());  break;
+        case ARRAY:          result = createArray();                         break;
+        case HEAPLOCAL:      result = new HeapLocal();                       break;
+        case ITERATOR:       result = JactlIterator.create(readCInt());      break;
+        case CONTINUATION:   result = new Continuation();                    break;
+        case MATCHER:        result = new RegexMatcher();                    break;
+        case BUILTIN:        result = createBuiltinInstance();               break;
+        case CLASS:          result = createClass();                         break;
         case NUMBER:
         case ANY:
         case UNKNOWN:
@@ -346,8 +343,14 @@ public class Restorer {
           throw new IllegalStateException("Unexpected type in readObject: " + ordinal);
       }
       restoredObjects[objId] = result;
-      if (shouldRestore) {
-        restoreObject(objOffset, result);
+      if (!isRestored) {
+        if (restore) {
+          restoreObject(objId, objOffset, result);
+        }
+        else {
+          toBeProcessed.add(Triple.of(objId, objOffset, result));
+          pendingRestores[objId] = true;
+        }
       }
       return result;
     }
@@ -356,7 +359,22 @@ public class Restorer {
     }
   }
 
-  private void restoreObject(int objOffset, Object obj) {
+  /**
+   * Restore the object if not already restored
+   * @param objId      the object id
+   * @param objOffset  offset into buffer where object is encoded
+   * @param obj        the object to be filled in
+   */
+  private void restoreObjectIfNeeded(int objId, int objOffset, Object obj) {
+    if (!pendingRestores[objId]) {
+      // Already done
+      return;
+    }
+    restoreObject(objId, objOffset, obj);
+  }
+  
+  private void restoreObject(int objId, int objOffset, Object obj) {
+    pendingRestores[objId] = false;
     int oldIdx = idx;
     try {
       idx = objOffset;
@@ -384,14 +402,22 @@ public class Restorer {
   void restoreMap(Map map) {
     int size = readCInt();
     for (int i = 0; i < size; i++) {
-      map.put(readObject(true), readObject());
+      Object key;
+      try {
+        mapKeyNestingDepth++;
+        key = readObject();
+      }
+      finally {
+        mapKeyNestingDepth--;
+      }
+      map.put(key, readObject());
     }
   }
 
   private void restoreList(List list) {
     int size = readCInt();
     for (int i = 0; i < size; i++) {
-      list.add(readObject(true));
+      list.add(readObject());
     }
   }
 

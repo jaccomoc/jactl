@@ -5,7 +5,6 @@ import io.jactl.runtime.BuiltinFunctions;
 import io.jactl.runtime.RuntimeUtils;
 import org.objectweb.asm.Label;
 
-import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -14,7 +13,6 @@ import java.util.stream.IntStream;
 
 import static io.jactl.JactlType.*;
 import static io.jactl.JactlType.DOUBLE;
-import static io.jactl.JactlType.LONG;
 import static org.objectweb.asm.Opcodes.*;
 
 /**
@@ -54,7 +52,7 @@ public class SwitchCompiler {
     List<Triple<Expr, Expr, Expr.SwitchCase>> flattened = new ArrayList<>();
     for (Expr.SwitchCase switchCase : expr.cases) {
       for (Pair<Expr, Expr> pair : switchCase.patterns) {
-        Triple<Expr, Expr, Expr.SwitchCase> exprExprSwitchCaseTriple = Triple.create(pair.first, pair.second, switchCase);
+        Triple<Expr, Expr, Expr.SwitchCase> exprExprSwitchCaseTriple = Triple.of(pair.first, pair.second, switchCase);
         flattened.add(exprExprSwitchCaseTriple);
       }
     }

@@ -937,7 +937,7 @@ public class Parser {
         }
         matchAny(EOL);
         Token typeToken = peek();
-        identifierAndTypes.add(Triple.create(typeToken, optionalType(), expectOrNull(true, IDENTIFIER)));
+        identifierAndTypes.add(Triple.of(typeToken, optionalType(), expectOrNull(true, IDENTIFIER)));
       }
       return identifierAndTypes;
     }, EOL, RIGHT_PAREN, RIGHT_SQUARE, RIGHT_BRACE);
