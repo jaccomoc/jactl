@@ -69,6 +69,7 @@ public class Utils {
   public static final MethodRef JACTL_INIT_WRAPPER_METHOD = getMethod(JactlObject.class, Utils.JACTL_INIT_WRAPPER, Continuation.class, String.class, int.class, Object[].class);
   public static final String JACTL_INIT_NOASYNC  = JACTL_PREFIX + "initNoAsync";
   public static final String JACTL_SCRIPT_PREFIX = JACTL_PREFIX + "Script";
+  public static final String JACTL_EVAL_SCRIPT_PREFIX = JACTL_SCRIPT_PREFIX + "Eval";
 
   public static final String JACTL_FIELDS_METHODS_MAP           = JACTL_PREFIX + "FieldsAndMethods";
   public static final String JACTL_FIELDS_METHODS_GETTER        = JACTL_PREFIX + "getFieldsAndMethods";

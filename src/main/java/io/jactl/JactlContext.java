@@ -670,11 +670,16 @@ public class JactlContext {
    * @param output         Writer where print/println output will go (can be null)
    */
   public void recoverCheckpoint(byte[] checkpoint, Consumer<Object> resultHandler, Reader input, Writer output) {
-    Continuation cont = (Continuation)Restorer.restore(this, checkpoint, input, output);
-    // If two args then we have commit closure and recovery closure so return recovery closure on recover
-    Object result = cont.localObjects.length == 1 ? cont.localObjects[0] : cont.localObjects[1];
-    RuntimeState state = RuntimeState.getState();
-    scheduleEvent(null, () -> resumeContinuation(resultHandler, result, cont, cont.scriptInstance, state));
+    try {
+      Continuation cont = (Continuation)Restorer.restore(this, checkpoint, input, output);
+      // If two args then we have commit closure and recovery closure so return recovery closure on recover
+      Object result = cont.localObjects.length == 1 ? cont.localObjects[0] : cont.localObjects[1];
+      RuntimeState state = RuntimeState.getState();
+      scheduleEvent(null, () -> resumeContinuation(resultHandler, result, cont, cont.scriptInstance, state));
+    }
+    catch (IndexOutOfBoundsException|NullPointerException|ClassCastException e) {
+      throw new IllegalStateException("Corrupt checkpoint: " + e, e);
+    }
   }
 
   //////////////////////////////////
@@ -1018,8 +1023,8 @@ public class JactlContext {
   private void cleanUp(JactlScriptObject instance) {
     RuntimeState.resetState();
     if (instance != null && instance._$j$isCheckpointed()) {
-      instance._$j$incrementCheckpointId();
       deleteCheckpoint(instance._$j$getInstanceId(), instance._$j$checkpointId());
+      instance._$j$incrementCheckpointId();
     }
   }
 

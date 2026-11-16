@@ -172,20 +172,20 @@ public abstract class JactlMethodHandle implements Checkpointable {
   }
 
   private static class Handle extends JactlMethodHandle {
-    private Class  className;
-    private String handleName;
+    private Class<?> clss;
+    private String   handleName;
     private MethodHandle methodHandle;
     private boolean isAsync;
     private boolean   needsLocation;
     private boolean[] heapLocalsPassedToFn;
     Handle(){}
     public Handle(MethodHandle methodHandle, boolean isAsync, boolean needsLookup, boolean[] heapLocalsPassedToFn, MethodHandle wrapperHandle, Class className, String handleName) {
-      this.handle       = wrapperHandle;
-      this.className    = className;
-      this.handleName   = handleName;
-      this.methodHandle = methodHandle;
-      this.isAsync        = isAsync;
-      this.needsLocation = needsLookup;
+      this.handle               = wrapperHandle;
+      this.clss                 = className;
+      this.handleName           = handleName;
+      this.methodHandle         = methodHandle;
+      this.isAsync              = isAsync;
+      this.needsLocation        = needsLookup;
       this.heapLocalsPassedToFn = heapLocalsPassedToFn;
     }
 
@@ -212,14 +212,14 @@ public abstract class JactlMethodHandle implements Checkpointable {
 
       // For JactlObject handles we write the class name but for built-in function classes
       // we write an id that has been registered with BuiltinFunctions.
-      if (JactlObject.class.isAssignableFrom(className)) {
+      if (JactlObject.class.isAssignableFrom(clss)) {
         checkpointer.writeBoolean(true);
-        checkpointer.writeObject(Type.getInternalName(className));
+        checkpointer.writeClassName(clss);
       }
       else {
         checkpointer.writeBoolean(false);
-        checkpointer.writeCInt(BuiltinFunctions.getClassId(className));
-        checkpointer.writeCInt(className.getName().hashCode());
+        checkpointer.writeCInt(BuiltinFunctions.getClassId(clss));
+        checkpointer.writeCInt(clss.getName().hashCode());
       }
       checkpointer.writeObject(handleName);
     }
@@ -229,15 +229,15 @@ public abstract class JactlMethodHandle implements Checkpointable {
       restorer.expectCInt(VERSION, "Bad version");
       boolean isJactlClass = restorer.readBoolean();
       if (isJactlClass) {
-        className = restorer.getJactlClass((String)restorer.readObject());
+        clss = restorer.getJactlClass((String)restorer.readObject());
       }
       else {
-        className = BuiltinFunctions.getClass(restorer.readCInt());
-        restorer.expectCInt(className.getName().hashCode(), "Class name hash does not match for " + className.getName());
+        clss = BuiltinFunctions.getClass(restorer.readCInt());
+        restorer.expectCInt(clss.getName().hashCode(), "Class name hash does not match for " + clss.getName());
       }
       handleName = (String)restorer.readObject();
       try {
-        Field handleField = className.getDeclaredField(handleName);
+        Field handleField = clss.getDeclaredField(handleName);
         Handle jactlMethodHandle = (Handle) handleField.get(null);
         handle = jactlMethodHandle.handle;
         methodHandle = jactlMethodHandle.methodHandle;
@@ -246,7 +246,7 @@ public abstract class JactlMethodHandle implements Checkpointable {
         heapLocalsPassedToFn = jactlMethodHandle.heapLocalsPassedToFn;
       }
       catch (NoSuchFieldException | IllegalAccessException e) {
-        throw new IllegalStateException("Error accessing field " + handleName + " in class " + className.getName(), e);
+        throw new IllegalStateException("Corrupt checkpoint: Error accessing field " + handleName + " in class " + clss.getName(), e);
       }
     }
   }

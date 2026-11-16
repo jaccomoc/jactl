@@ -513,6 +513,24 @@ public class PipelineCompiler {
         }
       }
     }
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
+      if (closureSlot >= 0) {
+        Expr arg = args.get(argNum);
+        if (arg.couldBeNull) {
+          methodCompiler.emitIf(arg.isAsync, MethodCompiler.IfTest.IS_NOTNULL,
+                                () -> methodCompiler.loadLocal(closureSlot),
+                                () -> {
+                                  methodCompiler.loadLocal(closureSlot);
+                                  invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
+                                },
+                                () -> {});
+        }
+        else {
+          methodCompiler.loadLocal(closureSlot);
+          invokeClosure(methodCompiler, ((Token) expr.methodNameLocation));
+        }
+      }
+    }
     @Override void cleanUp() {
       methodCompiler.stack.freeSlot(closureSlot);
     }
@@ -520,12 +538,6 @@ public class PipelineCompiler {
 
   private static class InlineMap extends InlineClosureInvoker {
     InlineMap(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler); }
-    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
-      if (closureSlot >= 0) {
-        methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
-      }
-    }
     @Override void asyncResumed(int contResultSlot, int valueSlot) {
       methodCompiler.loadLocal(contResultSlot);
     }
@@ -535,10 +547,7 @@ public class PipelineCompiler {
     InlineEach(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler, 0); }
     @Override boolean isTerminating() { return true; }
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
-      if (closureSlot >= 0) {
-        methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
-      }
+      super.compile(valueSlot, locationSlot, fns, idx);
       methodCompiler.popVal();
     }
     @Override void finish() {
@@ -572,10 +581,7 @@ public class PipelineCompiler {
       methodCompiler.mv.visitMethodInsn(INVOKEINTERFACE, "java/util/List", "add", "(Ljava/lang/Object;)Z", true);
       methodCompiler.mv.visitInsn(POP);
       methodCompiler.pushType(ANY);
-      if (closureSlot >= 0) {
-        methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
-      }
+      super.compile(valueSlot, locationSlot, fns, idx);
       methodCompiler.mv.visitIincInsn(indexSlot, 1);
     }
     @Override void asyncResumed(int contResultSlot, int valueSlot) {
@@ -601,10 +607,7 @@ public class PipelineCompiler {
       methodCompiler.storeLocal(subIterSlot);
     }
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
-      if (closureSlot >= 0) {
-        methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
-      }
+      super.compile(valueSlot, locationSlot, fns, idx);
       methodCompiler.mv.visitLabel(asyncCont);    // :ASYNC CONT
       methodCompiler.invokeMethod(RuntimeUtils.CREATE_ITERATOR_FLATMAP_METHOD);
       methodCompiler.storeLocal(subIterSlot);
@@ -657,10 +660,7 @@ public class PipelineCompiler {
       methodCompiler._storeLocal(resultSlot);
     }
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
-      if (closureSlot >= 0) {
-        methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
-      }
+      super.compile(valueSlot, locationSlot, fns, idx);
       addToResult();
     }
     private void addToResult() {
@@ -814,11 +814,15 @@ public class PipelineCompiler {
   private static class InlineFilter extends InlineClosureInvoker {
     InlineFilter(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler, 0); }
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
-      methodCompiler.dupVal();
-      if (closureSlot >= 0) {
-        // Invoke closure and check truthiness of its result
-        methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
+      if (valueSlot == -1) {
+        // Sync pipeline
+        methodCompiler.dupVal();
+      }
+      super.compile(valueSlot, locationSlot, fns, idx);
+      if (valueSlot != -1) {
+        // Async pipeline
+        methodCompiler.loadLocal(valueSlot);
+        methodCompiler.swap();
       }
       doFilter();
     }
@@ -892,11 +896,7 @@ public class PipelineCompiler {
       methodCompiler.storeLocal(resultSlot);
     }
     @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
-      if (closureSlot != -1) {
-        // Invoke closure and check truthiness of its result
-        methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
-      }
+      super.compile(valueSlot, locationSlot, fns, idx);
       checkResult();
     }
     private void checkResult() {
@@ -997,6 +997,9 @@ public class PipelineCompiler {
 
   private static class InlineSort extends InlineClosureInvoker {
     InlineSort(Expr.MethodCall expr, List<Expr> args, MethodCompiler methodCompiler) { super(expr, args, methodCompiler, 0); }
+    @Override void compile(int valueSlot, int locationSlot, List<InlineFn> fns, int idx) {
+      // nothing to do
+    }
     @Override boolean couldBeAsync()     { return false; }  // Not needed for sort because it runs in post processing and already deals with async
     @Override boolean isPostProcessing() { return true; }
     @Override void postProcess() {
@@ -1105,10 +1108,7 @@ public class PipelineCompiler {
       if (valueSlot == -1) {
         methodCompiler.dupVal();
       }
-      if (closureSlot != -1) {
-        methodCompiler.loadLocal(closureSlot);
-        invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
-      }
+      super.compile(valueSlot, locationSlot, fns, idx);
       methodCompiler.mv.visitLabel(asyncCont);
       if (locationSlot != -1) {
         methodCompiler.loadConst(4 + idx * 2);
@@ -1160,7 +1160,6 @@ public class PipelineCompiler {
     @Override boolean isTerminating() { return true; }
     @Override void initialise() {
       super.initialise();
-      assert closureSlot != -1: "Missing closure arg that should already have been validated";
       methodCompiler.mv.visitTypeInsn(NEW, "java/util/LinkedHashMap");
       methodCompiler.mv.visitInsn(DUP);
       methodCompiler.mv.visitMethodInsn(INVOKESPECIAL, "java/util/LinkedHashMap", "<init>", "()V", false);
@@ -1172,8 +1171,7 @@ public class PipelineCompiler {
         // Sync case
         methodCompiler.dupVal();
       }
-      methodCompiler.loadLocal(closureSlot);
-      invokeClosure(methodCompiler, ((Token)expr.methodNameLocation));
+      super.compile(valueSlot, locationSlot, fns, idx);
       if (valueSlot == -1) {
         methodCompiler.swap();
       }

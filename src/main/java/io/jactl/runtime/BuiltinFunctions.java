@@ -184,7 +184,7 @@ public class BuiltinFunctions {
       Jactl.method(ITERATOR)
            .name("groupBy")
            .asyncInstance(true)
-           .asyncParam("closure")
+           .asyncParam("closure", null)
            .impl(BuiltinFunctions.class, "iteratorGroupBy")
            .register();
 
@@ -724,6 +724,9 @@ public class BuiltinFunctions {
 
   // = stream
   public static JactlIterator stream(Continuation c, String source, int offset, JactlMethodHandle closure) {
+    if (closure == null) {
+      throw new NullError("Null value for Function", source, offset);
+    }
     return new StreamIterator(source, offset, closure);
   }
 
@@ -1366,6 +1369,9 @@ public class BuiltinFunctions {
   // = reduce
 
   public static Object iteratorReduce(Object iterable, Continuation c, String source, int offset, Object initialValue, JactlMethodHandle closure) {
+    if (closure == null) {
+      throw new NullError("Null value for Function", source, offset);
+    }
     return new Reducer(Reducer.Type.REDUCE, RuntimeUtils.createIterator(iterable), source, offset, initialValue, closure).reduce(null);
   }
 

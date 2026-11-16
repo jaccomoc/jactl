@@ -356,9 +356,14 @@ public class RegexMatcher implements Checkpointable {
 
     @Override void _restore(boolean haveMatcher) {
       if (haveMatcher) {
-        matcher = getMatcher(str, regex, modifiers, source, sourceOffset);
-        if (matched) {
-          matched = matcher.find(matchStart);
+        try {
+          matcher = getMatcher(str, regex, modifiers, source, sourceOffset);
+          if (matched) {
+            matched = matcher.find(matchStart);
+          }
+        }
+        catch (RuntimeError e) {
+          throw new IllegalStateException(e.getMessage(), e);
         }
       }
     }
@@ -394,9 +399,14 @@ public class RegexMatcher implements Checkpointable {
 
     @Override void _restore(boolean haveMatcher) {
       if (haveMatcher) {
-        matcher = getMatcher(str, regex, modifiers, source, sourceOffset);
-        // Repopulate match groups for capture vars
-        matcher.find();
+        try {
+          matcher = getMatcher(str, regex, modifiers, source, sourceOffset);
+          // Repopulate match groups for capture vars
+          matcher.find();
+        }
+        catch (RuntimeError e) {
+          throw new IllegalStateException(e.getMessage(), e);
+        }
       }
     }
   }

@@ -19,6 +19,7 @@ package io.jactl.runtime;
 
 import io.jactl.JactlContext;
 import io.jactl.JactlType;
+import io.jactl.Utils;
 import org.objectweb.asm.Type;
 
 import java.math.BigDecimal;
@@ -49,7 +50,7 @@ public class Checkpointer {
   static byte NULL_TYPE = -1;
 
   private static int  MAX_CACHE_SIZE      = 1024 * 16;
-  private static int  MAX_CHECKPOINT_SIZE = 1024 * 1024 * 128;
+  public  static int  MAX_CHECKPOINT_SIZE = Integer.getInteger("jactl.checkpoint.maxSize", 1024 * 1024 * 128);
 
   private byte[]                            buf;
   private int                               idx;
@@ -115,6 +116,10 @@ public class Checkpointer {
   }
 
   public static byte[] checkpoint(Object obj, RuntimeState state, JactlContext context, String source, int offset) {
+    if (state.evalNesting > 0) {
+      throw new RuntimeError("Checkpointing not currently supported from within eval()", source, offset);
+    }
+    
     Object scriptContext = state.getInvocationContext();
     // If we don't have a way of checkpointing the script context then write null instead
     if (scriptContext != null && context.getRegisteredClasses().getCheckpointer(scriptContext.getClass()) == null) {
@@ -125,11 +130,15 @@ public class Checkpointer {
     obj = Arrays.asList(state.getGlobals(), obj, scriptContext);
 
     Checkpointer checkpointer = Checkpointer.get(source, offset, context);
-    checkpointer._checkpoint(obj);
-    byte[] buf = new byte[checkpointer.getLength()];
-    System.arraycopy(checkpointer.getBuffer(), 0, buf, 0, checkpointer.getLength());
-    checkpointer.reset();
-    return buf;
+    try {
+      checkpointer._checkpoint(obj);
+      byte[] buf = new byte[checkpointer.getLength()];
+      System.arraycopy(checkpointer.getBuffer(), 0, buf, 0, checkpointer.getLength());
+      return buf;
+    }
+    finally {
+      checkpointer.reset();
+    }
   }
 
   private void _checkpoint(Object obj) {
@@ -185,7 +194,7 @@ public class Checkpointer {
     do {
       length <<= 1;
       if (length > MAX_CHECKPOINT_SIZE) {
-        throw new IllegalStateException("Checkpoint size too large (greater than " + MAX_CHECKPOINT_SIZE + ")");
+        throw new RuntimeError("Checkpoint size too large (greater than " + MAX_CHECKPOINT_SIZE + " - controlled by system property jactl.checkpoint.maxSize)",  source, offset);
       }
     } while (idx + n >= length);
     byte[] b = new byte[length];
@@ -240,7 +249,11 @@ public class Checkpointer {
 
   void writeClass(Class clss) {
     writeTypeEnum(CLASS.getType());
-    writeObject(Type.getInternalName(clss));
+    writeClassName(clss);
+  }
+  
+  void writeClassName(Class<?> clss) {
+    writeClassName(Type.getInternalName(clss));
   }
 
   void writeMap(Map<Object,Object> map) {
@@ -362,7 +375,7 @@ public class Checkpointer {
   }
 
   private void writeLongObj(long v) {
-    ensureCapacity(6);
+    ensureCapacity(11);
     _writeType(LONG);
     _writeCLong(v);
   }
@@ -513,7 +526,7 @@ public class Checkpointer {
   }
 
   private void writeString(String str) {
-    ensureCapacity(1 + 5 + str.length() * 2);
+    ensureCapacity(1 + 5 + str.length() * 3);
     buf[idx++] = ((byte)JactlType.TypeEnum.STRING.ordinal());
     _writeCInt(str.length());
     for (int i = 0; i < str.length(); i++) {
@@ -523,7 +536,7 @@ public class Checkpointer {
 
   // Only for internal use. Should use writeObject() when checkpointing string fields.
   private void _writeString(String str) {
-    ensureCapacity(5 + str.length() * 2);
+    ensureCapacity(5 + str.length() * 3);
     _writeCInt(str.length());
     for (int i = 0; i < str.length(); i++) {
       _writeCInt(str.charAt(i));
@@ -561,18 +574,30 @@ public class Checkpointer {
     }
     TypeEnum enumType = type.getType();
     writeTypeEnum(enumType);
-    if (enumType == JactlType.TypeEnum.ARRAY) {
+    if (enumType == TypeEnum.ARRAY) {
       writeType(type.getArrayElemType());
     }
     else if (enumType == JactlType.TypeEnum.INSTANCE) {
-      writeObject(type.getInternalName());
+      writeClassName(type);
     }
     else if (enumType == JactlType.TypeEnum.CLASS) {
-      writeObject(type.getInternalName());
+      writeClassName(type);
     }
   }
 
   private void _writeType(JactlType type) {
     buf[idx++] = (byte)type.getType().ordinal();
+  }
+  
+  private void writeClassName(JactlType type) {
+    writeClassName(type.getInternalName());
+  }
+  
+  public void writeClassName(String internalName) {
+    int idx = internalName.lastIndexOf('/');
+    if (internalName.substring(idx == -1 ? 0 : idx + 1).startsWith(Utils.JACTL_EVAL_SCRIPT_PREFIX)) {
+      throw new RuntimeError("Checkpointing not currently supported for eval()", source, offset);
+    }
+    writeObject(internalName);
   }
 }

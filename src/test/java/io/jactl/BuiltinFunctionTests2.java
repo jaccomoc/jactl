@@ -26,6 +26,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -106,7 +107,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
     testError("[a:1,b:2,c:3].flatMap(closurex:{ x,y -> x + y })", "no such parameter");
     testError("def f = [a:1,b:2,c:3]; f.flatMap(closurex:{ x,y -> x + y })", "no such parameter");
     test("[3,3,3,3,3].flatMap{ [it,it] }", Utils.listOf(3,3,3,3,3,3,3,3,3,3));
-    testError("[3,3,3,3,3].map(null).flatMap{ [it,it] }", "null value for function");
+    test("[3,3,3,3,3].map(null).flatMap{ [it,it] }", Utils.listOf(3,3,3,3,3,3,3,3,3,3));
   }
 
   @Test public void mapEntryAsList() {
@@ -118,6 +119,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("[].reduce(null){}", null);
     test("[].reduce(null){}", null);
     test("[1].reduce(null){}", null);
+    testError("[1,2].reduce(0,null)", "null value");
     test("[1].reduce(0){v,e -> v + e}", 1);
     testError("[1].reduce(0)", "missing mandatory argument");
     testError("def f = [1].reduce; f(0)", "missing mandatory argument");
@@ -1361,9 +1363,15 @@ public class BuiltinFunctionTests2 extends BaseTest {
     checkpointTest(source, commitExpected, recoverExpected, null);
   }
   
-  private void checkpointTest(String source, Object commitExpected, Object recoverExpected, Object scriptContext) throws InterruptedException, ExecutionException {
-    _checkpointTest(source, commitExpected, recoverExpected, false, scriptContext);
-    _checkpointTest(source, commitExpected, recoverExpected, true, scriptContext);
+  private void checkpointTest(String source, Object commitExpected, Object recoverExpected, Object scriptContext) {
+    try {
+      _checkpointTest(source, commitExpected, recoverExpected, false, scriptContext);
+      _checkpointTest(source, commitExpected, recoverExpected, true, scriptContext);
+    }
+    catch (ExecutionException|InterruptedException e) {
+      e.printStackTrace();
+      fail(e.getMessage());
+    }
   }
 
   private void _checkpointTest(String source, Object commitExpected, Object recoverExpected, boolean loopDetection, Object scriptContext) throws InterruptedException, ExecutionException {
@@ -1382,8 +1390,10 @@ public class BuiltinFunctionTests2 extends BaseTest {
         }
       }
     };
-    JactlContext context = getJactlContext(loopDetection);
-    JactlScript script = Jactl.compileScript(source, Utils.mapOf(), context);
+    JactlContext sourceContext = getJactlContext(loopDetection);
+    JactlContext destinationContext = getJactlContext(loopDetection);
+    JactlScript script = Jactl.compileScript(source, Utils.mapOf(), sourceContext);
+    Jactl.compileScript(source, Utils.mapOf(), destinationContext);   // make sure script exists in destination
     assertEquals(commitExpected, script.eval(Utils.mapOf(), scriptContext));
     if (!isAsync) {
       return;
@@ -1396,7 +1406,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
       checkpoints.clear();
       checkpoints.put(key, new ArrayList() {{ add(pair); }});
       CompletableFuture future = new CompletableFuture();
-      context.recoverCheckpoint(pair.second, value -> future.complete(value));
+      destinationContext.recoverCheckpoint(pair.second, value -> future.complete(value));
       Object result = future.get();
       if (result instanceof Throwable) {
         ((Throwable) result).printStackTrace();
@@ -1412,7 +1422,7 @@ public class BuiltinFunctionTests2 extends BaseTest {
     if (list.size() > 1) {
       checkpoints.put(key, list);
       CompletableFuture result = new CompletableFuture();
-      context.recoverCheckpoint(list.get(0).second, value -> result.complete(value));
+      destinationContext.recoverCheckpoint(list.get(0).second, value -> result.complete(value));
       Object err = result.get();
       assertTrue(err instanceof RuntimeError && ((RuntimeError) err).getMessage().contains("does not match expected"));
     }
@@ -1492,6 +1502,155 @@ public class BuiltinFunctionTests2 extends BaseTest {
     test("class X { int i; def f = { i * 10 } }; def x = new X(3); def m = [(x):'v']; [m[x], m.map{ it[0].f() }]", Utils.listOf("v", Utils.listOf(30)));
   }
 
+  public static Object uncheckpointableObj() { return new Object(); }
+
+  @Test public void checkpointLargeMultiByteStrings() throws ExecutionException, InterruptedException {
+    checkpointTest("def s = '😀💯💩' * 3000; checkpoint({},{}); s.size()", 18000, 18000);
+    checkpointTest("def s = '中' * 6000; checkpoint({},{}); s.size()", 6000, 6000);
+    checkpointTest("Decimal d = 1.5; def s = '中' * 6000; checkpoint({},{}); (s + d).size()", 6003, 6003);
+  }
+
+  @Test public void checkpointNegativeLongsAtBufferBoundary() throws ExecutionException, InterruptedException {
+    checkpointTest("def l = [1.0]; for (int i = 0; i < 1600; i++) { l <<= -1L }; Decimal d = 1.0; " +
+                   "for (int p = 0; p < 11; p++) { l[0] = d; checkpoint({},{}); d = d * 10 }; l.size()", 1601, 1601);
+  }
+
+  @Test public void checkpointAfterFailedCheckpoint() throws Exception {
+    try {
+      Jactl.function().name("uncheckpointableObj").impl(BuiltinFunctionTests2.class, "uncheckpointableObj").register();
+      List<byte[]> saved = new ArrayList<>();
+      JactlEnv env = new DefaultEnv() {
+        @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Object result, Consumer<Object> resumer) {
+          saved.add(checkpoint);
+          resumer.accept(result);
+        }
+      };
+      CompletableFuture<Object> failed = new CompletableFuture<>();
+      Jactl.compileScript("def a = 'AAA'; def b = 'BBB'; def o = uncheckpointableObj(); checkpoint(commit:{0}, recover:{1}); a + b",
+                          new HashMap<>(), JactlContext.create().environment(env).build())
+           .run(new HashMap<>(), failed::complete);
+      Object err = failed.get();
+      assertTrue(err instanceof RuntimeError && ((RuntimeError)err).getMessage().contains("could not locate a registered checkpoint function"));
+      assertEquals(0, saved.size());
+
+      String main = "def x = 'BBB'; def y = 'AAA'; def z = 'CCC'; checkpoint(commit:{0}, recover:{1}); x + y + z";
+      CompletableFuture<Object> ok = new CompletableFuture<>();
+      Jactl.compileScript(main, new HashMap<>(), JactlContext.create().environment(env).build()).run(new HashMap<>(), ok::complete);
+      assertEquals("BBBAAACCC", ok.get());
+      assertEquals(1, saved.size());
+
+      // Restore in a new context                                                                                                                                                                                 
+      JactlContext context2 = JactlContext.create().environment(env).build();
+      Jactl.compileScript(main, new HashMap<>(), context2);
+      CompletableFuture<Object> restored = new CompletableFuture<>();
+      context2.recoverCheckpoint(saved.get(0), restored::complete);
+      assertEquals("BBBAAACCC", restored.get());
+    }
+    finally {
+      Jactl.deregister("uncheckpointableObj");
+    }
+  }
+
+  @Test public void restoreCorruptedCheckpoint() throws Exception {
+    List<byte[]> saved = new ArrayList<>();
+    JactlEnv env = new DefaultEnv() {
+      @Override
+      public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Object result, Consumer<Object> resumer) {
+        saved.add(checkpoint);
+        resumer.accept(result);
+      }
+    };
+    CompletableFuture<Object> result       = new CompletableFuture<>();
+    JactlContext              jactlContext = JactlContext.create().environment(env).invokeDynamic(invokeDynamic).build();
+    Jactl.compileScript("int[] i = new int[10]; List l = 100.map(); Map m = 100.collectEntries{ [it.map(), it] }; checkpoint(commit:{0}, recover:{1}); 3", new HashMap<>(), jactlContext)
+         .run(new HashMap<>(), result::complete);
+    assertEquals(3, result.get());
+    assertEquals(1, saved.size());
+
+    byte[] checkpoint = saved.get(0);
+    CompletableFuture<Object> result2 = new CompletableFuture<>();
+    jactlContext.recoverCheckpoint(saved.get(0), result2::complete);
+    assertEquals(3, result2.get());
+    
+    for (int i = 0; i < checkpoint.length - 1; i++) {
+      CompletableFuture<Object> result3 = new CompletableFuture<>();
+      try {
+        jactlContext.recoverCheckpoint(Arrays.copyOf(checkpoint, i), result3::complete);
+        fail("Expected IllegalStateException");
+      }
+      catch (IllegalStateException e) {
+        assertTrue(e.getMessage().contains("Corrupt checkpoint"));
+      }
+      catch (Throwable e) {
+        e.printStackTrace();
+        fail("Expected IllegalStateException but got " + e);
+      }
+    }
+
+    Random rnd = new Random(0);
+    for (int i = 0; i < 10000; i++) {
+      byte[] copy = Arrays.copyOf(checkpoint, checkpoint.length);
+      for (int j = 0; j < 5; j++) {
+        copy[rnd.nextInt(copy.length)] = (byte)rnd.nextInt(256);
+      }
+      try {
+        CompletableFuture<Object> result3 = new CompletableFuture<>();
+        jactlContext.recoverCheckpoint(copy, result3::complete);
+        Object obj = result3.get();
+        if (obj instanceof Throwable) {
+          //((Throwable) obj).printStackTrace();
+        }
+      }
+      catch (IllegalStateException e) {
+        if (!e.getMessage().toLowerCase().contains("corrupt checkpoint")) {
+          e.printStackTrace();
+          fail("IllegalStateException with bad messsage");
+        }
+      }
+      catch (Throwable e) {
+        e.printStackTrace();
+        fail("Expected IllegalStateException but got " + e);
+      }
+    }
+  }
+  
+  @Test public void evalCheckpointing() {
+    skipCheckpointTests = true;
+    BiConsumer<String,String> checkpointError = (code, err) -> {
+      try {
+        checkpointTest(code, null, null, null);
+        fail("Expecting error '" + err + "'");
+      }
+      catch (RuntimeError e) {
+        if (!e.getMessage().toLowerCase().contains(err.toLowerCase())) {
+          fail("Error did not contain expected text: error=" + e.getMessage());
+        }
+      }
+    };
+    if (isAsync) {
+      testError("def m = [:]; eval('checkpoint({},{})', m)", "Checkpointing not currently supported from within eval()");
+      testError("def m = [:]; eval('''eval('checkpoint({},{})')''',m)", "Checkpointing not currently supported from within eval()");
+      test("def x = eval('{ x -> x*x }'); x(2)", 4);
+      checkpointError.accept("def x = eval('{ x -> x*x }'); checkpoint{ x(2) }{ x(2) }", "Checkpointing not currently supported");
+      test("def m = [f:null]; eval('f = { x -> x*x }', m); m.f(2)", 4);
+      checkpointError.accept("def m = [f:null]; eval('f = { x -> x*x }', m); checkpoint{ m.f(2) }{ m.f(2) }", "Checkpointing not currently supported");
+      test("def m = [f:null]; eval('class X { def f(x){ x*x } }; f = new X().f', m); m.f(2)", 4);
+      checkpointError.accept("def m = [f:null]; eval('class X { def f(x){ x*x } }; f = new X().f', m); checkpoint{ m.f(2) }{ m.f(2) }", "Checkpointing not currently supported");
+      checkpointError.accept("def x = eval('class X{}; new X()'); checkpoint{1}{2}", "Checkpointing not currently supported");
+    }
+  }
+
+  @Test public void nullCheckpointClosures() throws ExecutionException, InterruptedException {
+    if (isAsync) {
+      checkpointTest("checkpoint(null, null); 1", 1, 1, null);
+      checkpointTest("checkpoint({}, null); 1", 1, 1, null);
+      checkpointTest("checkpoint(null, {}); 1", 1, 1, null);
+      checkpointTest("checkpoint(); 1", 1, 1, null);
+      checkpointTest("checkpoint(null); 1", 1, 1, null);
+      checkpointTest("checkpoint({}); 1", 1, 1, null);
+    }
+  }
+  
   @Test public void functionWithDefaults() {
     try {
       Jactl.function().name("testFunc").param("arg", 10).impl(BuiltinFunctionTests2.class, "testFunc").register();

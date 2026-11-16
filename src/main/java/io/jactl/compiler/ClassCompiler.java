@@ -1381,7 +1381,7 @@ FINISH_LIST: mv.visitLabel(FINISH_LIST);
     mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Checkpointer", Checkpointer.WRITE_CINT, "(I)V", false);
     mv.visitVarInsn(ALOAD, CHECKPOINTER_SLOT);
     Utils.loadConst(mv, internalName, context);
-    mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Checkpointer", "writeObject", "(Ljava/lang/Object;)V", false);
+    mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Checkpointer", "writeClassName", "(Ljava/lang/String;)V", false);
     mv.visitVarInsn(ALOAD, CHECKPOINTER_SLOT);
     Utils.loadConst(mv, VERSION, context);
     mv.visitMethodInsn(INVOKEVIRTUAL, "io/jactl/runtime/Checkpointer", Checkpointer.WRITE_CINT, "(I)V", false);

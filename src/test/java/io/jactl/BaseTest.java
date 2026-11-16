@@ -198,7 +198,7 @@ public class BaseTest {
       jactlEnv = new DefaultEnv() {
         @Override public void saveCheckpoint(UUID id, int checkpointId, byte[] checkpoint, String source, int offset, Object result, Consumer<Object> resumer) {
           if (lastCheckpointId[0] + 1 != checkpointId) {
-            resumer.accept(new RuntimeError("Checkpoint id of " + checkpointId + " does not match expected value of " + lastCheckpointId[0] + 1, source, offset));
+            resumer.accept(new RuntimeError("Checkpoint id of " + checkpointId + " does not match expected value of " + (lastCheckpointId[0] + 1), source, offset));
             return;
           }
           lastCheckpointId[0] = checkpointId;
@@ -211,8 +211,8 @@ public class BaseTest {
         }
 
         @Override public void deleteCheckpoint(UUID id, int checkpointId) {
-          if (lastCheckpointId[0] + 1 != checkpointId) {
-            System.out.println("Delete: Checkpoint id of " + checkpointId + " does not match expected value of " + (lastCheckpointId[0] + 1));
+          if (lastCheckpointId[0] != checkpointId) {
+            System.out.println("Delete: Checkpoint id of " + checkpointId + " does not match expected value of " + lastCheckpointId[0]);
             errors[0]++;
             return;
           }
@@ -236,7 +236,7 @@ public class BaseTest {
       classCode.forEach(code -> compileClass(code, jactlContext2, packageName, asyncDecorator, bindings));
 
       JactlScript compiled = compileScript(scriptCode, jactlContext1, packageName, asyncDecorator, bindings);
-      compileScript(scriptCode, jactlContext2, packageName, asyncDecorator, bindings);
+      JactlScript compiled2 = compileScript(scriptCode, jactlContext2, packageName, asyncDecorator, bindings);
 
       Object result   = compiled.eval(bindings);
       checkEqual(expected, result);

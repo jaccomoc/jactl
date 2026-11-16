@@ -50,6 +50,7 @@ public class RuntimeState {
   private long                loopIterationCount;
   private long                counter;    // used to track how often we check for a timeout
   private long                endTime;
+  int                 evalNesting = 0;
 
   private static ThreadLocal<RuntimeState> threadLocalState = ThreadLocal.withInitial(RuntimeState::new);
 
@@ -93,6 +94,7 @@ public class RuntimeState {
     }
     state.loopIterationCount = 0;
     state.invocationContext = invocationContext;
+    state.evalNesting = 0;
   }
   
   public BufferedReader getInput() {
@@ -157,5 +159,15 @@ public class RuntimeState {
   
   public long getEndTime() {
     return endTime;
+  }
+  
+  public static MethodRef INCREMENT_EVAL_NESTING = Utils.getMethod(RuntimeState.class, "incrementEvalNesting");
+  public static void incrementEvalNesting() {
+    getState().evalNesting++;
+  }
+  
+  public static MethodRef DECREMENT_EVAL_NESTING = Utils.getMethod(RuntimeState.class, "decrementEvalNesting");
+  public static void decrementEvalNesting() {
+    getState().evalNesting--;
   }
 }

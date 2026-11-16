@@ -220,7 +220,10 @@ public class BuiltinFunctionTests extends BaseTest {
   public void noneMatch() {
     test("[].noneMatch{it>1}", true);
     test("[].noneMatch()", true);
+    test("[].noneMatch(null)", true);
     test("[1,2].noneMatch{it}", false);
+    test("[1,2].noneMatch()", false);
+    test("[1,2].noneMatch(null)", false);
     test("[1,'',2].noneMatch{it}", false);
     test("['',null].noneMatch{it}", true);
     test("[false,'',null].noneMatch(predicate:{it})", true);
@@ -249,6 +252,10 @@ public class BuiltinFunctionTests extends BaseTest {
     testError("def f = [1,2,3].noneMatch; f('abc')", "cannot be cast to function");
     test("[null,null,'P'].noneMatch{it != ' '}", false);
     test("[null,null,'P'].map{sleep(0,it)}.noneMatch{it != ' '}", false);
+    test("[null,null,'P'].map{sleep(0,it)}.noneMatch()", false);
+    test("[null,null,'P'].map{sleep(0,it)}.noneMatch(null)", false);
+    test("[null,null,'P'].map{sleep(0,it)}.anyMatch(null)", true);
+    test("[null,null,'P'].map{sleep(0,it)}.anyMatch()", true);
     test("[null,null,'P'].map{sleep(0,it)}.noneMatch{it}", false);
   }
 
@@ -407,6 +414,8 @@ public class BuiltinFunctionTests extends BaseTest {
     
     test("[[name:'a',age:30],[name:'b',age:20],[name:'c',age:20]].map{ it }.min{ it.age }.name", "b");
     test("['ab','cd','x'].map{ it }.min{ it.size() == 1 ? 9 : it.size() }", "ab");
+    test("['ab','cd','x'].map{ it }.min()", "ab");
+    test("['ab','cd','x'].map{ it }.min(null)", "ab");
   }
 
   @Test public void sumAvg() {
@@ -442,9 +451,9 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def f = { it + it }; def x = 1; def y = 2; [x,y].map(f).sum()", 6);
   }
 
-  @Test
-  public void groupBy() {
-    testError("['a','b','a','c','b'].groupBy()", "missing mandatory argument");
+  @Test public void groupBy() {
+    test("['a','b','a','c','b'].groupBy()", Utils.mapOf("a", Utils.listOf("a","a"), "b", Utils.listOf("b","b"), "c", Utils.listOf("c")));
+    test("['a','b','a','c','b'].groupBy(null)", Utils.mapOf("a", Utils.listOf("a","a"), "b", Utils.listOf("b","b"), "c", Utils.listOf("c")));
     test("[].groupBy{ it }", Utils.mapOf());
     test("['a','b','a','c','b'].groupBy{ it }", Utils.mapOf("a", Utils.listOf("a", "a"), "b", Utils.listOf("b", "b"), "c", Utils.listOf("c")));
     test("['a','b','a','c','b'].map{ sleep(0,it) }.groupBy{ sleep(0,it) }", Utils.mapOf("a", Utils.listOf("a", "a"), "b", Utils.listOf("b", "b"), "c", Utils.listOf("c")));
@@ -1216,8 +1225,12 @@ public class BuiltinFunctionTests extends BaseTest {
     test("5.map{ {it+1}(it) }.sum()", 15);
   }
 
-  @Test
-  public void nextLineAsync() throws IOException, ExecutionException, InterruptedException {
+  @Test public void streamNull() {
+    testError("stream()", "missing mandatory argument");
+    testError("stream(null)", "null value");
+  }
+  
+  @Test public void nextLineAsync() throws IOException, ExecutionException, InterruptedException {
     JactlContext ctx    = JactlContext.create().async(true).build();
     JactlScript  script = Compiler.compileScript("nextLine()", ctx, new HashMap<>());
     PipedReader  in     = new PipedReader();
@@ -1270,6 +1283,9 @@ public class BuiltinFunctionTests extends BaseTest {
     test("def list = [1,2,3,4]; if (true) list.filter{ it % 2 == 0 }.map{ it + it }.sum(); 13", 13);
     test("def list = [1,2,3,4]; list.filter{ it % 2 == 0 }.map{ it + it }.sum().filter{ it < 6 }.sum()", 15);
     test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.limit(2).map{ it + it }.sum()", 12);
+    test("List list = 10.map{it+1}; list.filter().limit(2).map{ it + it }.sum()", 6);
+    test("List list = 10.map{it+1}; list.filter(null).limit(2).map{ it + it }.sum()", 6);
+    test("List list = 10.map{it+1}; def x = null; list.filter(x).limit(2).map{ it + it }.sum()", 6);
     test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.sum()", 12 + 16 + 20);
     test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.skip(1).sum()", 16 + 20);
     test("List list = 10.map{it+1}; list.filter{ it % 2 == 0 }.skip(2).map{ it + it }.limit(2).skip(1).sum()", 16);
@@ -1293,7 +1309,14 @@ public class BuiltinFunctionTests extends BaseTest {
     test("var list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap().sum()", 6);
     test("var list = [1,2,3,4]; list.filter{ it % 2 == 0 }.flatMap().size() == 2", true);
     test("5.map{ {it+1}(it) }.sum()", 15);
-    testError("5.map(null)", "null value for function");
+    test("5.map().sum()", 10);
+    test("5.collect().sum()", 10);
+    test("5.collect(null).sum()", 10);
+    test("5.map(null).sum()", 10);
+    test("5.map(null)", Utils.listOf(0,1,2,3,4));
+    test("def x = null; 5.map(x)", Utils.listOf(0,1,2,3,4));
+    test("5.flatMap().sum()", 10);
+    test("5.flatMap(null).sum()", 10);
     test("def f = { sleep(0,it) * 2 }; [1,2,3].map(f).sum()", 12);
     test("def list = [1,2,3]; def run(f) { list.map(f).sum() }; run{ sleep(0,it) * 2 }", 12);
     testError("def x = 1; [1,2,3].map(x)", "int cannot be cast to function");
@@ -1349,6 +1372,8 @@ public class BuiltinFunctionTests extends BaseTest {
   }
 
   @Test public void pipelineMapWithIndex() {
+    test("List list = [1,2]; list.mapWithIndex()", Utils.listOf(Utils.listOf(1,0), Utils.listOf(2, 1)));
+    test("List list = [1,2]; list.mapWithIndex(null)", Utils.listOf(Utils.listOf(1,0), Utils.listOf(2, 1)));
     test("List list = [[1,2]]; list.flatMap{ [it,it] }.flatMap{ sleep(0,it) }", Utils.listOf(1, 2, 1, 2));
     test("List list = [1,2,3]; list.mapWithIndex{ it -> it }", Utils.listOf(Utils.listOf(1, 0), Utils.listOf(2, 1), Utils.listOf(3, 2)));
     test("List list = [1,2,3]; list.mapWithIndex{ it,i -> [it*it,i+1] }.flatMap().sum()", 20);

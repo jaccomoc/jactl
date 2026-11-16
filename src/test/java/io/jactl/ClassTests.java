@@ -1478,6 +1478,15 @@ public class ClassTests extends BaseTest {
     testError("class X { def f(){1} }; class Y extends X { def f(){2}; def g(){ super.\"${'f'}\" } }; new Y().g()()", "dynamic field lookup not supported for super");
   }
   
+  @Test public void className() {
+    skipCheckpointTests = true;
+    test("class X{}; new X().className()", "X");
+    test("class X{ class Y{} }; new X.Y().className()", "X.Y");
+    test("eval('class X{ class Y{} }; new X.Y()').className()", "X.Y");
+    test(Utils.listOf("package a.b; class X{}"), "import a.b.X; new X().className()", "a.b.X");
+    test(Utils.listOf("package a.b; class X{ def f () {eval('class Y{}; new Y()')} }"), "import a.b.X; new X().f().className()", "Y");
+  }
+  
   @Test public void baseClassesNamedArgContructors() {
     test("class X { int i = 1; int j = 2 }; class Y extends X { int k }; Y y = new Y(4); y.j", 2);
     test("class X { int i = 1; int j = 2 }; class Y extends X { int k = 3 }; Y y = new Y(k:4); y.j", 2);

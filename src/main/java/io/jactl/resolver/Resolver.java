@@ -2094,6 +2094,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
 
   @Override public JactlType visitClosure(Expr.Closure expr) {
     resolve(expr.funDecl);
+    expr.couldBeNull = expr.funDecl == null;
     return expr.type = FUNCTION;
   }
 

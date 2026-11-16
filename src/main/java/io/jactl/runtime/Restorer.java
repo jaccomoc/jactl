@@ -56,12 +56,23 @@ public class Restorer {
     this.buf = buf;
     expectCInt(Checkpointer.VERSION, "Bad checkpointer version");
     int numObjects = _readInt(idx);
+    if (numObjects > buf.length) {
+      throw new IllegalStateException("Corrupt checkpoint: Number of objects " + numObjects + " greater than number of bytes remaining in buffer");
+    }
     idx += 4;
     objTableOffset = _readInt(idx);
+    if (objTableOffset + numObjects * 4L > buf.length) {
+      throw new IllegalStateException("Corrupt checkpoint: Object table offset " + objTableOffset + " and number of objects " + numObjects + " too large for buffer size " + buf.length);
+    }
     idx += 4;
-    restoredObjects = new Object[numObjects];
-    pendingRestores = new boolean[numObjects];
-    return this;
+    try {
+      restoredObjects = new Object[numObjects];
+      pendingRestores = new boolean[numObjects];
+      return this;
+    }
+    catch (NegativeArraySizeException e) {
+      throw new IllegalStateException("Corrupt checkpoint: " + e, e);
+    }
   }
 
   public JactlContext getContext() {
@@ -80,9 +91,14 @@ public class Restorer {
     
     // We checkpoint a three element list (globals, continuation, scriptContext) so
     // restore the globals and scriptContext and return the continuation
-    List restored = (List)restorer.restore();
-    RuntimeState.setState(context, (Map<String, Object>)restored.get(0), input, output, restored.size() > 2 ? restored.get(2) : null);
-    return restored.get(1);
+    try {
+      List restored = (List)restorer.restore();
+      RuntimeState.setState(context, (Map<String, Object>) restored.get(0), input, output, restored.size() > 2 ? restored.get(2) : null);
+      return restored.get(1);
+    }
+    catch (IndexOutOfBoundsException|ClassCastException e) {
+      throw new IllegalStateException("Corrupt checkpoint: " + e, e);
+    }
   }
 
   private Object restore() {
@@ -144,7 +160,7 @@ public class Restorer {
   public void expectTypeEnum(JactlType.TypeEnum type) {
     int value = buf[idx++];
     if (value != type.ordinal()) {
-      throw new IllegalStateException("At offset " + (idx - 1) + ": expected " + type.ordinal() + " but got " + value);
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + (idx - 1) + ": expected " + type.ordinal() + " but got " + value);
     }
   }
 
@@ -152,7 +168,7 @@ public class Restorer {
     int errIdx = idx;
     int value = readCInt();
     if (value != expected) {
-      throw new IllegalStateException("At offset " + errIdx + ": " + msg + ": expected " + expected + " but got " + value);
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + errIdx + ": " + msg + ": expected " + expected + " but got " + value);
     }
   }
   public static String EXPECT_CINT = "expectCInt";
@@ -173,12 +189,17 @@ public class Restorer {
    * @return the integer
    */
   public int readCInt() {
-    int num = 0;
-    int i = 0;
-    do {
-      num += (buf[idx] & 0x7f) << (7 * i++);
-    } while ((buf[idx++] & 0x80) != 0);
-    return num;
+    try {
+      int num = 0;
+      int i   = 0;
+      do {
+        num += (buf[idx] & 0x7f) << (7 * i++);
+      } while ((buf[idx++] & 0x80) != 0);
+      return num;
+    }
+    catch (IndexOutOfBoundsException e) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
+    }
   }
   public static String READ_CINT = "readCInt";
 
@@ -187,12 +208,17 @@ public class Restorer {
    * @return the long
    */
   public long readCLong() {
-    long num = 0;
-    int i = 0;
-    do {
-      num += (long)(buf[idx] & 0x7f) << (7 * i++);
-    } while ((buf[idx++] & 0x80) != 0);
-    return num;
+    try {
+      long num = 0;
+      int  i   = 0;
+      do {
+        num += (long) (buf[idx] & 0x7f) << (7 * i++);
+      } while ((buf[idx++] & 0x80) != 0);
+      return num;
+    }
+    catch (IndexOutOfBoundsException e) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
+    }
   }
   public static String READ_CLONG = "readCLong";
 
@@ -221,32 +247,47 @@ public class Restorer {
    * @return the BigDecimal
    */
   public BigDecimal readDecimalObj() {
-    String val = readString();
-    return new BigDecimal(val);
+    try {
+      String val = readString();
+      return new BigDecimal(val);
+    }
+    catch (NumberFormatException e) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
+    }
   }
 
   private int _readInt(int i) {
-    int num = buf[i++] & 0xff;
-    num += (buf[i++] & 0xff) << 8;
-    num += (buf[i++] & 0xff) << 16;
-    num += (buf[i++] & 0xff) << 24;
-    return num;
+    try {
+      int num = buf[i++] & 0xff;
+      num += (buf[i++] & 0xff) << 8;
+      num += (buf[i++] & 0xff) << 16;
+      num += (buf[i++] & 0xff) << 24;
+      return num;
+    }
+    catch (IndexOutOfBoundsException e) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
+    }
   }
-
+  
   /**
    * Read long value from buffer
    * @return the long
    */
   public long readLong() {
-    long num = buf[idx++] & 0xff;
-    num += (buf[idx++] & 0xff) << 8;
-    num += (buf[idx++] & 0xff) << 16;
-    num += (long) (buf[idx++] & 0xff) << 24;
-    num += (long) (buf[idx++] & 0xff) << 32;
-    num += (long) (buf[idx++] & 0xff) << 40;
-    num += (long) (buf[idx++] & 0xff) << 48;
-    num += (long) (buf[idx++] & 0xff) << 56;
-    return num;
+    try {
+      long num = buf[idx++] & 0xff;
+      num += (buf[idx++] & 0xff) << 8;
+      num += (buf[idx++] & 0xff) << 16;
+      num += (long) (buf[idx++] & 0xff) << 24;
+      num += (long) (buf[idx++] & 0xff) << 32;
+      num += (long) (buf[idx++] & 0xff) << 40;
+      num += (long) (buf[idx++] & 0xff) << 48;
+      num += (long) (buf[idx++] & 0xff) << 56;
+      return num;
+    }
+    catch (IndexOutOfBoundsException e) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
+    }
   }
 
   private StringBuffer readStringBuffer() {
@@ -258,12 +299,17 @@ public class Restorer {
   }
   
   private String readString() {
-    int length = readCInt();
-    StringBuilder sb = new StringBuilder(length);
-    for (int i = 0; i < length; i++) {
-      sb.append((char) readCInt());
+    try {
+      int length = readSize();
+      StringBuilder sb     = new StringBuilder(length);
+      for (int i = 0; i < length; i++) {
+        sb.append((char) readCInt());
+      }
+      return sb.toString();
     }
-    return sb.toString();
+    catch (NegativeArraySizeException e) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
+    }
   }
 
   /**
@@ -279,24 +325,38 @@ public class Restorer {
    * @return the object
    */
   public Object readObject() {
+    return readObject(ANY);
+  }
+  
+  public Object readObject(JactlType expectedType) {
     boolean restore = mapKeyNestingDepth > 0;
     
-    int ordinal = buf[idx++];
-    if (ordinal == NULL_TYPE) {
-      return null;
+    int ordinal;
+    try {
+      ordinal = buf[idx++];
+      if (ordinal == NULL_TYPE) {
+        return null;
+      }
+    
+      // For primitive types we create the object now since they have no further fields that
+      // need to be restored.
+      TypeEnum type = TypeEnum.values()[ordinal];
+      if (!expectedType.is(ANY) && type != TypeEnum.ANY && expectedType.getType() != type) {
+        throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": expected " + expectedType.getType() + " but got " + type);
+      }
+      switch (type) {
+        case BOOLEAN:      return buf[idx++] == 0 ? false : true;
+        case BYTE:         return readByte();
+        case INT:          return readCInt();
+        case LONG:         return readCLong();
+        case DOUBLE:       return readDouble();
+        case DECIMAL:      return readDecimalObj();
+        default:           throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": Unexpected type " + ordinal);
+        case ANY: // Fall through
+      }
     }
-
-    // For primitive types we create the object now since they have no further fields that
-    // need to be restored.
-    switch (JactlType.TypeEnum.values()[ordinal]) {
-      case BOOLEAN:      return buf[idx++] == 0 ? false : true;
-      case BYTE:         return readByte();
-      case INT:          return readCInt();
-      case LONG:         return readCLong();
-      case DOUBLE:       return readDouble();
-      case DECIMAL:      return readDecimalObj();
-      default:           throw new IllegalStateException("Unexpected type " + ordinal);
-      case ANY: // Fall through
+    catch (IndexOutOfBoundsException e) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
     }
 
     int objId = readCInt();
@@ -319,7 +379,11 @@ public class Restorer {
       // list of objects that need to be restored later. This allows us to cater for circular
       // references.
       boolean isRestored = false;
-      switch (JactlType.TypeEnum.values()[ordinal]) {
+      TypeEnum type     = TypeEnum.values()[ordinal];
+      if (!expectedType.is(ANY) && expectedType.getType() != type) {
+        throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": expected " + expectedType.getType() + " but got " + type);
+      }
+      switch (type) {
         // Don't restore since these object types are more like primitives and are restored when we read them
         case STRING:         result = readString();            isRestored = true;   break;
         case STRING_BUFFER:  result = readStringBuffer();      isRestored = true;   break;
@@ -340,7 +404,7 @@ public class Restorer {
         case ANY:
         case UNKNOWN:
         default:
-          throw new IllegalStateException("Unexpected type in readObject: " + ordinal);
+          throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + " Unexpected type in readObject: " + ordinal);
       }
       restoredObjects[objId] = result;
       if (!isRestored) {
@@ -353,6 +417,15 @@ public class Restorer {
         }
       }
       return result;
+    }
+    catch (UnsupportedOperationException|IndexOutOfBoundsException e) {
+      throw new IllegalStateException("Corrupt checkpoint: " + e, e);
+    }
+    catch (IllegalArgumentException e) {
+      if (e.getMessage().toLowerCase().contains("corrupt checkpoint")) {
+        throw e;
+      }
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
     }
     finally {
       idx = oldIdx;
@@ -390,17 +463,42 @@ public class Restorer {
           case ARRAY:    restoreArray(obj);        break;
           case CLASS:    break;
           case INSTANCE: break;     // Registered class so already restored
-          default:    throw new IllegalStateException("Unexpected type in readObject: " + ordinal);
+          default:    throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": Unexpected type in readObject: " + ordinal);
         }
       }
+    }
+    catch (NullPointerException|ClassCastException|IndexOutOfBoundsException e) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
+    }
+    catch (IllegalStateException e) {
+      if (e.getMessage().toLowerCase().contains("corrupt checkpoint")) {
+        throw e;
+      }
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
     }
     finally {
       idx = oldIdx;
     }
   }
 
-  void restoreMap(Map map) {
+  private int readSize() {
+    return readSize(false);
+  }
+  
+  private int readSize(boolean isBooleanSize) {
     int size = readCInt();
+    int adjustedSize = size / (isBooleanSize ? 8 : 1);
+    if (adjustedSize > buf.length - idx) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": Size " + adjustedSize + " exceeds remaining bytes in buffer (" + (buf.length-idx) + ")");
+    }
+    if (size < 0) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": Size " + size + " is negative");
+    }
+    return size;
+  }
+  
+  void restoreMap(Map map) {
+    int size = readSize();
     for (int i = 0; i < size; i++) {
       Object key;
       try {
@@ -415,103 +513,128 @@ public class Restorer {
   }
 
   private void restoreList(List list) {
-    int size = readCInt();
+    int size = readSize();
     for (int i = 0; i < size; i++) {
       list.add(readObject());
     }
   }
 
   private void readBooleanArr(boolean[] arr) {
-    int size = readCInt();
-    int b = 0;
-    for (int i = 0; i < size; i++) {
-      if ((i & 7) == 0) {
-        b = buf[idx++];
+    try {
+      int size = readSize(true);
+      int b    = 0;
+      for (int i = 0; i < size; i++) {
+        if ((i & 7) == 0) {
+          b = buf[idx++];
+        }
+        arr[i] = (b & 0x1) != 0;
+        b >>>= 1;
       }
-      arr[i] = (b & 0x1) != 0;
-      b >>>= 1;
+    }
+    catch (IndexOutOfBoundsException e) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
     }
   }
 
   private void readByteArr(byte[] arr) {
-    int size = readCInt();
-    System.arraycopy(buf, idx, arr, 0, size);
-    idx += size;
+    try {
+      int size = readSize();
+      System.arraycopy(buf, idx, arr, 0, size);
+      idx += size;
+    }
+    catch (IndexOutOfBoundsException e) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
+    }
   }
 
   private void readIntArr(int[] arr) {
-    int size = readCInt();
+    int size = readSize();
     for (int i = 0; i < size; i++) {
       arr[i] = readCInt();
     }
   }
 
   private void readLongArr(long[] arr) {
-    int size = readCInt();
+    int size = readSize();
     for (int i = 0; i < size; i++) {
       arr[i] = readCLong();
     }
   }
 
   private void readDoubleArr(double[] arr) {
-    int size = readCInt();
+    int size = readSize();
     for (int i = 0; i < size; i++) {
       arr[i] = readDouble();
     }
   }
 
   private void readObjectArr(Object[] arr) {
-    int size = readCInt();
+    int size = readSize();
     for (int i = 0; i < size; i++) {
       arr[i] = readObject();
     }
   }
 
   private Object createArray() {
-    int numDimensions = buf[idx++];
-    int[]     dimensions = new int[numDimensions];
-    JactlType type       = readType();
-    int       size       = readCInt();
-    dimensions[0] = size;
-    switch (type.getType()) {
-      case BOOLEAN:    return Array.newInstance(boolean.class, dimensions);
-      case BYTE:       return Array.newInstance(byte.class, dimensions);
-      case INT:        return Array.newInstance(int.class, dimensions);
-      case LONG:       return Array.newInstance(long.class, dimensions);
-      case DOUBLE:     return Array.newInstance(double.class, dimensions);
-      case DECIMAL:    return Array.newInstance(BigDecimal.class, dimensions);
-      case STRING:     return Array.newInstance(String.class, dimensions);
-      case LIST:       return Array.newInstance(List.class, dimensions);
-      case MAP:        return Array.newInstance(Map.class, dimensions);
-      case INSTANCE:   return Array.newInstance(getJactlClass(type.getInternalName()), dimensions);
-      default:         return Array.newInstance(Object.class, dimensions);
+    try {
+      int numDimensions = buf[idx++];
+      int[]     dimensions = new int[numDimensions];
+      JactlType type       = readType();
+      int       size       = readSize(type.getType() == TypeEnum.BOOLEAN);
+      dimensions[0] = size;
+      switch (type.getType()) {
+        case BOOLEAN:    return Array.newInstance(boolean.class, dimensions);
+        case BYTE:       return Array.newInstance(byte.class, dimensions);
+        case INT:        return Array.newInstance(int.class, dimensions);
+        case LONG:       return Array.newInstance(long.class, dimensions);
+        case DOUBLE:     return Array.newInstance(double.class, dimensions);
+        case DECIMAL:    return Array.newInstance(BigDecimal.class, dimensions);
+        case STRING:     return Array.newInstance(String.class, dimensions);
+        case LIST:       return Array.newInstance(List.class, dimensions);
+        case MAP:        return Array.newInstance(Map.class, dimensions);
+        case INSTANCE:   return Array.newInstance(getJactlClass(type.getInternalName()), dimensions);
+        default:         return Array.newInstance(Object.class, dimensions);
+      }
+    }
+    catch (NegativeArraySizeException|IndexOutOfBoundsException e) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
     }
   }
-
+  
   private void restoreArray(Object arr) {
-    int       numDimensions = buf[idx++];
-    JactlType type          = readType();
-    if (numDimensions == 1) {
-      switch (type.getType()) {
-        case BOOLEAN:    readBooleanArr((boolean[])arr);     break;
-        case BYTE:       readByteArr((byte[])arr);           break;
-        case INT:        readIntArr((int[])arr);             break;
-        case LONG:       readLongArr((long[])arr);           break;
-        case DOUBLE:     readDoubleArr((double[])arr);       break;
-        default:         readObjectArr((Object[])arr);       break;
+    try {
+      int       numDimensions = buf[idx++];
+      JactlType type          = readType();
+      if (numDimensions == 1) {
+        switch (type.getType()) {
+          case BOOLEAN:    readBooleanArr((boolean[])arr);     break;
+          case BYTE:       readByteArr((byte[])arr);           break;
+          case INT:        readIntArr((int[])arr);             break;
+          case LONG:       readLongArr((long[])arr);           break;
+          case DOUBLE:     readDoubleArr((double[])arr);       break;
+          default:         readObjectArr((Object[])arr);       break;
+        }
+      }
+      else {
+        int size = readSize();
+        for (int i = 0; i < size; i++) {
+          Array.set(arr, i, readObject());
+        }
       }
     }
-    else {
-      int size = readCInt();
-      for (int i = 0; i < size; i++) {
-        Array.set(arr, i, readObject());
-      }
+    catch (ArrayStoreException|IllegalArgumentException|IndexOutOfBoundsException e) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
     }
   }
 
   private Object createBuiltinInstance() {
-    Class clss = BuiltinFunctions.getClass(readCInt());
-    return newInstance(clss);
+    try {
+      Class clss = BuiltinFunctions.getClass(readCInt());
+      return newInstance(clss);
+    }
+    catch (IllegalStateException e) {
+      throw new IllegalStateException("Corrupt checkpoint: Near offset " + idx + ": " + e, e);
+    }
   }
 
   private Class createClass() {
@@ -520,7 +643,7 @@ public class Restorer {
   }
 
   private Object createInstance() {
-    String internalClassName = (String)readObject();
+    String internalClassName = (String)readObject(STRING);
     Class  clss              = getJactlClass(internalClassName);
     if (JactlObject.class.isAssignableFrom(clss)) {
       return newInstance(clss);
@@ -548,7 +671,7 @@ public class Restorer {
       clss = context.getRegisteredClasses().findClassByInternalJavaName(internalName);
     }
     if (clss == null) {
-      throw new IllegalStateException("Unknown class: " + internalName);
+      throw new IllegalStateException("Unknown class: " + internalName + " (corrupt checkpoint or script/class was not compiled where checkpoint is being restored)");
     }
     return clss;
   }

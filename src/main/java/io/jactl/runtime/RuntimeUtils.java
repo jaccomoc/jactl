@@ -2530,7 +2530,7 @@ public class RuntimeUtils {
       return (JactlMethodHandle) obj;
     }
     if (obj == null) {
-      throw new NullError("Null value for Function", source, offset, captureStackTrace);
+      return null;
     }
     throw new RuntimeError("Object of type " + className(obj) + " cannot be cast to Function", source, offset);
   }
@@ -3265,8 +3265,7 @@ public class RuntimeUtils {
     try {
       bindings = bindings == null ? new LinkedHashMap() : bindings;
       Function<Map<String, Object>, Object> script = compileScript(code, bindings, RuntimeState.getState().getContext());
-      Object                                result = script.apply(bindings);
-      return result;
+      return script.apply(bindings);
     }
     catch (Continuation cont) {
       throw new Continuation(cont, eval$cHandle, 0, null, null);

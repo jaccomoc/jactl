@@ -92,7 +92,7 @@ public class Compiler {
 
   // For internal use by eval() function.
   public static Function<Map<String, Object>,Object> compileScriptInternal(String source, JactlContext jactlContext, String packageName, Map<String, Object> bindings) {
-    String         className = Utils.JACTL_SCRIPT_PREFIX + Utils.md5Hash(source);
+    String         className = Utils.JACTL_EVAL_SCRIPT_PREFIX + Utils.md5Hash(source);
     Parser         parser    = new Parser(new Tokeniser(source, false), jactlContext, packageName);
     Stmt.ClassDecl script    = parser.parseScript(className);
     Resolver       resolver = new Resolver(jactlContext, false, bindings, script.location);

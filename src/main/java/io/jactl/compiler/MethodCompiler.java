@@ -2441,6 +2441,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                      () -> {
                        // Need to get the method handle
                        compile(expr.callee);
+                       throwIfNull("Null value for Function", expr.callee.location);
                        convertTo(FUNCTION, expr.callee, true, expr.callee.location);
 
                        stackTypes.add(FUNCTION);
@@ -3111,7 +3112,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
                        invokeMethod(OBJECT_GET_CLASS_METHOD);
                        invokeMethod(CLASS_GET_CLASS_LOADER_METHOD);
                      },
-                     () -> invokeMethod(RuntimeUtils.EVAL_SCRIPT_METHOD));
+                     () -> {
+                       invokeMethod(RuntimeState.INCREMENT_EVAL_NESTING);
+                       invokeMethod(RuntimeUtils.EVAL_SCRIPT_METHOD);
+                     });
+    invokeMethod(RuntimeState.DECREMENT_EVAL_NESTING);
     return null;
   }
 

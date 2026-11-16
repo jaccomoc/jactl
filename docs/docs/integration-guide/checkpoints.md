@@ -22,7 +22,7 @@ If an application wants to be able to save checkpoint state then the application
 both of these methods, however, since these methods have `default` implementations that do nothing, it is not mandatory
 to provide implementations for these methods.
 
-## saveCheckpoint()
+## JactlEnv.saveCheckpoint()
 
 The signature for this method is:
 ```java
@@ -105,13 +105,43 @@ Alternatively, you can wait for the final `deleteCheckpoint()` call to know when
 checkpoints.
 :::
 
-## deleteCheckpoint()
+## JactlEnv.deleteCheckpoint()
 
 In order to know when it is safe to clean up old checkpoints, at the end of a script instance execution the
 `deleteCheckpoint()` is invoked, passing in the id of the script instance and the last checkpoint id that was
 saved for that instance.
 
+An implementation of this method needs to use the following signature:
+```java
+@Override
+public void deleteCheckpoint(UUID id, int checkpointId) {
+  ...
+}
+```
+
 The `deleteCheckpoint()` call is done on an event-loop thread and, since there is no need to actually guarantee that
 the deletion has completed before returning, if your implementation does anything that will block then you should make
 sure to schedule the work on a separate blocking thread.
 
+## JactlContext.recoverCheckpoint()
+
+To recover and continue execution of a script checkpoint you invoke one of the `recoverCheckpoint()` methods on
+`JactlContext`.
+If you need to specify a `Reader` for script input and a `Writer` for script output, then use something like:
+```java
+Reader input = ...;
+Writer output = ...;
+byte[] checkpointedState = ...;
+Consumer<Object> resultHandler = ...;                             
+jactlContext.recoverCheckpoint(checkpointedState, resultHandler, input, output);
+```
+
+That will restore the script state and continue the script from where the checkpoint occurred.
+Once the script completes, the result handler will be invoked with the script result.
+
+If you don't need to pass in a `Reader` for input and a `Writer` for output, you can use the simpler version:
+```java
+byte[] checkpointedState = ...;
+Consumer<Object> resultHandler = ...;                             
+jactlContext.recoverCheckpoint(checkpointedState, resultHandler);
+```

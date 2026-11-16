@@ -46,7 +46,7 @@ else {
 
 If checkpointing is required, it is up to the application in which Jactl is embedded to provide a
 mechanism for persisting the checkpoints and to also provide a way to read the checkpoints in the event
-of a failure and invoke `Restorer.restore()` to create a `Continuation` from the checkpoint and
-then resume the `Continuation` to allow the script to continue from where the checkpoint occurred.
+of a failure and invoke `JactlContext.recoverCheckpoint()` to restore the checkpoint and
+continue the script from where the checkpoint occurred.
 
 See the [Integration Guide](../integration-guide/introduction) for more details.

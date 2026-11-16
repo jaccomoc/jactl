@@ -833,41 +833,41 @@ public class InvokeDynamicBootstrap {
   }
   
   private static boolean sameJmhObject1(JactlMethodHandle expected, JactlMethodHandle jmh, Object arg1) {
-    return expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction(); 
+    return expected == jmh || expected != null && jmh != null && expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction(); 
   }
   
   private static boolean sameJmhObject2(JactlMethodHandle expected, JactlMethodHandle jmh, Object arg1, Object arg2) {
-    return expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction(); 
+    return expected == jmh || expected != null && jmh != null && expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction(); 
   }
   
   private static boolean sameJmhObject3(JactlMethodHandle expected, JactlMethodHandle jmh, Object arg1,  Object arg2, Object arg3) {
-    return expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction(); 
+    return expected == jmh || expected != null && jmh != null && expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction(); 
   }
   
   private static boolean sameJmhObjectN(JactlMethodHandle expected, JactlMethodHandle jmh, Object[] args) {
-    return expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction(); 
+    return expected == jmh || expected != null && jmh != null && expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction(); 
   }
 
   private static boolean sameJmhArg1(JactlMethodHandle expected, Class<?> c1, JactlMethodHandle jmh, Object arg1) {
-    return ((expected == jmh) || (expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction())) &&
+    return ((expected == jmh) || (expected != null && jmh != null && expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction())) &&
            (c1 == UNTYPED.class || (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1)));
   }
   
   private static boolean sameJmhArg2(JactlMethodHandle expected, Class<?> c1, Class<?> c2, JactlMethodHandle jmh, Object arg1, Object arg2) {
-    return (expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction()) &&
+    return (expected == jmh || expected != null && jmh != null && expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction()) &&
            (c1 == UNTYPED.class || (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1))) &&
            (c2 == UNTYPED.class || (c2 == null ? arg2 == null : (arg2 != null && arg2.getClass() == c2)));
   }
 
   private static boolean sameJmhArg3(JactlMethodHandle expected, Class<?> c1, Class<?> c2, Class<?> c3, JactlMethodHandle jmh, Object arg1, Object arg2, Object arg3) {
-    return (expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction()) &&
+    return (expected == jmh || expected != null && jmh != null && expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction()) &&
            (c1 == UNTYPED.class || (c1 == null ? arg1 == null : (arg1 != null && arg1.getClass() == c1))) &&
            (c2 == UNTYPED.class || (c2 == null ? arg2 == null : (arg2 != null && arg2.getClass() == c2))) &&
            (c3 == UNTYPED.class || (c3 == null ? arg3 == null : (arg3 != null && arg3.getClass() == c3)));
   }
 
   private static boolean sameJmhArgN(JactlMethodHandle expected, Class<?>[] classes, JactlMethodHandle jmh, Object[] args) {
-    if (expected == jmh || expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction()) {
+    if (expected == jmh || expected != null && jmh != null && expected.handleToUnderlyingFunction() == jmh.handleToUnderlyingFunction()) {
       if (args.length != classes.length) {
         return false;
       }
