@@ -1454,6 +1454,22 @@ public class ClassTests extends BaseTest {
     testError("class X { int i = 2 }; class Y extends X { int j = 1 }; Y y = new Y(3); y.i + y.j", "too many arguments");
     test("class X { int i }; class Y extends X { int j = 1 }; Y y = new Y(3); y.i + y.j", 4);
     testError("class X extends Y { class Y {} }; new X()", "unknown class 'Y'");
+    test("class X { def f() { 'X' } }; class Y extends X { def g() { def f = { 'Y' }; f() } }; new Y().g()", "Y");
+    test("class X { def f(i = 1) { \"X.f($i)\"} }; class Y extends X { def f(i = 2) { \"Y.f($i)\" } }; new Y().f()", "Y.f(2)");
+    test("class X { def f(i = 1) { \"X.f($i)\"} }; class Y extends X { def f(i = 2) { \"Y.f($i)\" } }; def x = new Y(); x.f()", "Y.f(2)");
+    test("class X { def f(i = 1) { \"X.f($i)\"} }; class Y extends X { def f(i = 2) { \"Y.f($i)\" } }; X x = new Y(); x.f()", "Y.f(2)");
+    test("class X { static def f(i = 1) { \"X.f($i)\"} }; class Y extends X { def g(i = 2) { f() } }; Y y = new Y(); y.g()", "X.f(1)");
+    test("class X { def f(i = 1) { \"X.f($i)\"} }; class Y extends X { def g(i = 2) { f() } }; Y y = new Y(); y.g()", "X.f(1)");
+    test("class X { static def f(i = 1) { \"X.f($i)\"} }; class Y extends X { static def f(i = 2) { \"Y.f($i)\" } }; X x = new Y(); x.f()", "Y.f(2)");
+    testError("class X { static def f(i = 1) { \"X.f($i)\"} }; class Y extends X { def f(i = 2) { \"Y.f($i)\" } }; X x = new Y(); x.f()", "clashes");
+    testError("class X { def f(i = 1) { \"X.f($i)\"} }; class Y extends X { static def f(i = 2) { \"Y.f($i)\" } }; X x = new Y(); x.f()", "clashes");
+    test("class X { static def f() {'X.f'} }; class Y extends X { def g() { def X = 3; f() } }; new Y().g()", "X.f");
+    test("class X { static def f() {'X.f'} }; class Y extends X { static def f() {'Y.f'}; def g() { f() } }; new Y().g()", "Y.f"); 
+    test("class A { class X { static def f(){1} } }; class Y extends A.X { def g() { f() } }; new Y().g()", 1);
+    test("class A { class X { static def f(){1} } }; class Y extends A.X { static def g() { f() } }; new Y().g()", 1);
+    test("class X { static def f() {'X.f'} }; class Y extends X { static def g() { def X = 3; f() } }; Y.g()", "X.f");
+    test("class X { static def f(i = 1) {\"X.f($i)\"} }; class Y extends X { static def f(i = 2) { i == 2 ? f(3) : \"Y.f($i)\" } }; Y.f()", "Y.f(3)");
+    test("class X { static def f() {'X.f'} }; class Y extends X { static def f() {'Y.f'}; static def g() { f() } }; Y.g()", "Y.f");
   }
   
   @Test public void superMethods() {

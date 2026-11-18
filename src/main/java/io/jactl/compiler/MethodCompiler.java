@@ -4006,14 +4006,15 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       params.add(HEAPLOCAL);
     }
     // Add Continuation after HeapLocals for async functions and for wrappers
-    if (funDecl.functionDescriptor.isAsync() || funDecl.isWrapper) {
+    FunctionDescriptor descriptor = funDecl.functionDescriptor;
+    if (descriptor.isAsync() || funDecl.isWrapper) {
       params.add(CONTINUATION);
     }
-    if (funDecl.functionDescriptor.needsLocation) {
+    if (descriptor.needsLocation) {
       params.add(STRING);
       params.add(INT);
     }
-    for (Stmt.VarDecl p: funDecl.parameters) {
+    for (Stmt.VarDecl p : funDecl.parameters) {
       params.add(p.declExpr.isPassedAsHeapLocal ? HEAPLOCAL : p.declExpr.type);
     }
     return params;

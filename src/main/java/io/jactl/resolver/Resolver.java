@@ -578,7 +578,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
   }
 
   private void validateSignatures(Expr.FunDecl funDecl, JactlClassDescriptor baseClass, FunctionDescriptor baseMethod) {
-    if (baseMethod.isStaticImplementation || funDecl.isStatic()) {
+    if (baseMethod.isStaticMethod || funDecl.isStatic()) {
       // Not overriding if one of the methods is static so no further check required
       return;
     }
@@ -1566,13 +1566,14 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     }
 
     // Make sure that if overriding a base class method we have same signature (including param names)
-    if (functionName != null && !expr.isStatic() && !expr.isInitMethod()) {
-      JactlClassDescriptor baseClass = classDescriptor.getBaseClassDescriptor();
-      FunctionDescriptor   method    = baseClass != null ? baseClass.getMethod(functionName) : null;
-      if (baseClass != null) {
-        if (method != null) {
-          validateSignatures(expr, baseClass, method);
-        }
+    if (functionName != null && !expr.isInitMethod()) {
+      JactlClassDescriptor baseClass  = classDescriptor.getBaseClassDescriptor();
+      FunctionDescriptor   baseMethod = baseClass != null ? baseClass.getMethod(functionName) : null;
+      if (baseMethod != null && baseMethod.isStaticMethod != expr.isStatic()) {
+        error(baseMethod.isStaticMethod ? "Instance method clashes with static base class method of same name" : "Static method clashes with base class instance method of same name", expr.location);
+      }
+      else if (!expr.isStatic() && baseMethod != null) {
+        validateSignatures(expr, baseClass, baseMethod);
       }
     }
 
@@ -2103,23 +2104,48 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       // Special case if we are invoking the function directly (not via a MethodHandle value)
       Expr.Identifier callee = (Expr.Identifier) expr.callee;
       callee.couldBeFunctionCall = true;
-      
-      // Check for base call method invocation
-      JactlType baseClass  = currentClass().baseClass;
-      if (!currentClass().isScriptClass() && baseClass != null) {
-        String             methodName  = callee.identifier.getStringValue();
-        FunctionDescriptor descriptor  = lookupMethod(baseClass, methodName);
-        if (descriptor != null) {
-          Expr.Identifier thisIdent = new Expr.Identifier(expr.token.newIdent(Utils.THIS_VAR));
-          expr.methodCall = new Expr.MethodCall(expr.token, thisIdent, new Token(DOT,expr.token), methodName, expr.token, null, expr.args);
-          expr.methodCall.isMethodCallTarget = expr.isMethodCallTarget;
-          resolve(expr.methodCall);
-          return expr.type = descriptor.returnType;
+      resolve(expr.callee);
+
+      Expr.VarDecl varDecl = ((Expr.Identifier) expr.callee).varDecl;
+      if (varDecl != null) {
+        FunctionDescriptor funcDesc             = varDecl.funDecl == null ? null : varDecl.funDecl.functionDescriptor;
+        JactlType          currentClassType     = currentClass().classDescriptor.getInstanceType();
+        boolean            existsInCurrentClass = funcDesc != null && funcDesc.firstArgtype != null && funcDesc.firstArgtype.equals(currentClassType);
+        if (varDecl.isField && !existsInCurrentClass) {
+          // Check for base call method invocation
+          JactlType baseClass = currentClass().baseClass;
+          if (!currentClass().isScriptClass() && baseClass != null) {
+            String             methodName = callee.identifier.getStringValue();
+            FunctionDescriptor descriptor = lookupMethod(baseClass, methodName);
+            if (descriptor != null) {
+              boolean useClassName = descriptor.isStaticMethod;
+              String parentName = useClassName ? descriptor.firstArgtype.getJactlClassDescriptor().getSimpleName()
+                                               : Utils.THIS_VAR;
+              Expr.Identifier thisIdent = new Expr.Identifier(expr.token.newIdent(parentName));
+              if (useClassName) {
+                JactlClassDescriptor classDesc    = descriptor.firstArgtype.getJactlClassDescriptor();
+                Expr.VarDecl         classVarDecl = new Expr.VarDecl(expr.token.newIdent(parentName), null, null);
+                classVarDecl.classDescriptor = classDesc;
+                classVarDecl.type = JactlType.createClass(classDesc);
+                classVarDecl.couldBeNull = false;
+                classVarDecl.isEffectivelyFinal = true;
+                thisIdent.varDecl = classVarDecl;
+                thisIdent.type = classVarDecl.type;
+                thisIdent.isResolved = true;
+              }
+              expr.methodCall = new Expr.MethodCall(expr.token, thisIdent, new Token(DOT, expr.token), methodName, expr.token, null, expr.args);
+              expr.methodCall.isMethodCallTarget = expr.isMethodCallTarget;
+              resolve(expr.methodCall);
+              return expr.type = descriptor.returnType;
+            }
+          }
         }
       }
     }
+    else {
+      resolve(expr.callee);
+    }
     
-    resolve(expr.callee);
     resolve(expr.args);
     if (expr.callee.type == null) {
       error("Unknown function", expr.callee.location);
@@ -2185,6 +2211,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (descriptor != null) {
         if (parentType.is(CLASS) && !descriptor.isStaticMethod) {
           error("No static method '" + expr.methodName + "' exists for " + parentType, expr.location);
+        }
+        else if (descriptor.isStaticMethod && !descriptor.isBuiltin && parentType.is(INSTANCE) && !expr.parent.isSuper()) {
+          // Static method invocation uses dynamic lookup to make "X x = new X(); x.f()" and "def x = new X(); x.f()"
+          // behave the same way
+          return expr.type = ANY;
         }
         expr.methodDescriptor = descriptor;
         expr.couldBeNull = expr.accessOperator.is(QUESTION_DOT);
