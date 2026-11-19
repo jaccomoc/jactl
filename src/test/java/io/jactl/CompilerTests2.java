@@ -19,6 +19,7 @@ package io.jactl;
 
 import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.function.BiConsumer;
 
 public class CompilerTests2 extends BaseTest {
@@ -2860,6 +2861,23 @@ public class CompilerTests2 extends BaseTest {
     test("def f(a = '',b = 2) {a+b}; f(a:'' if true,b:null unless true)", "null");
     test("def f(a = ('' if true),b = 2) {a+b}; f(a:'' if true,b:null unless true)", "null");
     testError("def f(a,b) {a+b}; f(a:123,", "Unexpected end-of-file");
+    test("def f(x, y) { [x,y] }; int i = 0; f(y:++i, x:++i)", Utils.listOf(2, 1));
+    test("def f(int x, int y) { 2 * x + y }; int i = 0; f(y:++i, x:++i)", 5);
+    test("def f(int x, int y) { 2 * x + y }; int i = 0; def g = f; g(y:++i, x:++i)", 5);
+    test("class X { def f(int x, int y) { 2 * x + y } }; int i = 0; new X().f(y:++i, x:++i)", 5);
+    test("class X { def f(int x, int y) { 2 * x + y } }; int i = 0; def g = new X().f; g(y:++i, x:++i)", 5);
+    test("class X { def f(int x, int y) { 2 * x + y } }; int i = 0; def x = new X(); x.f(y:++i, x:++i)", 5);
+    test("class X { def f(int x, int y) { 2 * x + y } }; int i = 0; def x = new X(); def g = x.f; g(y:++i, x:++i)", 5);
+    test("class X { static def f(int x, int y) { 2 * x + y } }; int i = 0; X.f(y:++i, x:++i)", 5);
+    test("class X { static def f(int x, int y) { 2 * x + y } }; int i = 0; def g = X.f; g(y:++i, x:++i)", 5);
+    test("class X { static def f(int x, int y) { 2 * x + y } }; int i = 0; new X().f(y:++i, x:++i)", 5);
+    test("class X { static def f(int x, int y) { 2 * x + y } }; int i = 0; def g = new X().f; g(y:++i, x:++i)", 5);
+    test("int i = 0; LocalDateTime.of(minute:++i, year:2024 + ++i,day:++i,month:02,second:++i,hour:12,nano:123456789)", LocalDateTime.of(2026,02,3,12,1,4,123456789));
+    test("int i = 0; LocalDateTime.of(minute:++i, year:2024 + ++i,month:02,day:++i,hour:12,second:++i,nano:123456789)", LocalDateTime.of(2026,02,3,12,1,4,123456789));
+    test("int i = 0; LocalDateTime.of(year:2024 + ++i,month:02,day:++i,hour:12,minute:++i,second:++i,nano:123456789)", LocalDateTime.of(2025,02,2,12,3,4,123456789));
+    test("int i = 0; sleep(data:++i,timeMs:++i)", 1);
+    test("int i = 0; sprintf(args:[++i,++i], format:'%d,' + ++i + ',%d')", "1,3,2");
+    test("int i = 0; [1,2,3].reduce(accumulator:do{ ++i; { v,e -> v + e + i }}, initial:++i)", 14);
   }
 
   @Test public void simpleClosures() {

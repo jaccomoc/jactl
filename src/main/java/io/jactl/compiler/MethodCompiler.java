@@ -2483,7 +2483,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private List<Expr> checkForValidArgs(Expr.MethodCall expr, FunctionDescriptor desc) {
     try {
       Pair<Boolean,List<Expr>> validationResult = validateArgs(expr.args, desc, expr.location, false, null);
-      return validationResult.first ? validationResult.second : null;
+      return validationResult.first && !isNamedArgs(validationResult.second) ? validationResult.second : null;
     }
     catch (CompileError e) {
       return null;
@@ -2794,8 +2794,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // (and method allows optional args) then invoke wrapper which will worry about filling
     // missing values. Exception is for built-in methods since we know that the default values
     // will all be simple constants that we generate code for here.
-    //Utils.isInvokeWrapper(
-    if (method.isBuiltin || !Utils.isInvokeWrapper(expr.args, expr.validateArgsAtCompileTime, method)) {
+    if (method.isBuiltin && !isNamedArgs(expr.args) || !Utils.isInvokeWrapper(expr.args, expr.validateArgsAtCompileTime, method)) {
       Runnable invoker = () -> {
         invokeMaybeAsync(isAsync, expr.accessOperator.is(QUESTION_DOT) ? method.returnType.boxed() : method.returnType, 0, expr.location,
                          () -> {
@@ -3550,13 +3549,18 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   /**
-   * Validate named arguments and turn them back into an order list of args based on parameter order
+   * Validate named arguments and turn them back into an order list of args based on parameter order.
+   * We fill in any missing values with default values unless default value is non-trivial.
+   * If multiple argument values potentially have side-effects and argument order differs from parameter
+   * order then return original args to force use of wrapper since evaluation order should be based on 
+   * argument order at call site not parameter order.
+   * We know argument order is safe if at most one value is non-const (so at most one side-effect).
    * @param args          singleton list of Expr.MapLiteral representing the named args
    * @param func          the function/method
    * @param location      location for errors
    * @param isInitMethod  true if this is for a "new" invocation
    * @param initClass     the JactlType for the class (if doing "new")
-   * @return the ordered args (or null if isInitMethod is true or we found an error)
+   * @return the ordered args (or original args if isInitMethod is true or arg values are non-const or we found an error)
    */
   private List<Expr> validateNamedArgs(List<Expr> args, FunctionDescriptor func, Token location, boolean isInitMethod, JactlType initClass) {
     List<String> missingArgs = new ArrayList<>();
@@ -3566,17 +3570,23 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     List<String>    paramNames = isInitMethod ? initClass.getClassDescriptor().getAllFieldNames() : func.paramNames;
     List<JactlType> paramTypes = isInitMethod ? initClass.getClassDescriptor().getAllFieldTypes() : func.paramTypes;
 
-    Function<Expr,String>  argName     = expr -> ((Expr.Literal)expr).value.getStringValue();
+    Function<Expr,String>  argNameGet  = expr -> ((Expr.Literal)expr).value.getStringValue();
     List<Pair<Expr, Expr>> mapEntries  = ((Expr.MapLiteral) args.get(0)).entries;
     Map<String, Expr>      namedArgMap = new HashMap<>();
+    List<String>           argNames    = new ArrayList<>();
     for (Pair<Expr, Expr> pair : mapEntries) {
-      namedArgMap.put(argName.apply(pair.first), pair.second);
+      String name = argNameGet.apply(pair.first);
+      namedArgMap.put(name, pair.second);
+      argNames.add(name);
     }
 
     // Make sure there are no missing arguments and check argument types are compatible
     // with parameter types. Remove each named arg as we validate.
     // Build up list of args in correct order.
     List<Expr> orderedArgs = isInitMethod ? null : new ArrayList<>();
+    boolean seenNonConstOutOfOrder = false;
+    boolean outOfOrder = false;
+    int argIdx = 0;
     for (int i = 0; i < paramNames.size(); i++) {
       String     paramName = paramNames.get(i);
       JactlType paramType = paramTypes.get(i);
@@ -3601,11 +3611,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
         }
       }
       else {
+        // We have a value for this parameter
+        String argName = argNames.get(argIdx++);
+        if (!paramName.equals(argName)) {
+          outOfOrder = true;
+        }
         validateArg(argExpr, paramType, namedArgMap.get(paramName).location);
         if (!isInitMethod && orderedArgs != null) {
           if (func.isVarArgs && i == paramNames.size() - 1) {
             // For varargs, the last list arg turns into multiple positional args
-            if (argExpr instanceof Expr.ListLiteral) {
+            if (argExpr instanceof Expr.ListLiteral && argExpr.isConst) {
               orderedArgs.addAll(((Expr.ListLiteral) argExpr).exprs);
             }
             else {
@@ -3613,7 +3628,16 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
             }
           }
           else {
-            orderedArgs.add(argExpr);
+            if (argExpr.isConst || !seenNonConstOutOfOrder) {
+              orderedArgs.add(argExpr);
+            }
+            if (!argExpr.isConst && outOfOrder) {
+              if (seenNonConstOutOfOrder) {
+                // Too many non-const arg values so fallback to wrapper
+                orderedArgs = null;
+              }
+              seenNonConstOutOfOrder = true;
+            }
           }
         }
         namedArgMap.remove(paramName);
@@ -3626,11 +3650,11 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (namedArgMap.size() > 0) {
       // Use location of first extraneous argument for error
       List<Expr> keys = mapEntries.stream()
-                                  .filter(entry -> namedArgMap.containsKey(argName.apply(entry.first)))
+                                  .filter(entry -> namedArgMap.containsKey(argNameGet.apply(entry.first)))
                                   .map(entry -> entry.first)
                                   .collect(Collectors.toList());
       error("No such " + Utils.plural(isInitMethod ? "field" : "parameter", namedArgMap.size()) + ": "
-                             + keys.stream().map(expr -> argName.apply(expr)).collect(Collectors.joining(", ")) +
+                             + keys.stream().map(expr -> argNameGet.apply(expr)).collect(Collectors.joining(", ")) +
                              (isInitMethod ? " in object of type " + initClass : ""),
                              keys.get(0).location);
     }
