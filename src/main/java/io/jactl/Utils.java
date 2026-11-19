@@ -1032,7 +1032,7 @@ public class Utils {
     // NOTE that if method is non-final and non-static we take the conservative approach and
     // invoke the wrapper since a child class might override with different default values.
     if (args.size() < func.paramTypes.size()) {
-      if (!func.isStaticMethod && !func.isFinal) {
+      if (func.isInstanceMethod() && !func.isStaticMethod && !func.isFinal) {
         return true;
       }
       for (int i = args.size(); i < func.paramTypes.size(); i++) {

@@ -2879,6 +2879,40 @@ public class CompilerTests2 extends BaseTest {
     test("int i = 0; sprintf(args:[++i,++i], format:'%d,' + ++i + ',%d')", "1,3,2");
     test("int i = 0; [1,2,3].reduce(accumulator:do{ ++i; { v,e -> v + e + i }}, initial:++i)", 14);
   }
+  
+  @Test public void spreadingArgList() {
+    test("def f(List a = [], b = 0) { \"a=$a b=$b\" }; f([[1],[2]])", "a=[[1], [2]] b=0");
+    test("def f(List a = [], b = 0) { \"a=$a b=$b\" }; List x = [[1],[2]]; f(x)", "a=[[1], [2]] b=0");
+    test("def f(List a = [], b = 0) { \"a=$a b=$b\" }; def x = [[1],[2]]; f(x)", "a=[[1], [2]] b=0");
+    test("def f(List a = [], b = 0) { \"a=$a b=$b\" }; def g = f; g([[1],[2]])", "a=[[1], [2]] b=0");
+    test("def f(List a = [], b = 0+0) { \"a=$a b=$b\" }; f([[1],[2]])", "a=[[1], [2]] b=0");
+    test("def f(List a = [], b = 0+0) { \"a=$a b=$b\" }; def g = f; g([[1],[2]])", "a=[[1], [2]] b=0");
+    test("def f(List a = [], b = 0) { \"a=$a b=$b\" }; f([3,4])", "a=[3, 4] b=0");
+    test("def f(List a = [], b = 0) { \"a=$a b=$b\" }; def g = f; g([3,4])", "a=[3, 4] b=0");
+    test("def sum(List nums = [], int start = 0) { start + nums.sum() }; sum([3, 4])", 7);
+    test("def sum(List nums = [], int start = 0) { start + nums.sum() }; def g = sum; g([3, 4])", 7);
+    test("def sum(List nums = [], int start = 0) { start + nums.sum() }; def d = [3, 4]; sum(d)", 7);
+    test("def items(List xs = [], String sep = ',') { xs.join(sep) }; items(['a', 'b'])", "a,b");
+    test("def items(List xs = [], String sep = ',' + '') { xs.join(sep) }; items(['a', 'b'])", "a,b");
+    test("class X { def f(List a = [], b = 0) { \"a=$a b=$b\" } }; X x = new X(); x.f([[1],[2]])", "a=[[1], [2]] b=0");
+    test("class X { def f(List a = [], b = 0) { \"a=$a b=$b\" } }; def x = new X(); x.f([[1],[2]])", "a=[[1], [2]] b=0");
+    test("class X { static def f(List a = [], b = 0+0) { \"a=$a b=$b\" } }; X.f([[1],[2]])", "a=[[1], [2]] b=0");
+    test("class X { static def f(List a = [], b = 0) { \"a=$a b=$b\" } }; def g = X.f; g([[1],[2]])", "a=[[1], [2]] b=0");
+    test("class X { static def f(List a = [], b = 0) { \"a=$a b=$b\" } }; def d = [[1],[2]]; X.f(d)", "a=[[1], [2]] b=0");
+    test("class X { static def sum(List nums = [], int start = 0) { start + nums.sum() } }; def g = X.sum; g([3, 4])", 7);
+    test("def sum(List nums = [], int start = 0) { start + nums.sum() }; sum([3, 4], 10)", 17);
+    test("class X { final def f(List a = [], b = 0) { \"a=$a b=$b\" } }; X x = new X(); x.f([[1],[2]])", "a=[[1], [2]] b=0");
+    test("class X { static def f(List a = [], b = 0) { \"a=$a b=$b\" } }; X.f([[1],[2]])", "a=[[1], [2]] b=0");
+    test("def c = { List a = [], b = 0 -> \"a=$a b=$b\" }; c([[1],[2]])", "a=[[1], [2]] b=0");
+    test("def f(a, b) { \"a=$a b=$b\" }; f([1,2])", "a=1 b=2");
+    test("def f(a, b) { \"a=$a b=$b\" }; def g = f; g([1,2])", "a=1 b=2");
+    test("def f(a = [], b = 0) { \"a=$a b=$b\" }; f([1,2])", "a=1 b=2");
+    test("def f(a = [], b = 0) { \"a=$a b=$b\" }; def g = f; g([1,2])", "a=1 b=2");
+    test("def f(List a, b = 0) { \"a=$a b=$b\" }; f([1,2])", "a=[1, 2] b=0");
+    test("def f(List a, b = 0) { \"a=$a b=$b\" }; def g = f; g([1,2])", "a=[1, 2] b=0");
+    test("def f(List a = [], b = 0) { \"a=$a b=$b\" }; f([1], 2)", "a=[1] b=2");
+    test("def f(List a = [], b = 0) { \"a=$a b=$b\" }; f(b:2, a:[1])", "a=[1] b=2");
+  }
 
   @Test public void simpleClosures() {
     test("{;}()", null);

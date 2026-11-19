@@ -3483,9 +3483,11 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     Expr.Binary argCountIs1 = new Expr.Binary(argCountIdent, token.apply(EQUAL_EQUAL), intLiteral.apply(1));
 
     // Special case to handle situation where we have List passed as only arg within the Object[].
-    // If there is one parameter (or one mandatory parameter) then we pass the list as a single argument.
+    // If there is one parameter (or one mandatory parameter) or first parameter is a list
+    // then we pass the list as a single argument.
     // Otherwise, we treat the List as a list of argument values.
-    boolean passListAsList = paramCount == 1 || mandatoryCount == 1;
+    boolean passListAsList = paramCount == 1 || mandatoryCount == 1 ||
+                             (mandatoryCount == 0 && paramCount > 0 && funDecl.functionDescriptor.paramTypes.get(0).is(LIST));
     boolean treatSingleArgListAsArgs = !passListAsList;
     if (treatSingleArgListAsArgs) {
       //:   if (_$argCount == 1 && _$argArr[0] instanceof List) {

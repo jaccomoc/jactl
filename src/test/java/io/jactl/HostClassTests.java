@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -56,6 +57,11 @@ public class HostClassTests extends BaseTest {
     public String process2(int x, int y) { if (throwException) throw new RuntimeException("throwing test exception"); return prefix + ": " + x + ": " + y; }
     public static String staticMethod() { if (throwException) throw new RuntimeException("throwing test exception"); return "static"; }
     public static String staticMethod2(String x) { if (throwException) throw new RuntimeException("throwing test exception"); return "static: " + x; }
+    public Object listMethod(List x) { return x; }
+    public static Object staticListMethod(List x) { return x; }
+    public Object listMethod2(List x, String s) { return x; }
+    public static Object staticListMethod2(List x, String s) { return x; }
+    public Object listMethod3(int i, int j, int k) { return Utils.listOf(i, j, k); }
   }
 
   @BeforeEach
@@ -324,6 +330,19 @@ public class HostClassTests extends BaseTest {
     test("String f(io.jactl.HostClassTests.NewType n) { n.process('xyz') }; f(new io.jactl.HostClassTests.NewType('prefix'));",  "prefix: xyz");
     testError("class X{}; X f(io.jactl.HostClassTests.NewType n) { n.process('xyz') }; f(new io.jactl.HostClassTests.NewType('prefix'));",  "String not compatible");
     test("class X { String f(io.jactl.HostClassTests.NewBaseType n) { n.baseMethod('xyz') } }; new X().f(new io.jactl.HostClassTests.NewType('prefix'));",  "baseMethod: xyz");
+    test("import io.jactl.HostClassTests.NewType; NewType n = new NewType('xxx'); n.listMethod([1,2,3])", Utils.listOf(1,2,3));
+    test("import io.jactl.HostClassTests.NewType; NewType n = new NewType('xxx'); def f = n.listMethod; f([1,2,3])", Utils.listOf(1,2,3));
+    test("import io.jactl.HostClassTests.NewType; NewType.staticListMethod([1,2,3])", Utils.listOf(1,2,3));
+    test("import io.jactl.HostClassTests.NewType; def f = NewType.staticListMethod; f([1,2,3])", Utils.listOf(1,2,3));
+    test("import io.jactl.HostClassTests.NewType; NewType n = new NewType('xxx'); n.listMethod2([1,2,3], 'a')", Utils.listOf(1,2,3));
+    test("import io.jactl.HostClassTests.NewType; NewType n = new NewType('xxx'); def f = n.listMethod2; f([1,2,3], 'a')", Utils.listOf(1,2,3));
+    test("import io.jactl.HostClassTests.NewType; NewType n = new NewType('xxx'); def f = n.listMethod2; f([[1,2,3], 'a'])", Utils.listOf(1,2,3));
+    test("import io.jactl.HostClassTests.NewType; NewType.staticListMethod2([1,2,3], 'a')", Utils.listOf(1,2,3));
+    test("import io.jactl.HostClassTests.NewType; def f = NewType.staticListMethod2; f([1,2,3], 'a')", Utils.listOf(1,2,3));
+    test("import io.jactl.HostClassTests.NewType; def f = NewType.staticListMethod2; f([[1,2,3], 'a'])", Utils.listOf(1,2,3));
+    test("import io.jactl.HostClassTests.NewType; NewType n = new NewType('xxx'); n.listMethod3(1,2,3)", Utils.listOf(1,2,3));
+    test("import io.jactl.HostClassTests.NewType; NewType n = new NewType('xxx'); def f = n.listMethod3; f(1,2,3)", Utils.listOf(1,2,3));
+    test("import io.jactl.HostClassTests.NewType; NewType n = new NewType('xxx'); def f = n.listMethod3; f([1,2,3])", Utils.listOf(1,2,3));
   }
   
   @Test public void javaTypes() {

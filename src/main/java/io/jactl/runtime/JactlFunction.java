@@ -448,7 +448,8 @@ public class JactlFunction extends FunctionDescriptor {
       // mandatory parameter) then we assume list is the value for that parameter. Otherwise, we
       // treat the list as a list of arg values.
       if (args.length == 1 && args[0] instanceof List) {
-        boolean passListAsList = paramNamesArr.length == 1 || mandatoryArgCount == 1;
+        boolean passListAsList = paramNamesArr.length == 1 || mandatoryArgCount == 1 ||
+                                 (mandatoryArgCount == 0 && paramNamesArr.length > 0 && paramTypes.get(0).is(JactlType.LIST));
         if (!passListAsList) {
           args = ((List) args[0]).toArray();
         }
