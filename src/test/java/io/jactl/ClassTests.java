@@ -1074,7 +1074,7 @@ public class ClassTests extends BaseTest {
     test("class X { int i }; def x = new X(2); x == [i:2] as X", true);
     testError("class X { int i }; def x = new X(2); x == [2] as X", "cannot coerce from list to instance");
     test("class X { int i }; X x = new X(2); x == [i:2] as X", true);
-    testError("class X { X x }; X x = new X(null); x.x = x; Map m = x as Map; m.x == m", "Self-referential data-structure");
+    test("class X { X x }; X x = new X(null); x.x = x; Map m = x as Map; m.x == m", true);
     test("class X { int i; int j; X x = null }; X x1 = new X(1,2); X x2 = new X(1,3); x1 == x2", false);
     test("class X { int i; int j; X x = null }; X x1 = new X(1,2); X x2 = new X(1,3); x1 != x2", true);
     test("class X { int i; int j; X x = null }; X x1 = new X(1,2); X x2 = new X(1,2); x1 != x2", false);
@@ -1149,9 +1149,29 @@ public class ClassTests extends BaseTest {
     test("class X { int i = 0; long j = 2 }; def x = new X(); x as Map", Utils.mapOf("i",0,"j",2L));
     test("class X { int i = 0; long j = 2; X x = null }; def x = new X(); (x as Map).toString()", "[i:0, j:2, x:null]");
     test("class X { int i = 0; long j = 2; X x = null }; def x = new X(); x.x = x; x.toString()", "[i:0, j:2, x:<CIRCULAR_REF>]");
-    testError("class X { int i = 0; long j = 2; X x = null }; def x = new X(); x.x = x; (x as Map).toString()", "Self-referential data-structure");
+    test("class X { int i = 0; long j = 2; X x = null }; def x = new X(); x.x = x; (x as Map).toString()", "[i:0, j:2, x:<CIRCULAR_REF>]");
     testError("class X { int i = 0; long j = 2 }; new X() as List", "cannot coerce");
     testError("class X { int i = 0; long j = 2 }; def x = new X(); x as List", "cannot coerce");
+    test("class X { int i = 1 }; class Y { int j = 2; X x = new X() }; def m = new Y() as Map; m.toString()", "[j:2, x:[i:1]]");
+    test("class X { int i = 1 }; class Y { int j = 2; X x = new X() }; class Z { Y y = new Y() }; def m = new Z() as Map; m.toString()", "[y:[j:2, x:[i:1]]]");
+    test("class Y { int i = 1 }; class X { int a = 2; Y y = new Y() }; X x = new X(); (x as Map).toString()", "[a:2, y:[i:1]]");
+    test("class Y { int i = 1 }; class X { int a = 2; Y y = new Y() }; def x = new X(); (x as Map).toString()", "[a:2, y:[i:1]]");
+    test("class Y { int i = 1 }; class X { int a = 2; Y y = new Y() }; (new X() as Map).y instanceof Map", true);
+    test("class Y { int i = 1 }; class X { int a = 2; Y y = new Y() }; (new X() as Map).y.i", 1);
+    test("class Z { String s = 'z' }; class Y { int i = 1; Z z = new Z() }; class X { int a = 2; Y y = new Y() }; (new X() as Map).toString()", "[a:2, y:[i:1, z:[s:'z']]]");
+    test("class Y { int i = 1 }; class X { int a = 2; Y y = null }; (new X() as Map).toString()", "[a:2, y:null]");
+    test("class A { String street; String city }; class P { String name; A address }; def p = new P(name:'Fred', address:new A(street:'1 Main St', city:'Springfield')); (p as Map).toJson()", "{\"name\":\"Fred\",\"address\":{\"street\":\"1 Main St\",\"city\":\"Springfield\"}}");
+    test("class A { String street; String city }; class P { String name; A address }; def p = new P(name:'Fred', address:new A(street:'1 Main St', city:'Springfield')); (p as Map).toJson() == p.toJson()", true);
+    test("class Y { int i = 1 }; class X { Y a; Y b }; Y y = new Y(); (new X(a:y, b:y) as Map).toString()", "[a:[i:1], b:[i:1]]");
+    test("class Y { int i = 1 }; class X { Y a; Y b }; Y y = new Y(); def m = new X(a:y, b:y) as Map; m.b instanceof Map", true);
+    test("class Y { int i = 1 }; class X { Y a; Y b }; Y y = new Y(); def m = new X(a:y, b:y) as Map; m.a === m.b", true);
+    test("class Y { int i }; class X { Y a; Y b }; def m = new X(a:new Y(1), b:new Y(1)) as Map; m.a.i = 5; m.toString()", "[a:[i:5], b:[i:1]]");
+    test("class Y { int i }; class X { Y a; Y b }; def m = new X(a:new Y(1), b:new Y(1)) as Map; m.a === m.b", false);
+    test("class X { int i = 0; X x = null }; def x = new X(); x.x = x; def m = x as Map; m.x === m", true);
+    test("class X { int i = 0; X x = null }; def x = new X(); x.x = x; (x as Map).toString()", "[i:0, x:<CIRCULAR_REF>]");
+    test("class N { String name; N next = null }; def a = new N(name:'a'); def b = new N(name:'b', next:a); a.next = b; def m = a as Map; m.next instanceof Map && m.next.next === m", true);
+    test("class N { String name; N next = null }; def a = new N(name:'a'); def b = new N(name:'b', next:a); a.next = b; (a as Map).toString()", "[name:'a', next:[name:'b', next:<CIRCULAR_REF>]]");
+    test("class X { int i = 0; X x = null }; def x = new X(); x.x = x; def m = x as Map; m.x.x.x.i", 0);
   }
 
   @Test public void questionColon() {
@@ -1217,7 +1237,7 @@ public class ClassTests extends BaseTest {
     test("class X {}; def x = new X(); x.toString()", "[:]");
     test("class X {X x; long i}; new X(null,3).toString()", "[x:null, i:3]");
     test("class X {X x; int i}; def x = new X(null,3); x.x = x; x.toString()", "[x:<CIRCULAR_REF>, i:3]");
-    testError("class X {X x; int i}; def x = new X(null,3); x.x = x; (x as Map).toString()", "Self-referential data-structure");
+    test("class X {X x; int i}; def x = new X(null,3); x.x = x; (x as Map).toString()", "[x:<CIRCULAR_REF>, i:3]");
     test("class X { Y y }; class Y { X x }; def a = [y:[x:[y:null]]]; def x = a as X; x.toString()", "[y:[x:[y:null]]]");
     test("class X { def toString() { 'xxx' } }; new X().toString()", "xxx");
     test("class X { def toString() { 'xxx' } }; def x = [new X()]; x.toString()", "[xxx]");

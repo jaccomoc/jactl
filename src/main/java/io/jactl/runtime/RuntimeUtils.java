@@ -3153,10 +3153,10 @@ public class RuntimeUtils {
 
   public static final MethodRef AS_MAP_METHOD = Utils.getMethod(RuntimeUtils.class, "asMap", Object.class, boolean.class, String.class, int.class);
   public static Map asMap(Object obj, boolean captureStackTrace, String source, int offset) {
-    return doAsMap(obj, source, offset, new HashMap<>());
+    return doAsMap(obj, source, offset, new IdentityHashMap<>());
   }
 
-  private static Map doAsMap(Object obj, String source, int offset, Map<Object,Map> fieldValues) {
+  private static Map doAsMap(Object obj, String source, int offset, IdentityHashMap<Object,Map> fieldValues) {
     if (obj == null)           { return null; }
     if (obj instanceof Map)    { return (Map)obj; }
     if (obj instanceof List) {
@@ -3175,9 +3175,12 @@ public class RuntimeUtils {
             Object value = ((Field) value1).get(obj);
             if (value instanceof JactlObject) {
               // Check we don't already have a value for this object due to circular reference somewhere
-              value = fieldValues.get(value);
-              if (value == null) {
+              Object mapValue = fieldValues.get(value);
+              if (mapValue == null) {
                 value = doAsMap(value, source, offset, fieldValues);
+              }
+              else {
+                value = mapValue;
               }
             }
             result.put(field, value);
