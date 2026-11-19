@@ -947,14 +947,8 @@ public class RuntimeUtils {
       // Maximum shift amount based on size of lhs to match Java behaviour
       rhs = left instanceof Byte ? rhs & 0x7 : left instanceof Integer ? rhs & 0x1f : rhs & 0x3f;
     }
-    else if (rhs < 0) {
-      // For non-shift don't sign extend ints and bytes
-      if (right instanceof Integer) {
-        rhs &= 0xffffffff;
-      }
-      if (right instanceof Byte) {
-        rhs &= 0xff;
-      }
+    else if (rhs < 0 && right instanceof Byte) {
+      rhs &= 0xff;
     }
 
     long result;
@@ -968,7 +962,10 @@ public class RuntimeUtils {
       result = lhs >> rhs;
     }
     else {
-      long lhs = leftIsLong ? ((Number) left).longValue() : left instanceof Byte ? ((long)(byte)left) & 0xff : ((long)(int)left) & 0xffffffffL;
+      long lhs = leftIsLong ? ((Number) left).longValue()
+                            : left instanceof Byte ? ((long)(byte)left) & 0xff 
+                                                   : operator == TRIPLE_GREATER_THAN ? ((long)(int)left) & 0xffffffffL
+                                                                                     : (long)(int)left;
       switch (operator) {
         case DOUBLE_LESS_THAN:    result = lhs << rhs;  break;
         case TRIPLE_GREATER_THAN: result = lhs >>> rhs; break;

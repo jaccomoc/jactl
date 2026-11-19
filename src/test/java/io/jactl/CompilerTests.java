@@ -2248,6 +2248,40 @@ class CompilerTests extends BaseTest {
     test("def x = -1; var y = 20; x >>>= y", -1 >>> 20);
     test("def x = -1L; var y = 20; x >>>= y", -1L >>> 20);
   }
+  
+  @Test public void bitOperations2() {
+    test("def f(int i, long j) { i | j }; f(-7, 7L)", -1L);
+    test("def f(i, j) { i | j }; f(-7, 7L)", -1L);
+    test("def a = -7; def b = 7L; a | b", -1L);
+    test("def a = -7; def b = -1L; a & b", -7L);
+    test("def a = -7; def b = 7L; a ^ b", -2L);
+    test("def a = -7; a | 7L", -1L);
+    test("def a = -7; long b = 7L; a | b", -1L);
+    test("int a = -7; def b = 7L; a | b", -1L);
+    test("int a = -7; long b = 7L; def da = a; def db = b; (da | db) == (a | b)", true);
+    test("def a = 7L; def b = -7; a | b", -1L);
+    test("def a = -1L; def b = -7; a & b", -7L);
+    test("def a = -7; def b = -1; a | b", -1);
+    test("def a = -7; def b = 7; a ^ b", -2);
+    test("def a = 7; def b = -1L; a & b", 7L);
+    test("def a = -7; a << 1", -14);
+    test("def a = -7; a >> 1", -4);
+    test("def a = -7; a >>> 28", 15);
+    test("def a = -7; def b = 28L; a >>> b", 15);
+    test("def a = -1L; a >>> 60", 15L);
+    test("def a = -7; a << 33", -14);
+    test("def a = (byte)200; def b = -1L; a & b", 200L);
+    test("def a = (byte)200; def b = 0xFFL; a | b", 255L);
+    test("def a = (byte)200; def b = -7; a | b", -7);
+    test("int h = -1794106052; long mask = 0xFFFFFFFFFFL; h & mask", 1097717521724L);
+    test("def h = -1794106052; long mask = 0xFFFFFFFFFFL; h & mask", 1097717521724L);
+    test("List flags = [-1, 2]; flags.reduce(0L){ acc, f -> f | acc }", -1L);
+    test("List flags = [-1, 2]; flags.reduce(0L){ acc, f -> acc | f }", -1L);
+    test("def orAll(a, b) { a | b }; orAll(-7, 7L)", -1L);
+    test("long typedOr(int a, long b) { a | b }; typedOr(-7, 7L)", -1L);
+    test("long l = 0L; def d = -7; l |= d; l", -7L);
+    test("def l = -7; l |= 7L; l", -1L);
+  }
 
   @Test public void percentEquals(){
     test("byte x = 18; x %= 7L", (long)4);
