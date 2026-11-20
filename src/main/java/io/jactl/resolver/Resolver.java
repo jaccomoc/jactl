@@ -1525,7 +1525,12 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     // Don't bother checking for type compatibility if we already have an error since we may
     // not have a valid type to check against
     if (errors.isEmpty()) {
-      checkTypeConversion(expr.initialiser, expr.type, false, expr.equals);
+      // For params, initialiser is replaced so find original one to check against
+      Expr initialiser = expr.initialiser;
+      if (expr.paramVarDecl != null && expr.paramVarDecl.initialiser instanceof Expr.Noop) {
+        initialiser = ((Expr.Noop) expr.paramVarDecl.initialiser).originalExpr;
+      }
+      checkTypeConversion(initialiser, expr.type, false, expr.equals);
     }
 
     // Track last type assigned so we can supply better completions in Intellij plugin
@@ -1798,16 +1803,17 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     if (from == null) {
       return;
     }
-    if (jactlContext.isIdePlugin() && from.type.is(INSTANCE) && to.is(INSTANCE) && (from.type.getClassDescriptor() == null || to.getClassDescriptor() == null)) {
+    JactlType fromType = from.type;
+    if (jactlContext.isIdePlugin() && fromType.is(INSTANCE) && to.is(INSTANCE) && (fromType.getClassDescriptor() == null || to.getClassDescriptor() == null)) {
       // Allow unresolved class types during interactive editing in IDE
       return;
     }
-    if (!from.type.isCastableTo(to) && !(toAndFrom && from.type.isAssignableFrom(to))) {
-      error("Cannot convert from " + from.type + " to " + to, location);
+    if (!fromType.isCastableTo(to) && !(toAndFrom && fromType.isAssignableFrom(to))) {
+      error("Cannot convert from " + fromType + " to " + to, location);
     }
     // Check casting from empty or multiple char string to a number. Single char is fine as we use single char
     // strings to represent a single character which then has a numeric value (the ASCII value).
-    if (to.isNumeric() && from.type.is(STRING) && from.isConst && from.constValue instanceof  String) {
+    if (to.isNumeric() && fromType.is(STRING) && from.isConst && from.constValue instanceof  String) {
       String str = (String)from.constValue;
       if (str.isEmpty()) {
         error("Empty string cannot be cast to " + to, location);
@@ -1816,7 +1822,7 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
         error("String with multiple chars cannot be cast to " + to, location);
       }
     }
-    if (to.is(BOOLEAN) && from instanceof Expr.RegexMatch && from.type.is(STRING)) {
+    if (to.is(BOOLEAN) && from instanceof Expr.RegexMatch && fromType.is(STRING)) {
       error("Regex string used in boolean context", from.location);
     }
   }
@@ -1946,6 +1952,9 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
       if (parent.type.is(CLASS)) {
         error("Cannot modify class field", field.location);
       }
+      if (errors.isEmpty()) {
+        checkTypeConversion(valueExpr, fieldType, false, accessType);
+      }
       if (expr instanceof Expr.FieldAssign && ((Expr.FieldAssign) expr).assignmentOperator.is(QUESTION_EQUAL)) {
         fieldType = fieldType.boxed();
       }
@@ -1965,8 +1974,10 @@ public class Resolver implements Expr.Visitor<JactlType>, Stmt.Visitor<Void> {
     
     // If array then return the array element type but set the expr.type to be value of rhs since
     // the type of the assignment is always the type of the rhs
-    if (parent.type.is(ARRAY)) {
-      return parent.type.getArrayElemType();
+    if (parent.type.is(ARRAY) && errors.isEmpty()) {
+      JactlType arrayElemType = parent.type.getArrayElemType();
+      checkTypeConversion(valueExpr, arrayElemType, false, accessType);
+      return arrayElemType;
     }
     
     return expr.type;

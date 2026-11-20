@@ -737,6 +737,46 @@ public class ListMapArrayTests extends BaseTest {
     test("([[1],[-2],[3]] as int[][]).toString()", "[[1], [-2], [3]]");
   }
 
+  @Test public void storingArrayElemWrongType() {
+    testError("int[] a = new int[1]; a[0] = true; a[0]", "cannot convert");
+    testError("int[] a = new int[1]; def x = true; a[0] = x; a[0]", "cannot be cast");
+    testError("def a = new int[1]; def x = true; a[0] = x; a[0]", "cannot be cast");
+    testError("int[] a = new int[1]; a[0] = 'aaa'; a[0]", "cannot be cast");
+    testError("long[] a = new long[1]; a[0] = true; a[0]", "cannot convert");
+    testError("byte[] a = new byte[1]; a[0] = true; a[0]", "cannot convert");
+    testError("int[] a = new int[1]; boolean b = true; a[0] = b; a[0]", "cannot convert");
+    testError("int[] a = new int[1]; a[0] = 1 > 0; a[0]", "cannot convert");
+    testError("class X { int i }; X x = new X(0); x.i = true; x.i", "cannot convert");
+    testError("class X { long i }; X x = new X(0); x.i = true; x.i", "cannot convert");
+    testError("class X { byte i }; X x = new X(0); x.i = true; x.i", "cannot convert");
+    testError("class X { int i }; X x = new X(5); boolean b = false; x.i = b; x.i", "cannot convert");
+    testError("class X { int i }; X x = new X(0); x['i'] = true; x.i", "cannot convert");
+    testError("def f(int i = true) { i }; f()", "cannot convert");
+    testError("def f(long i = false) { i }; f()", "cannot convert");
+    testError("int x = true; x", "cannot convert from boolean to int");
+    testError("int i = 0; i = true; i", "cannot convert from boolean to int");
+    testError("long x = 0L; x = true; x", "cannot convert from boolean to long");
+    testError("double[] a = new double[1]; a[0] = true; a", "cannot convert");
+    testError("Decimal[] a = new Decimal[1]; a[0] = true; a", "cannot convert");
+    testError("class X { double i }; X x = new X(0); x.i = true; x", "cannot convert");
+    testError("class X { int i }; X x = new X(true); x", "cannot convert argument of type boolean");
+    testError("class X { int i }; X x = new X(i:true); x", "cannot convert argument of type boolean");
+    testError("class X { int i = true }; new X()", "cannot convert from boolean to int");
+    testError("def f(int i) { i }; f(true)", "cannot convert argument of type boolean");
+    testError("int f() { true }; f()", "not compatible");
+    testError("def b = true; int x = b; x", "cannot be cast to int");
+    testError("def a = new int[1]; a[0] = true; a", "cannot be cast to int");
+    testError("int[] a = new int[1]; def b = true; a[0] = b; a", "cannot be cast to int");
+    testError("class X { int i }; def x = new X(0); x.i = true; x", "cannot be cast to int");
+    testError("class X { int i }; X x = [i:true]; x", "cannot be cast to int");
+    testError("int[] a = new int[1]; a[0] ?= true; a", "cannot be cast to int");
+    testError("int[] a = [true]; a", "cannot convert boolean to int");
+    test("int[] a = new int[1]; a[0] = 1; a[0]", 1);
+    test("class X { int i }; X x = new X(0); x.i = 2; x.i", 2);
+    test("def f(int i = 3) { i }; f()", 3);
+    testError("X[] x; x[0] = new X()", "unknown class");
+  }
+  
   @Test public void nullArrays() {
     testError("int[] a; a[0] = 3; a[0]", "null value for array");
     testError("int[] a; a[0]", "null parent");

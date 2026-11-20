@@ -884,7 +884,7 @@ public class JactlType extends JactlUserDataHolder {
       if (isHostClass || otherType.isHostClass) {
         return false;
       }
-      if (getClassDescriptor() == null)           { 
+      if (getClassDescriptor() == null) { 
         throw new IllegalStateException("Internal error: classDescriptor should be set"); 
       }
       if (otherType.getClassDescriptor() == null) { throw new IllegalStateException("Internal error: classDescriptor should be set"); }
