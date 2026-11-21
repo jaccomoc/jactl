@@ -1249,6 +1249,122 @@ class CompilerTests extends BaseTest {
     test("def x = 9223372036854775806L; def y = 9223372036854775807L; x % y", 9223372036854775806L);
   }
 
+  @Test public void doubleValues() {
+    test("0D/0D == 0D/0D", false);
+    test("0D/0D != 0D/0D", true);
+    test("0D/0D > 1D", false);
+    test("-0D == 0D", true);
+    test("-0D < 0D", false);
+    test("(0D/0D) <=> 1D", 1);
+    test("-0D <=> 0D", -1);
+
+    test("def d = 1.0D; d == null", false);
+    test("def b = (byte)200; def d = 200.0D; b == d", true);
+    test("def d = 0D/0D; d !== d", true);
+    test("def d = 0D/0D; d === d", false);
+    
+    for (String decls: new String[] { "double nan = 0D/0D; double one = 1D; ",
+                                      "def nan = 0D/0D; def one = 1D; ",
+                                      "double nan = 0D/0D; def one = 1D; "}) {
+      test(decls + "nan == nan", false);
+      test(decls + "nan != nan", true);
+      test(decls + "nan == one", false);
+      test(decls + "nan != one", true);
+      test(decls + "nan < one", false);
+      test(decls + "nan <= one", false);
+      test(decls + "nan > one", false);
+      test(decls + "nan >= one", false);
+      test(decls + "one < nan", false);
+      test(decls + "one > nan", false);
+      test(decls + "int i = 1; nan > i", false);
+      test(decls + "def i = 1; nan < i", false);
+    }
+    
+    test("def n = 0D/0D; def m = n; m == n", false);                                                                                                           
+    test("def n = 0D/0D; double one = 1D; n > one", false);
+    
+    for (String decls : new String[] { "double zero = 0D; double nzero = -zero; ",
+                                       "def zero = 0D; def nzero = -zero; ",
+                                       "double zero = 0D; def nzero = -zero; "}) {
+      test(decls + "nzero == zero", true);
+      test(decls + "nzero != zero", false);
+      test(decls + "nzero < zero", false);
+      test(decls + "nzero <= zero", true);
+      test(decls + "nzero > zero", false);
+      test(decls + "nzero >= zero", true);
+    }
+
+    for (String decls: new String[] { "double n = 0D/0D; double one = 1D; double z = 0D; double nz = -z; ",
+                                      "def n = 0D/0D; def one = 1D; def z = 0D; def nz = -z; ",
+                                      "double n = 0D/0D; def one = 1D; double z = 0D; def nz = -z; " }) {
+      test(decls + "n <=> one", 1);
+      test(decls + "one <=> n", -1);
+      test(decls + "n <=> n", 0);
+      test(decls + "nz <=> z", -1);
+      test(decls + "z <=> nz", 1);
+      test(decls + "int i = 1; n <=> i", 1);
+      test(decls + "(n <=> one) == -(one <=> n)", true);
+    }
+  }
+
+  @Test public void doubleCollections() {
+    String decls = "double nan = 0D/0D; double one = 1D; double zero = 0D; double nzero = -zero; ";
+    test(decls + "[nan, one, zero, nzero].sort()", Utils.listOf(-0D, 0D, 1D, Double.NaN));
+    test(decls + "[nan, one, zero, nzero].sort{ a,b -> a <=> b }", Utils.listOf(-0D, 0D, 1D, Double.NaN));
+    test(decls + "[nan, one, zero, nzero].sort{ double a, double b -> a <=> b }", Utils.listOf(-0D, 0D, 1D, Double.NaN));
+    test(decls + "[nan, one, zero, nzero].sort{ a,b -> b <=> a }", Utils.listOf(Double.NaN, 1D, 0D, -0D));
+    test(decls + "[nan] == [nan]", true);
+    test(decls + "[nzero] == [zero]", false);
+    test(decls + "[a:nan] == [a:nan]", true);
+    test(decls + "nan in [one, nan]", true);
+    test(decls + "[nan, nan].unique()", Utils.listOf(Double.NaN));
+    test(decls + "[nzero, zero].unique()", Utils.listOf(-0D, 0D));
+    test(decls + "[one, nan].max()", Double.NaN);
+    test(decls + "[nzero, zero].min()", -0D);
+  }
+
+  @Test public void doubleComparisonMatrix() {
+    Object[] values = { Double.NaN, -0D, 0D, 1D, -1D, 1, -1 };
+    String[] ops    = { "==", "!=", "<", "<=", ">", ">=", "<=>" };
+    for (String op : ops) {
+      for (Object a : values) {
+        for (Object b : values) {
+          if (a instanceof Integer && b instanceof Integer) { continue; }
+          Object expected = javaResult(op, ((Number)a).doubleValue(), ((Number)b).doubleValue());
+          String at = a instanceof Integer ? "int" : "double";
+          String bt = b instanceof Integer ? "int" : "double";
+          String av = literal(a);
+          String bv = literal(b);
+          test(at    + " a = " + av + "; " + bt    + " b = " + bv + "; a " + op + " b", expected);
+          test("def a = " + av + "; def b = " + bv + "; a " + op + " b", expected);
+          test(at    + " a = " + av + "; def b = " + bv + "; a " + op + " b", expected);
+          test("def a = " + av + "; " + bt    + " b = " + bv + "; a " + op + " b", expected);
+        }
+      }
+    }
+  }
+
+  private static String literal(Object v) {
+    if (v instanceof Integer) { return "(" + v + ")"; }
+    double d = (Double)v;
+    if (Double.isNaN(d))                              { return "(0D/0D)"; }
+    if (d == 0 && Double.doubleToLongBits(d) != 0)    { return "(-0D)"; }
+    return "(" + d + "D)";
+  }
+
+  private static Object javaResult(String op, double a, double b) {
+    switch (op) {
+      case "==":  return a == b;
+      case "!=":  return a != b;
+      case "<":   return a <  b;
+      case "<=":  return a <= b;
+      case ">":   return a >  b;
+      case ">=":  return a >= b;
+      case "<=>": return Double.compare(a, b);
+    }
+    throw new IllegalStateException(op);
+  }
+
   @Test public void byteType() {
     test("byte b = 1", (byte)1);
     test("byte b = 1; def x = b", (byte)1);

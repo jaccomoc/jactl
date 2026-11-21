@@ -1671,7 +1671,7 @@ public class MethodCompiler implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
           expect(2);
           switch (maxType.getType()) {
             case DECIMAL: invokeMethod(BIG_DECIMAL_COMPARE_TO_METHOD);                   break;
-            case DOUBLE:  mv.visitInsn(DCMPL);    popType(2);   pushType(INT);     break;
+            case DOUBLE:  invokeMethod(DOUBLE_COMPARE_METHOD);                           break;
             case LONG:    mv.visitInsn(LCMP);     popType(2);   pushType(INT);     break;
             default: throw new IllegalStateException("Internal error: unexpected type " + maxType.getType());
           }

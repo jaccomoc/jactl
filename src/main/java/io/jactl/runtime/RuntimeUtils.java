@@ -719,6 +719,29 @@ public class RuntimeUtils {
       if (operator == LESS_THAN_EQUAL) {  return lhs <= rhs; }
       if (operator == GREATER_THAN_EQUAL) {  return lhs >= rhs; }
     }
+
+    if (left instanceof Number && right instanceof Number &&
+        !(left instanceof BigDecimal || right instanceof BigDecimal) &&
+        (left instanceof Double || right instanceof Double)) {
+      if (left instanceof Byte) {
+        left = ((byte)left) & 0xff;
+      }
+      if (right instanceof Byte) {
+        right = ((byte)right) & 0xff;
+      }
+      double lhs = ((Number)left).doubleValue();
+      double rhs = ((Number)right).doubleValue();
+      switch (operator) {
+        case EQUAL_EQUAL: case TRIPLE_EQUAL:     return lhs == rhs;
+        case BANG_EQUAL:  case BANG_EQUAL_EQUAL: return lhs != rhs;
+        case LESS_THAN:                          return lhs < rhs;
+        case GREATER_THAN:                       return lhs > rhs;
+        case LESS_THAN_EQUAL:                    return lhs <= rhs;
+        case GREATER_THAN_EQUAL:                 return lhs >= rhs;
+        default: throw new IllegalStateException("Internal error: unexpected operator " + operator);
+      }
+    }
+
     if (operator == TRIPLE_EQUAL) {
       if (left == right)                                        { return true;  }
       if (left instanceof Boolean || left instanceof String)    { return left.equals(right); }
@@ -765,6 +788,11 @@ public class RuntimeUtils {
 
   public static final MethodRef IS_EQUALS_METHOD = Utils.getMethod(RuntimeUtils.class, "isEquals", Object.class, Object.class, String.class, int.class);
   public static boolean isEquals(Object left, Object right, String source, int offset) {
+    if ((left instanceof Double || right instanceof Double) &&
+        left instanceof Number && right instanceof Number &&
+        !(left instanceof BigDecimal || right instanceof BigDecimal)) {
+      return compareTo(left, right, source, offset) == 0;
+    }
     return booleanOp(left, right, EQUAL_EQUAL, source, offset);
   }
 
